@@ -1,0 +1,97 @@
+[2026-03-03 16:54:45,279][MainThread:31252][task_id:django.utils.autoreload][autoreload.py:667][INFO][Watching for file changes with StatReloader]
+[2026-03-03 16:54:56,743][MainThread:35952][task_id:django.utils.autoreload][autoreload.py:667][INFO][Watching for file changes with StatReloader]
+[2026-03-03 16:55:58,707][MainThread:29764][task_id:django.utils.autoreload][autoreload.py:667][INFO][Watching for file changes with StatReloader]
+[2026-03-03 16:56:31,363][MainThread:496][task_id:django.utils.autoreload][autoreload.py:667][INFO][Watching for file changes with StatReloader]
+[2026-03-03 16:57:26,052][MainThread:28580][task_id:django.utils.autoreload][autoreload.py:667][INFO][Watching for file changes with StatReloader]
+[2026-03-03 16:58:10,578][MainThread:35228][task_id:django.utils.autoreload][autoreload.py:667][INFO][Watching for file changes with StatReloader]
+[2026-03-03 17:00:04,020][MainThread:28388][task_id:django.utils.autoreload][autoreload.py:667][INFO][Watching for file changes with StatReloader]
+[2026-03-03 17:00:15,596][Thread-1 (process_request_thread):36588][task_id:root][middleware.py:66][INFO][访问日志 | IP: 127.0.0.1 | 次数: 1 | 类型: 正常路径 | 方法: GET | 路径: / | User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36]
+[2026-03-03 17:00:15,604][Thread-1 (process_request_thread):36588][task_id:django.request][log.py:253][WARNING][Not Found: /]
+[2026-03-03 17:00:15,922][Thread-1 (process_request_thread):36588][task_id:root][middleware.py:66][INFO][访问日志 | IP: 127.0.0.1 | 次数: 1 | 类型: 恶意路径 | 方法: GET | 路径: /favicon.ico | User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36]
+[2026-03-03 17:00:15,925][Thread-1 (process_request_thread):36588][task_id:django.request][log.py:253][WARNING][Not Found: /favicon.ico]
+[2026-03-03 17:00:20,836][Thread-1 (process_request_thread):36588][task_id:root][middleware.py:66][INFO][访问日志 | IP: 127.0.0.1 | 次数: 2 | 类型: 正常路径 | 方法: GET | 路径: /api/ | User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36]
+[2026-03-03 17:00:21,041][Thread-1 (process_request_thread):36588][task_id:root][middleware.py:66][INFO][访问日志 | IP: 127.0.0.1 | 次数: 3 | 类型: 正常路径 | 方法: GET | 路径: /static/rest_framework/css/bootstrap.min.css | User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36]
+[2026-03-03 17:00:21,043][Thread-1 (process_request_thread):36588][task_id:django.request][log.py:253][WARNING][Not Found: /static/rest_framework/css/bootstrap.min.css]
+[2026-03-03 17:00:21,188][Thread-1 (process_request_thread):36588][task_id:root][middleware.py:66][INFO][访问日志 | IP: 127.0.0.1 | 次数: 4 | 类型: 正常路径 | 方法: GET | 路径: /static/rest_framework/css/default.css | User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36]
+[2026-03-03 17:00:21,190][Thread-1 (process_request_thread):36588][task_id:django.request][log.py:253][WARNING][Not Found: /static/rest_framework/css/default.css]
+[2026-03-03 17:00:21,349][Thread-2 (process_request_thread):29912][task_id:root][middleware.py:66][INFO][访问日志 | IP: 127.0.0.1 | 次数: 5 | 类型: 正常路径 | 方法: GET | 路径: /static/rest_framework/css/bootstrap-tweaks.css | User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36]
+[2026-03-03 17:00:21,349][Thread-1 (process_request_thread):36588][task_id:root][middleware.py:66][INFO][访问日志 | IP: 127.0.0.1 | 次数: 7 | 类型: 正常路径 | 方法: GET | 路径: /static/rest_framework/js/bootstrap.min.js | User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36]
+[2026-03-03 17:00:21,349][Thread-3 (process_request_thread):33376][task_id:root][middleware.py:66][INFO][访问日志 | IP: 127.0.0.1 | 次数: 6 | 类型: 正常路径 | 方法: GET | 路径: /static/rest_framework/css/prettify.css | User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36]
+[2026-03-03 17:00:21,352][Thread-1 (process_request_thread):36588][task_id:django.request][log.py:253][WARNING][Not Found: /static/rest_framework/js/bootstrap.min.js]
+[2026-03-03 17:00:21,354][Thread-2 (process_request_thread):29912][task_id:django.request][log.py:253][WARNING][Not Found: /static/rest_framework/css/bootstrap-tweaks.css]
+[2026-03-03 17:00:21,356][Thread-3 (process_request_thread):33376][task_id:django.request][log.py:253][WARNING][Not Found: /static/rest_framework/css/prettify.css]
+[2026-03-03 17:00:21,547][Thread-3 (process_request_thread):33376][task_id:root][middleware.py:66][INFO][访问日志 | IP: 127.0.0.1 | 次数: 8 | 类型: 正常路径 | 方法: GET | 路径: /static/rest_framework/js/load-ajax-form.js | User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36]
+[2026-03-03 17:00:21,547][Thread-1 (process_request_thread):36588][task_id:root][middleware.py:66][INFO][访问日志 | IP: 127.0.0.1 | 次数: 9 | 类型: 正常路径 | 方法: GET | 路径: /static/rest_framework/js/prettify-min.js | User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36]
+[2026-03-03 17:00:21,547][Thread-2 (process_request_thread):29912][task_id:root][middleware.py:66][INFO][访问日志 | IP: 127.0.0.1 | 次数: 10 | 类型: 正常路径 | 方法: GET | 路径: /static/rest_framework/js/default.js | User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36]
+[2026-03-03 17:00:21,551][Thread-3 (process_request_thread):33376][task_id:django.request][log.py:253][WARNING][Not Found: /static/rest_framework/js/load-ajax-form.js]
+[2026-03-03 17:00:21,554][Thread-1 (process_request_thread):36588][task_id:django.request][log.py:253][WARNING][Not Found: /static/rest_framework/js/prettify-min.js]
+[2026-03-03 17:00:21,557][Thread-2 (process_request_thread):29912][task_id:django.request][log.py:253][WARNING][Not Found: /static/rest_framework/js/default.js]
+[2026-03-03 17:00:21,658][Thread-5 (process_request_thread):36284][task_id:root][middleware.py:66][INFO][访问日志 | IP: 127.0.0.1 | 次数: 12 | 类型: 正常路径 | 方法: GET | 路径: /static/rest_framework/js/ajax-form.js | User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36]
+[2026-03-03 17:00:21,658][Thread-6 (process_request_thread):33984][task_id:root][middleware.py:66][INFO][访问日志 | IP: 127.0.0.1 | 次数: 11 | 类型: 正常路径 | 方法: GET | 路径: /static/rest_framework/js/csrf.js | User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36]
+[2026-03-03 17:00:21,658][Thread-4 (process_request_thread):11104][task_id:root][middleware.py:66][INFO][访问日志 | IP: 127.0.0.1 | 次数: 13 | 类型: 正常路径 | 方法: GET | 路径: /static/rest_framework/js/jquery-3.7.1.min.js | User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36]
+[2026-03-03 17:00:21,661][Thread-5 (process_request_thread):36284][task_id:django.request][log.py:253][WARNING][Not Found: /static/rest_framework/js/ajax-form.js]
+[2026-03-03 17:00:21,663][Thread-6 (process_request_thread):33984][task_id:django.request][log.py:253][WARNING][Not Found: /static/rest_framework/js/csrf.js]
+[2026-03-03 17:00:21,665][Thread-4 (process_request_thread):11104][task_id:django.request][log.py:253][WARNING][Not Found: /static/rest_framework/js/jquery-3.7.1.min.js]
+[2026-03-03 17:01:40,699][MainThread:28388][task_id:django.utils.autoreload][autoreload.py:265][INFO][E:\project\WallPaper\models\models.py changed, reloading.]
+[2026-03-03 17:01:41,712][MainThread:35992][task_id:django.utils.autoreload][autoreload.py:667][INFO][Watching for file changes with StatReloader]
+[2026-03-03 17:02:19,513][MainThread:35992][task_id:django.utils.autoreload][autoreload.py:265][INFO][E:\project\WallPaper\App\view\user\view.py changed, reloading.]
+[2026-03-03 17:02:20,482][MainThread:28380][task_id:django.utils.autoreload][autoreload.py:667][INFO][Watching for file changes with StatReloader]
+[2026-03-03 17:04:54,751][MainThread:28380][task_id:django.utils.autoreload][autoreload.py:265][INFO][E:\project\WallPaper\WallPaper\urls.py changed, reloading.]
+[2026-03-03 17:04:55,728][MainThread:21176][task_id:django.utils.autoreload][autoreload.py:667][INFO][Watching for file changes with StatReloader]
+[2026-03-03 17:04:59,646][Thread-1 (process_request_thread):15284][task_id:root][middleware.py:66][INFO][访问日志 | IP: 127.0.0.1 | 次数: 1 | 类型: 正常路径 | 方法: GET | 路径: / | User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36]
+[2026-03-03 17:04:59,654][Thread-1 (process_request_thread):15284][task_id:django.request][log.py:253][WARNING][Not Found: /]
+[2026-03-03 17:05:03,742][Thread-1 (process_request_thread):15284][task_id:root][middleware.py:66][INFO][访问日志 | IP: 127.0.0.1 | 次数: 2 | 类型: 正常路径 | 方法: GET | 路径: /api/docs/ | User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36]
+[2026-03-03 17:05:03,764][Thread-1 (process_request_thread):15284][task_id:django.request][log.py:253][ERROR][Internal Server Error: /api/docs/]
+Traceback (most recent call last):
+  File "D:\env\conda\envs\WallPaper\Lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "D:\env\conda\envs\WallPaper\Lib\site-packages\django\core\handlers\base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\env\conda\envs\WallPaper\Lib\site-packages\django\views\decorators\csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\env\conda\envs\WallPaper\Lib\site-packages\django\views\generic\base.py", line 105, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\env\conda\envs\WallPaper\Lib\site-packages\rest_framework\views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\env\conda\envs\WallPaper\Lib\site-packages\rest_framework\views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "D:\env\conda\envs\WallPaper\Lib\site-packages\rest_framework\views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "D:\env\conda\envs\WallPaper\Lib\site-packages\rest_framework\views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\env\conda\envs\WallPaper\Lib\site-packages\drf_spectacular\views.py", line 141, in get
+    'schema_url': self._get_schema_url(request),
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\env\conda\envs\WallPaper\Lib\site-packages\drf_spectacular\views.py", line 159, in _get_schema_url
+    schema_url = self.url or get_relative_url(reverse(self.url_name, request=request))
+                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\env\conda\envs\WallPaper\Lib\site-packages\rest_framework\reverse.py", line 47, in reverse
+    url = _reverse(viewname, args, kwargs, request, format, **extra)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\env\conda\envs\WallPaper\Lib\site-packages\rest_framework\reverse.py", line 60, in _reverse
+    url = django_reverse(viewname, args=args, kwargs=kwargs, **extra)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\env\conda\envs\WallPaper\Lib\site-packages\django\urls\base.py", line 98, in reverse
+    resolved_url = resolver._reverse_with_prefix(view, prefix, *args, **kwargs)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\env\conda\envs\WallPaper\Lib\site-packages\django\urls\resolvers.py", line 831, in _reverse_with_prefix
+    raise NoReverseMatch(msg)
+django.urls.exceptions.NoReverseMatch: Reverse for 'schema' not found. 'schema' is not a valid view function or pattern name.
+[2026-03-03 17:05:38,640][MainThread:21176][task_id:django.utils.autoreload][autoreload.py:265][INFO][E:\project\WallPaper\WallPaper\urls.py changed, reloading.]
+[2026-03-03 17:05:39,580][MainThread:28524][task_id:django.utils.autoreload][autoreload.py:667][INFO][Watching for file changes with StatReloader]
+[2026-03-03 17:05:48,548][Thread-1 (process_request_thread):35000][task_id:root][middleware.py:66][INFO][访问日志 | IP: 127.0.0.1 | 次数: 3 | 类型: 正常路径 | 方法: GET | 路径: /api/docs/ | User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36]
+[2026-03-03 17:05:49,765][Thread-1 (process_request_thread):35000][task_id:root][middleware.py:66][INFO][访问日志 | IP: 127.0.0.1 | 次数: 4 | 类型: 正常路径 | 方法: GET | 路径: /api/schema/ | User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36]
+[2026-03-03 17:06:29,924][MainThread:36408][task_id:django.utils.autoreload][autoreload.py:667][INFO][Watching for file changes with StatReloader]
+[2026-03-03 17:06:35,689][Thread-1 (process_request_thread):34760][task_id:root][middleware.py:66][INFO][访问日志 | IP: 127.0.0.1 | 次数: 1 | 类型: 正常路径 | 方法: GET | 路径: /api/docs/ | User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36]
+[2026-03-03 17:06:35,996][Thread-1 (process_request_thread):34760][task_id:root][middleware.py:66][INFO][访问日志 | IP: 127.0.0.1 | 次数: 2 | 类型: 正常路径 | 方法: GET | 路径: /api/schema/ | User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36]
+[2026-03-03 17:08:36,152][MainThread:18196][task_id:django.utils.autoreload][autoreload.py:667][INFO][Watching for file changes with StatReloader]
+[2026-03-03 17:08:59,122][Thread-1 (process_request_thread):36504][task_id:root][middleware.py:66][INFO][访问日志 | IP: 127.0.0.1 | 次数: 5 | 类型: 正常路径 | 方法: GET | 路径: /api/docs/ | User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36]
+[2026-03-03 17:08:59,240][Thread-1 (process_request_thread):36504][task_id:root][middleware.py:66][INFO][访问日志 | IP: 127.0.0.1 | 次数: 6 | 类型: 正常路径 | 方法: GET | 路径: /api/schema/ | User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36]
+[2026-03-03 17:09:02,773][Thread-1 (process_request_thread):36504][task_id:root][middleware.py:66][INFO][访问日志 | IP: 127.0.0.1 | 次数: 7 | 类型: 正常路径 | 方法: GET | 路径: /api/users/ | User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36]
+[2026-03-03 17:09:02,776][Thread-1 (process_request_thread):36504][task_id:django.request][log.py:253][WARNING][Unauthorized: /api/users/]
