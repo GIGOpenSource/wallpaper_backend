@@ -1,6 +1,6 @@
 networks:
-  crash_net:
-    name: wallpaper_net
+  wallpaper_net:
+    name: bridge
 
 volumes:
   pgdata:
@@ -8,8 +8,6 @@ volumes:
   staticfiles:
     driver: local
   nginx_logs:
-    driver: local
-  redisdata:  # Redis数据卷
     driver: local
 
 services:
