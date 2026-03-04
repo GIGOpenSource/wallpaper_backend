@@ -64,7 +64,6 @@ services:
       - REDIS_PORT=6379
     depends_on:
       - db
-      - redis
     networks:
       - wallpaper_net
     restart: unless-stopped
