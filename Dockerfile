@@ -7,8 +7,8 @@ ENV PYTHONUNBUFFERED=1
 ENV DJANGO_SETTINGS_MODULE=WallPaper.settings.pro
 
 # 配置国内pip源（解决依赖安装慢/失败问题）
-RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple && \
-    pip install --no-cache-dir --upgrade pip
+# pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple && \
+RUN pip install --no-cache-dir --upgrade pip
 
 # 设置工作目录
 WORKDIR /app
