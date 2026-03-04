@@ -12,7 +12,6 @@ from django.db import models
 from django.utils import timezone
 from tool.password_hasher import hash_password
 
-
 class WeChatUser(models.Model):
     """
     微信小程序用户模型

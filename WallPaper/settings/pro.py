@@ -143,6 +143,14 @@ if POSTGRES_HOST:
             'PASSWORD': 'crash',
             'HOST': POSTGRES_HOST,
             'PORT': '5432',
+        },
+        'wallpaper': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': 'wall_paper_db',  # 新建的库名
+            'USER': 'crash',  # 建议使用相同账号，也可新建专用账号
+            'PASSWORD': 'crash',
+            'HOST': POSTGRES_HOST,
+            'PORT': '5432',
         }
     }
 else:

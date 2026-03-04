@@ -1,0 +1,111 @@
+networks:
+  crash_net:
+    name: wallpaper_net
+
+volumes:
+  pgdata:
+    driver: local
+  staticfiles:
+    driver: local
+  nginx_logs:
+    driver: local
+  redisdata:  # Redis数据卷
+    driver: local
+
+services:
+#   nginx:
+#     image: nginx:1.27-alpine
+#     container_name: crash-nginx
+#     ports:
+#       - "80:80"
+#       - "8000:8000"
+#     volumes:
+#       - ./pages/app/dist/h5/:/usr/share/nginx/html/gig-x/
+#       - ./pages/admin/dist/:/usr/share/nginx/html/gig-admin/
+#       - ./nginx.conf:/etc/nginx/nginx.conf:ro
+#       - staticfiles:/usr/share/nginx/html/static
+#       - nginx_logs:/var/log/nginx
+#     networks:
+#       - crash_net
+#     restart: unless-stopped
+#     healthcheck:
+#       test: ["CMD", "curl", "-f", "http://localhost:80/"]
+#       interval: 30s
+#       timeout: 3s
+#       retries: 3
+#     depends_on:
+#       - web
+
+#   web:
+#     # 保持原有配置不变，添加Redis依赖
+#     build: .
+#     container_name: crash_web
+#     command: sh -c "
+#         find . -path '*/migrations/*.py' -not -name '__init__.py' -delete &&
+#         find . -path '*/migrations/*.pyc' -delete &&
+#         python manage.py makemigrations models&&
+#         python manage.py migrate models--noinput &&
+#         python manage.py collectstatic --noinput &&
+#         python manage.py runserver 0.0.0.0:8000"
+#     ports:
+#       - "10080:8000"
+#     volumes:
+#       - staticfiles:/app/staticfiles
+#     environment:
+#       - DJANGO_SETTINGS_MODULE=FlashCircle.settings
+#       - ALLOWED_HOSTS=*
+#       - POSTGRES_HOST=db
+#       - POSTGRES_DB=crash
+#       - POSTGRES_USER=crash
+#       - POSTGRES_PASSWORD=crash
+#       - POSTGRES_PORT=5432
+#       - REDIS_HOST=redis  # 添加Redis环境变量
+#       - REDIS_PORT=6379
+#     depends_on:
+#       - db
+#       - redis  # 添加Redis依赖
+#     networks:
+#       - crash_net
+#     restart: unless-stopped
+
+  db:
+    # 保持原有配置不变
+    image: postgres:16-alpine
+    container_name: wallpaper_db
+    environment:
+      - POSTGRES_DB=wallpaper_db
+      - POSTGRES_USER=wallpaper123
+      - POSTGRES_PASSWORD=wallpaper123
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    ports:
+      - "5436:5432" # 宿主机5432端口 / 容器5432端口
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - wallpaper_net
+    restart: unless-stopped
+
+#  # 添加Redis服务
+#  redis:
+#    image: redis:7-alpine
+#    container_name: crash_redis
+#    ports:
+#      - "6379:6379"  # 仅绑定服务器本地IP，外网无法直接访问
+#    volumes:
+#      - redisdata:/data
+#    networks:
+#      - crash_net
+#    restart: unless-stopped
+#    # 关键修复：删除command内的中文注释，仅保留纯命令参数
+#    command: >
+#      redis-server
+#      --requirepass Redis@2026#0119
+#      --protected-mode yes
+#      --rename-command FLUSHALL ""
+#      --rename-command FLUSHDB ""
+#      --rename-command CONFIG ""
+#    healthcheck:
+#      test: [ "CMD", "redis-cli", "-a", "Redis@2026#0119", "ping" ]  # 去掉数组内多余空格
+#      interval: 10s
+#      timeout: 5s
+#      retries: 3
