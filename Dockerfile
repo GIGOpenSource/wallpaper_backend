@@ -31,7 +31,7 @@ FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV DJANGO_SETTINGS_MODULE=WallPaper.settings.pro
-ENV PATH="/app/venv/bin:$PATH"  # 指向构建层的虚拟环境
+ENV PATH="/app/venv/bin:$PATH"
 
 # 安装系统依赖（仅运行时需要，精简）
 RUN apt-get update && \
