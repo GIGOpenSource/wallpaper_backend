@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: UTF-8 -*-
 """
-@Project ：NoBad 
+@Project ：Wallpaper
 @File    ：tool_wechat.py
 @Author  ：LYP
 @Date    ：2025/10/31 16:06 
@@ -13,7 +13,7 @@ import os
 from datetime import datetime, timedelta
 import json5
 import requests
-from NoBad.settings.dev import KEY_DIR
+from WallPaper.settings.pro import KEY_DIR
 from base64 import b64encode, b64decode
 from django.db import transaction
 from Cryptodome.PublicKey import RSA
@@ -22,7 +22,7 @@ from Cryptodome.Hash import SHA256
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from django.forms import model_to_dict
 
-from models.models import WeChatUser as _, WeChatPayOrder as Order, Product, UserPoster, AITrialCase
+from models.models import WeChatUser as _
 from tool.tools import getEnvConfig, logger
 from tool.token_tools import _redis
 
@@ -148,114 +148,10 @@ def updataOrderNotify(data: dict):
     :return:
     """
     try:
-        openid = data["payer"]["openid"]
-        out_trade_no = data["out_trade_no"]
-        userData = _.objects.get(open_id=openid)
-        orderData = Order.objects.get(out_trade_no=out_trade_no, openid=openid)
-        productData = Product.objects.get(id=orderData.product_id)
-        orderData.transaction_id = data["transaction_id"]
-        orderData.total_fee = float(data["amount"]["total"] / 100)
-        orderData.payer_total = float(data["amount"]["payer_total"] / 100)
-        orderData.fee_type = data["amount"]["currency"]
-        orderData.trade_type = data["trade_type"]
-        orderData.trade_state = data["trade_state"]
-        orderData.pay_time = str(data["success_time"]).replace("T", " ").strip("+08:00")
-        orderData.update_time = datetime.now()
-        orderData.notify_time = str(data["success_time"]).replace("T", " ").strip("+08:00")
-        orderData.is_notify_processed = True
-        days = productData.days
-        logger.info(f"准备更新的数据为==>:{data}")
-        logger.info(f"订单data===>：{orderData}")
-        logger.info(f"用户为==>:{userData.username}")
-        logger.info(f"用户充值类型为==>:{productData.product_type}")
-        logger.info(f"充值天数为==>:{days}天")
-        if "vip" in productData.product_type:
-            userData.is_vip = True
-            userData.vip_type = productData.name
-            old_date = userData.vip_expire_date
-            if old_date:
-                userData.vip_expire_date = old_date + timedelta(days=int(days))
-            else:
-                userData.vip_expire_date = datetime.now() + timedelta(days=int(days))
-            userData.save()
-        if "once" in productData.product_type:
-            logger.info(f"更新的父 posterid为==>:{orderData.posterId}")
-            try:
-                # 尝试获取子记录
-                posterDeep = UserPoster.objects.get(parent_id=orderData.posterId)
-                posterDeep.is_active_by_user = "True"
-                posterDeep.save()
-            except UserPoster.DoesNotExist:
-                # 如果子记录不存在，则更新id等于posterId的记录
-                try:
-                    poster = UserPoster.objects.get(id=orderData.posterId)
-                    poster.is_active_by_user = "True"
-                    poster.save()
-                except UserPoster.DoesNotExist:
-                    logger.error(f"未找到id为{orderData.posterId}的海报记录")
 
-        def update_poster_status(poster, is_active=True, pay_status="pay_completed"):
-            """更新海报的激活状态和支付状态"""
-            poster.is_active_by_user = is_active  # 改用布尔值，而非字符串"True"
-            poster.content["room_pay_status"] = pay_status
-            poster.save()
-        if "trial_case" in productData.product_type:
-            poster_id = orderData.posterId
-            trial_poster = UserPoster.objects.get(id=poster_id)
-            # 使用 filter 获取所有具有相同 unique_key 的记录
-            related_posters = UserPoster.objects.filter(unique_key=trial_poster.unique_key)
-            # 遍历所有相关记录并将 is_active_by_user 设置为 "True"
-            for poster in related_posters:
-                poster.is_active_by_user = "True"
-                poster.status = "waiting"
-                poster.save()
-            case_number = trial_poster.unique_key.split("@")[1]
-            related_trialcase = AITrialCase.objects.filter(case_number=case_number)
-            for trial_case in related_trialcase:
-                trial_case.status = "done"
-                trial_case.save()
-
-        if "mbti" in productData.product_type:
-            poster_id = orderData.posterId
-            try:
-                if "single" in productData.product_type:
-                    # 处理单人海报逻辑
-                    single_poster = UserPoster.objects.get(id=poster_id)
-                    update_poster_status(single_poster)
-                elif "double" in productData.product_type:
-                    # 处理双人海报逻辑
-                    double_poster = UserPoster.objects.get(id=poster_id)
-                    unique_key = None
-                    otherId = None
-                    # 根据海报类型获取关联信息
-                    if double_poster.parse_type == "once_mbti":  # 父类
-                        unique_key = double_poster.unique_key
-                        content = double_poster.content
-                        otherId = content.get("invitee") if content.get("master") else content.get("inviter")
-                        other_parent = UserPoster.objects.get(user_id=otherId, unique_key=unique_key)
-                        other_self = UserPoster.objects.get(parent_id=poster_id)
-                        other_child = UserPoster.objects.get(parent_id=other_parent.id)
-                    elif double_poster.parse_type == "once_mbti_double":  # 子类
-                        other_self = UserPoster.objects.get(id=double_poster.parent_id)
-                        unique_key = other_self.unique_key
-                        content = other_self.content
-                        otherId = content.get("invitee") if content.get("master") else content.get("inviter")
-                        other_parent = UserPoster.objects.get(user_id=otherId, unique_key=unique_key)
-                        other_child = UserPoster.objects.get(parent_id=other_parent.id)
-                    # 批量更新所有关联海报
-                    for poster in [double_poster, other_self, other_parent, other_child]:
-                        update_poster_status(poster)
-                # 更新用户MBTI激活状态（原代码else分支逻辑修正）
-                userData.mbti_is_active = True
-            except UserPoster.DoesNotExist as e:
-                logger.error(f"未找到海报记录，海报ID：{poster_id}，错误信息：{str(e)}")
-            except Exception as e:
-                logger.error(f"更新MBTI海报状态失败，海报ID：{poster_id}，错误信息：{str(e)}")
-            logger.info(f"更新MBTI海报状态，海报ID：{poster_id}")
-        orderData.save()
-        logger.info(f"更新订单成功,更新结果为:{model_to_dict(orderData)}")
+        logger.info(f"更新订单成功,更新结果为")
         return True
-    except Order.DoesNotExist:
+    except Exception:
         pass
 
 def generateSign(timestamp, nonceStr, packId):
@@ -307,7 +203,7 @@ def genterateUnlimitedQRCode(openId):
     env_version 正式版为 "release"，体验版为 "trial"，开发版为 "develop"。
     :return:
     """
-    from NoBad.settings.dev import DOWNLOAD_DIR
+    from WallPaper.settings.pro import DOWNLOAD_DIR
     access_token = getWechatAccessToken()
     data = {
         "page": "pages/index/index",

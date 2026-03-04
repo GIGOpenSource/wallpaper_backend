@@ -10,7 +10,9 @@
 from django.urls import path, include
 
 from App.view.user import urls as user
+from App.view.wechat import urls as wechat
 
 urlpatterns = [
     path('', include(user)),
+    path('wechat/', include(wechat)),
 ]

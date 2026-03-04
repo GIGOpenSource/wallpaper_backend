@@ -111,7 +111,7 @@ class UserViewSet(viewsets.ViewSet):
         return ApiResponse(message=_("用户名密码错误"),code=400)
 
     def list(self, request):
-        print(_("当前登录用户：%s") % request.user.username)
+        # print(_("当前登录用户：%s") % request.user.username)
         users = self.queryset.all()
         serializer = RegisterSerializer(users, many=True)
         return ApiResponse(serializer.data)
@@ -135,3 +135,44 @@ class UserViewSet(viewsets.ViewSet):
             return ApiResponse(message=_("登出成功，Token 已失效"))
         return ApiResponse(message=_("未提供有效 Token"),code=400)
 
+
+def deactivate_user_and_delete_posters(open_id):
+    """
+    注销用户并删除其相关海报数据
+    Args:
+        open_id (str): 用户的OpenID
+    Returns:
+        dict: 操作结果信息
+    """
+    from datetime import datetime
+    import pytz
+    try:
+        # 1. 根据open_id查询用户
+        user = WeChatUser.objects.get(open_id=open_id)
+        user_id = user.id
+        # 检查删除截止时间，只有在截止时间已过的情况下才执行删除
+        if user.deletion_deadline and user.deletion_deadline < datetime.now(pytz.UTC):
+            # 删除用户的所有海报数据
+
+            return {
+                "success": True,
+                "message": f"用户已删除",
+            }
+        else:
+            # 删除截止时间未到，不执行删除操作
+            return {
+                "success": True,
+                "message": "用户删除截止时间未到，暂不执行删除操作",
+                "deleted_user_count": 0,
+                "deleted_posters_count": 0
+            }
+    except WeChatUser.DoesNotExist:
+        return {
+            "success": False,
+            "message": "用户不存在"
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"注销过程中出现错误: {str(e)}"
+        }

@@ -130,36 +130,34 @@ SPECTACULAR_SETTINGS = {
 }
 
 WSGI_APPLICATION = 'WallPaper.wsgi.application'
+DATABASE_ROUTERS = ['WallPaper.settings.db_router.AppDBRouter']
+POSTGRES_HOST_OLD = "119.45.233.147"  # 老库（只读）
+POSTGRES_HOST_NEW = "101.32.179.223"  # 新库（默认库，可写）
 
-
-
-POSTGRES_HOST = "119.45.233.147"
-if POSTGRES_HOST:
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': 'crash_db',
-            'USER': 'crash',
-            'PASSWORD': 'crash',
-            'HOST': POSTGRES_HOST,
-            'PORT': '5432',
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'wallpaper_db',
+        'USER': 'wallpaper123',
+        'PASSWORD': 'wallpaper123',
+        'HOST': POSTGRES_HOST_NEW,
+        'PORT': '5436',
+        'OPTIONS': {
+            'connect_timeout': 10,
         },
-        'wallpaper': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': 'wall_paper_db',  # 新建的库名
-            'USER': 'crash',  # 建议使用相同账号，也可新建专用账号
-            'PASSWORD': 'crash',
-            'HOST': POSTGRES_HOST,
-            'PORT': '5432',
-        }
+    },
+    'old_db': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'crash_db',
+        'USER': 'crash',
+        'PASSWORD': 'crash',
+        'HOST': POSTGRES_HOST_OLD,
+        'PORT': '5432',
+        'OPTIONS': {
+            'connect_timeout': 10,
+        },
     }
-else:
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
-    }
+}
 
 STATIC_URL = 'static/'
 
