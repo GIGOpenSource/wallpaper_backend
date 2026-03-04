@@ -1,6 +1,8 @@
 networks:
   wallpaper_net:
-    name: bridge
+    driver: bridge
+    name: wallpaper_net
+
 
 volumes:
   pgdata:
