@@ -4,7 +4,7 @@ FROM python:3.11-slim
 # 设置环境变量
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-ENV DJANGO_SETTINGS_MODULE=FlashCicle.settings
+ENV DJANGO_SETTINGS_MODULE=WallPaper.settings.pro
 
 # 配置国内pip源（解决依赖安装慢/失败问题）
 RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple && \
