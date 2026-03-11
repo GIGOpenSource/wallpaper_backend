@@ -8,13 +8,7 @@ class AppDBRouter:
     OLD_DB_READ_ONLY_MODELS = [
         'models.wechatuser',
         'models.user',
-        'models.InvitationRecord'
-    ]
-
-    # 新库的模型（后续新增都加这里）
-    NEW_DB_MODELS = [
-        'models.wallpapers',
-        # 新增模型示例：'models.category', 'models.banner'
+        'models.invitationrecord'
     ]
 
     def db_for_read(self, model, **hints):
@@ -62,9 +56,9 @@ class AppDBRouter:
                 print(f"新库禁止迁移老库模型：{full_model_name}")
                 return False
             # 新库模型允许迁移
-            result = full_model_name in self.NEW_DB_MODELS
-            print(f"新库迁移允许：{full_model_name} → {result}")
-            return result
+            # result = full_model_name in self.NEW_DB_MODELS
+            print(f"新库迁移允许：{full_model_name}")
+            return True
 
         # 其他数据库禁止迁移
         return False

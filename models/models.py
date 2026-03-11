@@ -7,10 +7,12 @@
 @Date    ：2025/10/30 10:47 
 @description : 微信小程序用户模型
 """
+from datetime import datetime
 
 from django.db import models
 from django.utils import timezone
 from tool.password_hasher import hash_password
+
 
 class WeChatUser(models.Model):
     """
@@ -151,6 +153,7 @@ class User(models.Model):
         verbose_name_plural = '后台管理员'
         ordering = ['-created_at']
         managed = False
+
     def __str__(self):
         return f"{self.username} ({self.get_role_display()})"
 
@@ -159,18 +162,10 @@ class InvitationRecord(models.Model):
     """
     邀请记录模型：记录用户之间的邀请关系
     """
-    inviter = models.ForeignKey(
-        WeChatUser,
-        on_delete=models.CASCADE,
-        related_name="invitations_sent",
-        verbose_name="邀请人"
-    )
-    invitee = models.OneToOneField(
-        WeChatUser,
-        on_delete=models.CASCADE,
-        related_name="invitation_received",
-        verbose_name="被邀请人"
-    )
+    inviter = models.ForeignKey(WeChatUser, on_delete=models.CASCADE, related_name="invitations_sent",
+                                verbose_name="邀请人")
+    invitee = models.OneToOneField(WeChatUser, on_delete=models.CASCADE, related_name="invitation_received",
+                                   verbose_name="被邀请人")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="邀请时间")
 
     class Meta:
@@ -182,12 +177,104 @@ class InvitationRecord(models.Model):
     def __str__(self):
         return f"{self.inviter.username} 邀请了 {self.invitee.username}"
 
-class Wallpapers(models.Model):
-    name = models.CharField(max_length=100, verbose_name="壁纸名称")
-    url = models.URLField(verbose_name="壁纸链接")
+#壁纸分类
+class WallpaperCategory(models.Model):
+    name = models.CharField(max_length=50, verbose_name="分类名称", unique=True)
+    desc = models.CharField(max_length=200, verbose_name="分类描述", blank=True, null=True)
+    sort = models.IntegerField(default=0, verbose_name="排序（数字越小越靠前）")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
 
+    class Meta:
+        db_table = 't_wallpaper_category'
+        verbose_name = '壁纸分类'
+        verbose_name_plural = '壁纸分类'
+        ordering = ['sort', '-created_at']  # 优先按排序，再按创建时间
+
+    def __str__(self):
+        return self.name
+
+#壁纸标签，可以有很多
+class WallpaperTag(models.Model):
+    name = models.CharField(max_length=50, verbose_name="标签名称", unique=True)
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    class Meta:
+        db_table = 't_wallpaper_tag'
+        verbose_name = '壁纸标签'
+        verbose_name_plural = '壁纸标签'
+    def __str__(self):
+        return self.name
+
+#壁纸
+class Wallpapers(models.Model):
+    name = models.CharField(max_length=200, verbose_name="壁纸名称")  # 加长长度适配英文标题
+    url = models.URLField(max_length=500, verbose_name="壁纸原图链接")  # 加长URL长度
+    thumb_url = models.URLField(max_length=500, blank=True, null=True, verbose_name="壁纸缩略图链接")  # 新增：缩略图URL
+    width = models.IntegerField(default=0, verbose_name="图片宽度")  # 新增：宽度
+    height = models.IntegerField(default=0, verbose_name="图片高度")  # 新增：高度
+    image_format = models.CharField(max_length=20, blank=True, null=True, verbose_name="图片格式")  # 新增：格式(jpg/png)
+    source_url = models.URLField(max_length=500, blank=True, null=True, verbose_name="图片来源链接")  # 新增：来源链接
+    has_watermark = models.BooleanField(default=False, verbose_name="是否有水印")  # 新增：水印标识
+    # 原有字段
+    category = models.ManyToManyField(WallpaperCategory, blank=True, verbose_name="所属分类")
+    tags = models.ManyToManyField(WallpaperTag, blank=True, verbose_name="标签")
+    is_live = models.BooleanField(default=False, verbose_name="是否Live壁纸")
+    is_hd = models.BooleanField(default=False, verbose_name="是否高清壁纸")
+    hot_score = models.IntegerField(default=0, verbose_name="热门分值（越高越热门）")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
     class Meta:
         db_table = 't_wallpapers'
         verbose_name = '壁纸'
         verbose_name_plural = '壁纸'
+        ordering = ['-created_at']
+    def __str__(self):
+        return self.name[:50]  # 截断过长名称
+    def get_category_names(self):
+        """返回拼接的分类名称，如「静态 + 手机」"""
+        categories = self.category.all()
+        if not categories:
+            return "未分类"
+        return " + ".join([cat.name for cat in categories])
+    def is_hd_auto(self):
+        """根据分辨率自动判断是否高清（可选）"""
+        # 简单判断：宽度≥1920 或 高度≥1080 视为高清
+        return self.width >= 1920 or self.height >= 1080
+
+class WallpaperCollection(models.Model):
+    user = models.ForeignKey(WeChatUser, on_delete=models.CASCADE, verbose_name="收藏用户", db_constraint=False)
+    wallpaper = models.ForeignKey(Wallpapers, on_delete=models.CASCADE, verbose_name="收藏壁纸")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="收藏时间")
+
+    class Meta:
+        db_table = 't_wallpaper_collection'
+        verbose_name = '壁纸收藏'
+        verbose_name_plural = '壁纸收藏'
+        unique_together = ('user', 'wallpaper')
+
+    def __str__(self):
+        return f"{self.user.username} - {self.wallpaper.name}"
+
+
+class CrawlerProgress(models.Model):
+    """爬虫断点续传表（适配Django ORM）"""
+    # 爬虫名称（如 pexels/bing/unsplash），区分不同爬虫
+    spider_name = models.CharField(max_length=50, verbose_name="爬虫名称")
+    # 爬取关键词（如 Indian Palace/故宫/自然风光）
+    keyword = models.CharField(max_length=200, verbose_name="爬取关键词")
+    # 当前页码（断点核心：记录上次爬取到第几页）
+    current_page = models.IntegerField(default=1, verbose_name="当前页码")
+    # 累计爬取数量（可选：统计该关键词已爬取的壁纸数）
+    crawled_count = models.IntegerField(default=0, verbose_name="累计爬取数量")
+    # 最后更新时间（自动维护：每次更新断点时刷新）
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="最后更新时间")
+    created_at = models.DateTimeField(default=datetime.now, verbose_name="创建时间")
+    class Meta:
+        # 数据库表名（和你的项目表命名风格一致）
+        db_table = 't_crawler_progress'
+        verbose_name = '爬虫断点续传'
+        verbose_name_plural = '爬虫断点续传'
+        # 联合唯一约束：确保 爬虫+关键词 组合唯一，避免重复记录
+        unique_together = ('spider_name', 'keyword')
+
+    def __str__(self):
+        """自定义显示名称，便于后台管理"""
+        return f"{self.spider_name} - {self.keyword}（第{self.current_page}页）"

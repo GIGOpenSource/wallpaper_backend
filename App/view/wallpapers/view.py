@@ -156,7 +156,6 @@ class WallpapersViewSet(BaseViewSet):
                     code=400,
                     message=_("Excel 文件缺少必要字段，需要包含：%(cols)s") % {"cols": ", ".join(required_columns)}
                 )
-
             # 6. 定义数据处理函数
             def process_cell_value(value):
                 """处理单元格值，转换类型和处理空值"""
