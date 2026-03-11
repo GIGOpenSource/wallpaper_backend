@@ -14,7 +14,7 @@ import pandas as pd
 from rest_framework.decorators import api_view, action
 from rest_framework import serializers
 # 导入壁纸模型
-from models.models import Wallpapers
+from models.models import Wallpapers, WallpaperTag, WallpaperCategory
 
 
 # ==================== 壁纸相关视图 ====================
@@ -36,6 +36,8 @@ class WallpapersSerializer(serializers.ModelSerializer):
             OpenApiParameter(name="currentPage", type=int, required=False, description="当前页码"),
             OpenApiParameter(name="pageSize", type=int, required=False, description="每页数量"),
             OpenApiParameter(name="name", type=str, required=False, description="壁纸名称搜索"),
+            OpenApiParameter(name="tag_id", type=str, required=False,
+                             description="标签 ID 查询，支持单个或多个（逗号分隔）"),
         ],
         responses={
             200: {
@@ -88,7 +90,96 @@ class WallpapersViewSet(BaseViewSet):
         name = self.request.query_params.get("name")
         if name:
             queryset = queryset.filter(name__icontains=name)
+        # 筛选参数：tag_id（支持单个和多个，逗号分隔）
+        tag_ids = self.request.query_params.get("tag_id")
+        if tag_ids:
+            tag_id_list = [int(tid.strip()) for tid in tag_ids.split(',') if tid.strip().isdigit()]
+            if tag_id_list:
+                # 使用 filter 进行多对多查询，会匹配包含任一标签的壁纸
+                queryset = queryset.filter(tags__id__in=tag_id_list).distinct()
         return queryset
+
+    @extend_schema(
+        summary="获取所有壁纸标签",
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "integer", "example": 200},
+                    "message": {"type": "string", "example": "标签获取成功"},
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": "integer", "example": 1},
+                                "name": {"type": "string", "example": "风景"},
+                                "created_at": {"type": "string", "format": "date-time"}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    )
+    @action(detail=False, methods=['get'], url_path='tags')
+    def tags(self, request):
+        """
+        获取所有壁纸标签列表
+        """
+        tags = WallpaperTag.objects.all().order_by('-created_at')
+        data = [
+            {
+                'id': tag.id,
+                'name': tag.name,
+                'created_at': tag.created_at.strftime('%Y-%m-%d %H:%M:%S')
+            }
+            for tag in tags
+        ]
+        return ApiResponse(data=data, message="标签获取成功")
+
+    @extend_schema(
+        summary="获取所有壁纸分类",
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "integer", "example": 200},
+                    "message": {"type": "string", "example": "分类获取成功"},
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": "integer", "example": 1},
+                                "name": {"type": "string", "example": "静态"},
+                                "desc": {"type": "string", "example": "静态壁纸分类"},
+                                "sort": {"type": "integer", "example": 1},
+                                "created_at": {"type": "string", "format": "date-time"}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    )
+    @action(detail=False, methods=['get'], url_path='categories')
+    def categories(self, request):
+        """
+        获取所有壁纸分类列表
+        """
+        categories = WallpaperCategory.objects.all().order_by('sort', '-created_at')
+        data = [
+            {
+                'id': cat.id,
+                'name': cat.name,
+                'desc': cat.desc or '',
+                'sort': cat.sort,
+                'created_at': cat.created_at.strftime('%Y-%m-%d %H:%M:%S')
+            }
+            for cat in categories
+        ]
+        return ApiResponse(data=data, message="分类获取成功")
 
     @extend_schema(
         summary="批量导入壁纸数据",

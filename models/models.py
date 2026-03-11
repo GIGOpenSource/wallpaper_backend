@@ -252,29 +252,3 @@ class WallpaperCollection(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.wallpaper.name}"
-
-
-class CrawlerProgress(models.Model):
-    """爬虫断点续传表（适配Django ORM）"""
-    # 爬虫名称（如 pexels/bing/unsplash），区分不同爬虫
-    spider_name = models.CharField(max_length=50, verbose_name="爬虫名称")
-    # 爬取关键词（如 Indian Palace/故宫/自然风光）
-    keyword = models.CharField(max_length=200, verbose_name="爬取关键词")
-    # 当前页码（断点核心：记录上次爬取到第几页）
-    current_page = models.IntegerField(default=1, verbose_name="当前页码")
-    # 累计爬取数量（可选：统计该关键词已爬取的壁纸数）
-    crawled_count = models.IntegerField(default=0, verbose_name="累计爬取数量")
-    # 最后更新时间（自动维护：每次更新断点时刷新）
-    updated_at = models.DateTimeField(auto_now=True, verbose_name="最后更新时间")
-    created_at = models.DateTimeField(default=datetime.now, verbose_name="创建时间")
-    class Meta:
-        # 数据库表名（和你的项目表命名风格一致）
-        db_table = 't_crawler_progress'
-        verbose_name = '爬虫断点续传'
-        verbose_name_plural = '爬虫断点续传'
-        # 联合唯一约束：确保 爬虫+关键词 组合唯一，避免重复记录
-        unique_together = ('spider_name', 'keyword')
-
-    def __str__(self):
-        """自定义显示名称，便于后台管理"""
-        return f"{self.spider_name} - {self.keyword}（第{self.current_page}页）"
