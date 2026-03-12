@@ -5,6 +5,7 @@
 @Date    ：2026/3/4 17:09
 @description : 星座相关视图逻辑
 """
+from App.view.wallpapers.search_models.search_models import TAG_MAPPING
 from tool.base_views import BaseViewSet
 from tool.middleware import logger
 from tool.utils import CustomPagination, ApiResponse
@@ -71,7 +72,7 @@ class WallpapersViewSet(BaseViewSet):
     queryset = Wallpapers.objects.all()
     serializer_class = WallpapersSerializer
     pagination_class = CustomPagination
-
+    TAG_MAPPING
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
         page = self.paginate_queryset(queryset)
@@ -87,9 +88,31 @@ class WallpapersViewSet(BaseViewSet):
         """
         queryset = super().get_queryset()
         # 筛选参数：name
-        name = self.request.query_params.get("name")
-        if name:
-            queryset = queryset.filter(name__icontains=name)
+        user_input = self.request.query_params.get("name", "").strip()
+        if user_input:
+            # 1. 找出所有用户输入中包含的TAG_MAPPING关键词
+            matched_tags = []
+            for keyword, tag_id in TAG_MAPPING.items():
+                # 判断用户输入是否包含当前关键词（不区分大小写）
+                if keyword.lower() in user_input.lower():
+                    matched_tags.append((len(keyword), keyword, tag_id))
+
+            if matched_tags:
+                # 2. 排序：优先匹配长度更长的关键词（多个关键词时优先匹配更精准的）
+                # 例如：输入"关键词123"，同时匹配"关键词1"和"关键词123"，优先选后者
+                matched_tags.sort(key=lambda x: x[0], reverse=True)
+
+                # 3. 获取优先级最高的标签ID进行筛选
+                highest_priority_tag_id = matched_tags[0][2]
+                queryset = queryset.filter(tags__id=highest_priority_tag_id).distinct()
+
+                # 可选：如果需要同时匹配所有包含的标签（交集），取消下面注释
+                # tag_ids = [tag[2] for tag in matched_tags]
+                # queryset = queryset.filter(tags__id__in=tag_ids).distinct()
+            else:
+                # 4. 未匹配到任何TAG_MAPPING关键词 → 降级为原有的名称模糊搜索
+                queryset = queryset.filter(name__icontains=user_input)
+
         # 筛选参数：tag_id（支持单个和多个，逗号分隔）
         tag_ids = self.request.query_params.get("tag_id")
         if tag_ids:
