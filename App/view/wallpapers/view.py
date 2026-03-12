@@ -15,7 +15,7 @@ import pandas as pd
 from rest_framework.decorators import api_view, action
 from rest_framework import serializers
 # 导入壁纸模型
-from models.models import Wallpapers, WallpaperTag, WallpaperCategory
+from models.models import Wallpapers, WallpaperTag, WallpaperCategory, NavigationTag
 
 
 # ==================== 壁纸相关视图 ====================
@@ -72,7 +72,6 @@ class WallpapersViewSet(BaseViewSet):
     queryset = Wallpapers.objects.all()
     serializer_class = WallpapersSerializer
     pagination_class = CustomPagination
-    TAG_MAPPING
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
         page = self.paginate_queryset(queryset)
@@ -330,3 +329,53 @@ class WallpapersViewSet(BaseViewSet):
         except Exception as e:
             logger.error(f"批量导入失败：{str(e)}", exc_info=True)
             return ApiResponse(code=500, message=_("批量导入失败：%(error)s") % {"error": str(e)})
+
+
+class WallpapersSerializer(serializers.ModelSerializer):
+    """壁纸序列化器"""
+
+    class Meta:
+        model = NavigationTag
+        fields = '__all__'
+
+
+@extend_schema(tags=["导航管理"])
+@extend_schema_view(
+    list=extend_schema(
+        summary="获取导航列表",
+        parameters=[
+            OpenApiParameter(name="currentPage", type=int, required=False, description="当前页码"),
+            OpenApiParameter(name="pageSize", type=int, required=False, description="每页数量"),
+        ],
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "integer", "example": 200},
+                    "data": {
+                        "type": "object",
+                        "properties": {
+                            "results": {"type": "array", "items": {"$ref": "#/components/schemas/NavigationTag"}},
+                            "total": {"type": "integer", "example": 50}
+                        }
+                    },
+                    "message": {"type": "string", "example": "列表获取成功"}
+                }
+            }
+        }
+    ),
+    retrieve=extend_schema(summary="获取导航详情", responses={200: WallpapersSerializer, 404: "导航不存在"}),
+    create=extend_schema(summary="创建导航", request=WallpapersSerializer),
+    update=extend_schema(summary="更新导航", request=WallpapersSerializer),
+    partial_update=extend_schema(summary="部分更新导航", request=WallpapersSerializer),
+    destroy=extend_schema(summary="删除导航", description="删除指定导航记录",
+                          responses={204: "删除成功", 404: "导航不存在"})
+)
+class NavigationTagViewSet(BaseViewSet):
+    """
+    导航管理 ViewSet
+    提供导航的增删改查功能
+    """
+    queryset = NavigationTag.objects.all()
+    serializer_class = WallpapersSerializer
+    pagination_class = CustomPagination

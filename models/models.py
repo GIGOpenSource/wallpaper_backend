@@ -177,7 +177,8 @@ class InvitationRecord(models.Model):
     def __str__(self):
         return f"{self.inviter.username} 邀请了 {self.invitee.username}"
 
-#壁纸分类
+
+# 壁纸分类
 class WallpaperCategory(models.Model):
     name = models.CharField(max_length=50, verbose_name="分类名称", unique=True)
     desc = models.CharField(max_length=200, verbose_name="分类描述", blank=True, null=True)
@@ -193,18 +194,22 @@ class WallpaperCategory(models.Model):
     def __str__(self):
         return self.name
 
-#壁纸标签，可以有很多
+
+# 壁纸标签，可以有很多
 class WallpaperTag(models.Model):
     name = models.CharField(max_length=50, verbose_name="标签名称", unique=True)
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+
     class Meta:
         db_table = 't_wallpaper_tag'
         verbose_name = '壁纸标签'
         verbose_name_plural = '壁纸标签'
+
     def __str__(self):
         return self.name
 
-#壁纸
+
+# 壁纸
 class Wallpapers(models.Model):
     name = models.CharField(max_length=200, verbose_name="壁纸名称")  # 加长长度适配英文标题
     url = models.URLField(max_length=500, verbose_name="壁纸原图链接")  # 加长URL长度
@@ -221,23 +226,28 @@ class Wallpapers(models.Model):
     is_hd = models.BooleanField(default=False, verbose_name="是否高清壁纸")
     hot_score = models.IntegerField(default=0, verbose_name="热门分值（越高越热门）")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+
     class Meta:
         db_table = 't_wallpapers'
         verbose_name = '壁纸'
         verbose_name_plural = '壁纸'
         ordering = ['-created_at']
+
     def __str__(self):
         return self.name[:50]  # 截断过长名称
+
     def get_category_names(self):
         """返回拼接的分类名称，如「静态 + 手机」"""
         categories = self.category.all()
         if not categories:
             return "未分类"
         return " + ".join([cat.name for cat in categories])
+
     def is_hd_auto(self):
         """根据分辨率自动判断是否高清（可选）"""
         # 简单判断：宽度≥1920 或 高度≥1080 视为高清
         return self.width >= 1920 or self.height >= 1080
+
 
 class WallpaperCollection(models.Model):
     user = models.ForeignKey(WeChatUser, on_delete=models.CASCADE, verbose_name="收藏用户", db_constraint=False)
@@ -252,3 +262,38 @@ class WallpaperCollection(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.wallpaper.name}"
+
+
+class NavigationTag(models.Model):
+    """
+    前端导航分类标签（后台可控）
+    - 关联壁纸标签（Tag）
+    - 支持地区标识
+    - 支持排序、显示/隐藏控制
+    """
+    # 关联的壁纸标签（一对一/多对一，根据实际需求选择）
+    # 推荐一对一：一个导航标签对应一个壁纸标签，便于管理
+    tag = models.OneToOneField(WallpaperTag,on_delete=models.CASCADE,verbose_name="关联壁纸标签",related_name="navigation_tag")
+    # 地区标识（用于区分不同地区的导航标签）
+    region = models.CharField(max_length=20,default='global',verbose_name="所属地区")
+    # 导航展示相关字段
+    nav_name = models.CharField(max_length=50,verbose_name="导航显示名称",help_text="可自定义导航栏显示的名称，不填则使用标签名称")
+    sort = models.IntegerField(default=0,verbose_name="导航排序（数字越小越靠前）")
+    is_show = models.BooleanField(default=True,verbose_name="是否在前端显示")
+    created_at = models.DateTimeField(auto_now_add=True,verbose_name="创建时间")
+    updated_at = models.DateTimeField(auto_now=True,verbose_name="更新时间")
+
+    class Meta:
+        db_table = 't_navigation_tag'
+        verbose_name = '导航分类标签'
+        verbose_name_plural = '导航分类标签'
+        ordering = ['sort', '-created_at']
+
+    def __str__(self):
+        return f"{self.get_region_display()} - {self.nav_name or self.tag.name}"
+
+    def save(self, *args, **kwargs):
+        # 自动填充导航名称（如果未填写则使用标签名称）
+        if not self.nav_name:
+            self.nav_name = self.tag.name
+        super().save(*args, **kwargs)
