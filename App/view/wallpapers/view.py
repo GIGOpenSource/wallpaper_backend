@@ -22,12 +22,36 @@ from models.models import Wallpapers, WallpaperTag, WallpaperCategory, Navigatio
 
 class WallpapersSerializer(serializers.ModelSerializer):
     """壁纸序列化器"""
-
+    tags = serializers.SerializerMethodField()
+    aspect_ratio = serializers.SerializerMethodField()
     class Meta:
         model = Wallpapers
         fields = '__all__'
         read_only_fields = ['id', 'created_at']
 
+    def get_tags(self, obj):
+        return [
+            {
+                'id': tag.id,
+                'name': tag.name,
+            }
+            for tag in obj.tags.all()
+        ]
+
+    def get_aspect_ratio(self, obj):
+        """计算宽高比，格式如 16:9"""
+        if not obj.width or not obj.height:
+            return None
+
+        # 计算最大公约数
+        def gcd(a, b):
+            while b:
+                a, b = b, a % b
+            return a
+        common_divisor = gcd(obj.width, obj.height)
+        width_ratio = obj.width // common_divisor
+        height_ratio = obj.height // common_divisor
+        return f"{width_ratio}:{height_ratio}"
 
 @extend_schema(tags=["壁纸管理"])
 @extend_schema_view(
