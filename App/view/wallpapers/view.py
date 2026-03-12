@@ -39,6 +39,9 @@ class WallpapersSerializer(serializers.ModelSerializer):
             OpenApiParameter(name="name", type=str, required=False, description="壁纸名称搜索"),
             OpenApiParameter(name="tag_id", type=str, required=False,
                              description="标签 ID 查询，支持单个或多个（逗号分隔）"),
+            OpenApiParameter(name="category_id", type=str, required=False,description="分类 ID 筛选，支持单个或多个（逗号分隔）"),
+            OpenApiParameter(name="media_live", type=str, required=False,description="静态false或动态true"),
+            OpenApiParameter(name="platform", type=str, required=False,description="平台电脑PC或手机PHONE "),
         ],
         responses={
             200: {
