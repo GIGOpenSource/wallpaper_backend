@@ -149,28 +149,96 @@ class WallpapersViewSet(BaseViewSet):
         return queryset
 
     @extend_schema(
-        summary="获取所有壁纸标签",
+        summary="猜你喜欢",
+        description="根据传入的壁纸 ID，推荐具有相同标签的其他壁纸（按匹配标签数量排序）",
+        parameters=[
+            OpenApiParameter(name="wallpaper_id", type=int, required=True, description="壁纸 ID"),
+            OpenApiParameter(name="limit", type=int, required=False, description="返回数量限制，默认 10"),
+        ],
         responses={
             200: {
                 "type": "object",
                 "properties": {
                     "code": {"type": "integer", "example": 200},
-                    "message": {"type": "string", "example": "标签获取成功"},
+                    "message": {"type": "string", "example": "推荐成功"},
                     "data": {
                         "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "id": {"type": "integer", "example": 1},
-                                "name": {"type": "string", "example": "风景"},
-                                "created_at": {"type": "string", "format": "date-time"}
+                        "items": {"$ref": "#/components/schemas/Wallpapers"}
+                    }
+                }
+            },
+            404: {"description": "壁纸不存在"}
+        }
+    )
+    @action(detail=False, methods=['get'], url_path='guess_you_like')
+    def guess_you_like(self, request):
+        """
+        猜你喜欢：根据传入的壁纸 ID，推荐具有相同标签的其他壁纸
+        """
+        from django.db.models import Count, Q
+
+        wallpaper_id = request.query_params.get("wallpaper_id")
+        limit = int(request.query_params.get("limit", 10))
+
+        if not wallpaper_id:
+            return ApiResponse(code=400, message="请提供壁纸 ID")
+
+        try:
+            # 获取指定壁纸及其标签
+            target_wallpaper = Wallpapers.objects.prefetch_related('tags').get(id=wallpaper_id)
+            target_tags = target_wallpaper.tags.all()
+
+            if not target_tags.exists():
+                # 如果该壁纸没有标签，返回空列表
+                return ApiResponse(data=[], message="该壁纸没有标签，无法推荐")
+
+            target_tag_ids = list(target_tags.values_list('id', flat=True))
+
+            # 查询具有相同标签的其他壁纸（排除自身）
+            # 使用 annotate 计算匹配的标签数量
+            recommended_wallpapers = Wallpapers.objects.filter(
+                tags__id__in=target_tag_ids
+            ).exclude(
+                id=wallpaper_id
+            ).annotate(
+                match_count=Count('tags', filter=Q(tags__id__in=target_tag_ids))
+            ).order_by(
+                '-match_count', '-hot_score', '-created_at'
+            ).distinct()[:limit]
+
+            # 序列化返回数据
+            serializer = self.get_serializer(recommended_wallpapers, many=True)
+            return ApiResponse(data=serializer.data, message=f"为您找到{len(serializer.data)}个相关推荐")
+
+        except Wallpapers.DoesNotExist:
+            return ApiResponse(code=404, message="指定的壁纸不存在")
+        except Exception as e:
+            logger.error(f"猜你喜欢推荐失败：{str(e)}", exc_info=True)
+            return ApiResponse(code=500, message=f"推荐失败：{str(e)}")
+
+    @extend_schema(
+            summary="获取所有壁纸标签",
+            responses={
+                200: {
+                    "type": "object",
+                    "properties": {
+                        "code": {"type": "integer", "example": 200},
+                        "message": {"type": "string", "example": "标签获取成功"},
+                        "data": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {"type": "integer", "example": 1},
+                                    "name": {"type": "string", "example": "风景"},
+                                    "created_at": {"type": "string", "format": "date-time"}
+                                }
                             }
                         }
                     }
                 }
             }
-        }
-    )
+        )
     @action(detail=False, methods=['get'], url_path='tags')
     def tags(self, request):
         """
@@ -358,14 +426,12 @@ class WallpapersViewSet(BaseViewSet):
             return ApiResponse(code=500, message=_("批量导入失败：%(error)s") % {"error": str(e)})
 
 
-class WallpapersSerializer(serializers.ModelSerializer):
+class NavigationTagSerializer(serializers.ModelSerializer):
     """壁纸序列化器"""
 
     class Meta:
         model = NavigationTag
         fields = '__all__'
-
-
 @extend_schema(tags=["导航管理"])
 @extend_schema_view(
     list=extend_schema(
@@ -391,10 +457,10 @@ class WallpapersSerializer(serializers.ModelSerializer):
             }
         }
     ),
-    retrieve=extend_schema(summary="获取导航详情", responses={200: WallpapersSerializer, 404: "导航不存在"}),
-    create=extend_schema(summary="创建导航", request=WallpapersSerializer),
-    update=extend_schema(summary="更新导航", request=WallpapersSerializer),
-    partial_update=extend_schema(summary="部分更新导航", request=WallpapersSerializer),
+    retrieve=extend_schema(summary="获取导航详情", responses={200: NavigationTagSerializer, 404: "导航不存在"}),
+    create=extend_schema(summary="创建导航", request=NavigationTagSerializer),
+    update=extend_schema(summary="更新导航", request=NavigationTagSerializer),
+    partial_update=extend_schema(summary="部分更新导航", request=NavigationTagSerializer),
     destroy=extend_schema(summary="删除导航", description="删除指定导航记录",
                           responses={204: "删除成功", 404: "导航不存在"})
 )
@@ -404,7 +470,7 @@ class NavigationTagViewSet(BaseViewSet):
     提供导航的增删改查功能
     """
     queryset = NavigationTag.objects.all()
-    serializer_class = WallpapersSerializer
+    serializer_class = NavigationTagSerializer
     pagination_class = CustomPagination
 
     def list(self, request, *args, **kwargs):
