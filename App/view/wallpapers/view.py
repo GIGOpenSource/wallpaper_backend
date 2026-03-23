@@ -114,6 +114,18 @@ class WallpapersViewSet(BaseViewSet):
         """
         queryset = super().get_queryset()
         # 筛选参数：name
+        platform = self.request.query_params.get("platform", "")
+        if platform.upper() == 'PC':
+            queryset = queryset.filter(category__id=1).distinct()
+        elif platform.upper() == 'PHONE':
+            queryset = queryset.filter(category__id=2).distinct()
+
+        media_live = self.request.query_params.get("media_live", "")
+        if media_live.lower() == 'true':
+            queryset = queryset.filter(category__id=4).distinct()
+        elif media_live.lower() == 'false':
+            queryset = queryset.filter(category__id=3).distinct()
+
         user_input = self.request.query_params.get("name", "").strip()
         if user_input:
             # 1. 找出所有用户输入中包含的TAG_MAPPING关键词
