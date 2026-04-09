@@ -85,6 +85,14 @@ class WallpapersSerializer(serializers.ModelSerializer):
             return False
         return WallpaperCollection.objects.filter(user_id=cid, wallpaper_id=obj.pk).exists()
 
+
+class CollectionItemSerializer(serializers.ModelSerializer):
+    wallpaper = WallpapersSerializer(read_only=True)
+
+    class Meta:
+        model = WallpaperCollection
+        fields = ["id", "created_at", "wallpaper"]
+
 @extend_schema(tags=["壁纸管理"])
 @extend_schema_view(
     list=extend_schema(
@@ -296,8 +304,10 @@ class WallpapersViewSet(BaseViewSet):
                 if created:
                     Wallpapers.objects.filter(pk=wp.pk).update(like_count=F("like_count") + 1)
                     liked = True
+                    message = "点赞成功"
                 else:
                     like.delete()
+                    message = "取消点赞成功"
                     Wallpapers.objects.filter(pk=wp.pk).update(
                         like_count=Greatest(F("like_count") - 1, 0)
                     )
@@ -307,7 +317,7 @@ class WallpapersViewSet(BaseViewSet):
             return ApiResponse(code=404, message="壁纸不存在")
         return ApiResponse(
             data={"liked": liked, "like_count": wp.like_count},
-            message="操作成功",
+            message=message,
         )
 
     @extend_schema(summary="收藏/取消收藏（需客户 Token）")
@@ -379,6 +389,41 @@ class WallpapersViewSet(BaseViewSet):
             data={"download_count": wp.download_count},
             message="记录成功",
         )
+
+    @extend_schema(summary="我的收藏列表（仅需客户 Token）")
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="my-collections",
+        permission_classes=[IsCustomerTokenValid],
+    )
+    def my_collections(self, request):
+        token = request.headers.get("token")
+        is_valid, customer_id = CustomTokenTool.verify_customer_token(token)
+        if not is_valid or not customer_id:
+            return ApiResponse(code=401, message="客户 Token 无效或已过期")
+
+        qs = (
+            WallpaperCollection.objects
+            .filter(user_id=customer_id)
+            .select_related("wallpaper")
+            .prefetch_related("wallpaper__tags", "wallpaper__category")
+            .order_by("-created_at")
+        )
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            data = CollectionItemSerializer(
+                page,
+                many=True,
+                context=self.get_serializer_context(),
+            ).data
+            return self.get_paginated_response(data)
+        data = CollectionItemSerializer(
+            qs,
+            many=True,
+            context=self.get_serializer_context(),
+        ).data
+        return ApiResponse(data=data, message="获取收藏列表成功")
 
     @extend_schema(
             summary="获取所有壁纸标签",
