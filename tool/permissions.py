@@ -1,7 +1,7 @@
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.permissions import BasePermission
 
-from models.models import WeChatUser, User
+from models.models import User
 from tool.token_tools import CustomTokenTool
 
 
@@ -46,6 +46,19 @@ class IsTokenValid(BasePermission):
             return True
         else:
             return False
+
+
+class IsCustomerTokenValid(BasePermission):
+    """C 端客户 Token（请求头 token，值为 CToken 开头）。"""
+    message = "客户 Token 无效或已过期"
+
+    def has_permission(self, request, view):
+        token = request.headers.get("token")
+        is_valid, customer_id = CustomTokenTool.verify_customer_token(token)
+        if is_valid:
+            request.customer_id = int(customer_id)
+            return True
+        return False
 
 
 class IsOwnerOrAdmin(BasePermission):

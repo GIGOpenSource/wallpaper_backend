@@ -3,19 +3,31 @@
 @File    ：view.py
 @Author  ：LiangHB
 @Date    ：2026/3/4 17:09
-@description : 星座相关视图逻辑
+@description : 壁纸相关视图逻辑
 """
+from django.db import transaction
+from django.db.models import F
+from django.db.models.functions import Greatest
+
 from App.view.wallpapers.search_models.search_models import TAG_MAPPING
 from tool.base_views import BaseViewSet
 from tool.middleware import logger
+from tool.permissions import IsCustomerTokenValid
+from tool.token_tools import CustomTokenTool
 from tool.utils import CustomPagination, ApiResponse
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
 from django.utils.translation import get_language, gettext as _, activate
 import pandas as pd
 from rest_framework.decorators import api_view, action
 from rest_framework import serializers
-# 导入壁纸模型
-from models.models import Wallpapers, WallpaperTag, WallpaperCategory, NavigationTag
+from models.models import (
+    Wallpapers,
+    WallpaperTag,
+    WallpaperCategory,
+    NavigationTag,
+    WallpaperLike,
+    WallpaperCollection,
+)
 
 
 # ==================== 壁纸相关视图 ====================
@@ -24,10 +36,18 @@ class WallpapersSerializer(serializers.ModelSerializer):
     """壁纸序列化器"""
     tags = serializers.SerializerMethodField()
     aspect_ratio = serializers.SerializerMethodField()
+    is_liked = serializers.SerializerMethodField()
+    is_collected = serializers.SerializerMethodField()
+
     class Meta:
         model = Wallpapers
-        fields = '__all__'
-        read_only_fields = ['id', 'created_at']
+        fields = [
+            'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
+            'source_url', 'has_watermark', 'category', 'tags', 'is_live', 'is_hd',
+            'hot_score', 'like_count', 'collect_count', 'download_count', 'created_at',
+            'aspect_ratio', 'is_liked', 'is_collected',
+        ]
+        read_only_fields = ['id', 'created_at', 'like_count', 'collect_count', 'download_count']
 
     def get_tags(self, obj):
         return [
@@ -52,6 +72,18 @@ class WallpapersSerializer(serializers.ModelSerializer):
         width_ratio = obj.width // common_divisor
         height_ratio = obj.height // common_divisor
         return f"{width_ratio}:{height_ratio}"
+
+    def get_is_liked(self, obj):
+        cid = self.context.get("customer_id")
+        if not cid:
+            return False
+        return WallpaperLike.objects.filter(customer_id=cid, wallpaper_id=obj.pk).exists()
+
+    def get_is_collected(self, obj):
+        cid = self.context.get("customer_id")
+        if not cid:
+            return False
+        return WallpaperCollection.objects.filter(user_id=cid, wallpaper_id=obj.pk).exists()
 
 @extend_schema(tags=["壁纸管理"])
 @extend_schema_view(
@@ -99,6 +131,17 @@ class WallpapersViewSet(BaseViewSet):
     queryset = Wallpapers.objects.all()
     serializer_class = WallpapersSerializer
     pagination_class = CustomPagination
+
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        ctx["customer_id"] = None
+        tok = self.request.headers.get("token")
+        if tok:
+            ok, cid = CustomTokenTool.verify_customer_token(tok)
+            if ok:
+                ctx["customer_id"] = cid
+        return ctx
+
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
         page = self.paginate_queryset(queryset)
@@ -227,6 +270,115 @@ class WallpapersViewSet(BaseViewSet):
         except Exception as e:
             logger.error(f"猜你喜欢推荐失败：{str(e)}", exc_info=True)
             return ApiResponse(code=500, message=f"推荐失败：{str(e)}")
+
+    @extend_schema(summary="点赞/取消点赞（需客户 Token）")
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="toggle-like",
+        permission_classes=[IsCustomerTokenValid],
+    )
+    def toggle_like(self, request):
+        wid = request.data.get("wallpaper_id")
+        if not wid:
+            return ApiResponse(code=400, message="请提供 wallpaper_id")
+        try:
+            wid = int(wid)
+        except (TypeError, ValueError):
+            return ApiResponse(code=400, message="wallpaper_id 无效")
+        cid = request.customer_id
+        try:
+            with transaction.atomic():
+                wp = Wallpapers.objects.select_for_update().get(pk=wid)
+                like, created = WallpaperLike.objects.get_or_create(
+                    customer_id=cid, wallpaper=wp
+                )
+                if created:
+                    Wallpapers.objects.filter(pk=wp.pk).update(like_count=F("like_count") + 1)
+                    liked = True
+                else:
+                    like.delete()
+                    Wallpapers.objects.filter(pk=wp.pk).update(
+                        like_count=Greatest(F("like_count") - 1, 0)
+                    )
+                    liked = False
+                wp.refresh_from_db(fields=["like_count"])
+        except Wallpapers.DoesNotExist:
+            return ApiResponse(code=404, message="壁纸不存在")
+        return ApiResponse(
+            data={"liked": liked, "like_count": wp.like_count},
+            message="操作成功",
+        )
+
+    @extend_schema(summary="收藏/取消收藏（需客户 Token）")
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="toggle-collect",
+        permission_classes=[IsCustomerTokenValid],
+    )
+    def toggle_collect(self, request):
+        wid = request.data.get("wallpaper_id")
+        if not wid:
+            return ApiResponse(code=400, message="请提供 wallpaper_id")
+        try:
+            wid = int(wid)
+        except (TypeError, ValueError):
+            return ApiResponse(code=400, message="wallpaper_id 无效")
+        cid = request.customer_id
+        try:
+            with transaction.atomic():
+                wp = Wallpapers.objects.select_for_update().get(pk=wid)
+                row, created = WallpaperCollection.objects.get_or_create(
+                    user_id=cid, wallpaper=wp
+                )
+                if created:
+                    Wallpapers.objects.filter(pk=wp.pk).update(
+                        collect_count=F("collect_count") + 1
+                    )
+                    collected = True
+                else:
+                    row.delete()
+                    Wallpapers.objects.filter(pk=wp.pk).update(
+                        collect_count=Greatest(F("collect_count") - 1, 0)
+                    )
+                    collected = False
+                wp.refresh_from_db(fields=["collect_count"])
+        except Wallpapers.DoesNotExist:
+            return ApiResponse(code=404, message="壁纸不存在")
+        return ApiResponse(
+            data={"collected": collected, "collect_count": wp.collect_count},
+            message="操作成功",
+        )
+
+    @extend_schema(summary="记录一次下载并返回累计下载量（需客户 Token）")
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="record-download",
+        permission_classes=[IsCustomerTokenValid],
+    )
+    def record_download(self, request):
+        wid = request.data.get("wallpaper_id")
+        if not wid:
+            return ApiResponse(code=400, message="请提供 wallpaper_id")
+        try:
+            wid = int(wid)
+        except (TypeError, ValueError):
+            return ApiResponse(code=400, message="wallpaper_id 无效")
+        try:
+            with transaction.atomic():
+                wp = Wallpapers.objects.select_for_update().get(pk=wid)
+                Wallpapers.objects.filter(pk=wp.pk).update(
+                    download_count=F("download_count") + 1
+                )
+                wp.refresh_from_db(fields=["download_count"])
+        except Wallpapers.DoesNotExist:
+            return ApiResponse(code=404, message="壁纸不存在")
+        return ApiResponse(
+            data={"download_count": wp.download_count},
+            message="记录成功",
+        )
 
     @extend_schema(
             summary="获取所有壁纸标签",

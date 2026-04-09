@@ -113,4 +113,4 @@ raw_tag_list = [
 # 生成最终的 TAG_MAPPING
 TAG_MAPPING = generate_tag_mapping(raw_tag_list)
 
-print(TAG_MAPPING)
+# print(TAG_MAPPING)

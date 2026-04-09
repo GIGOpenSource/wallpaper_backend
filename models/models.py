@@ -5,116 +5,36 @@
 @File    ：models.py
 @Author  ：LiangHB
 @Date    ：2025/10/30 10:47 
-@description : 微信小程序用户模型
+@description : 数据模型（客户账户、壁纸等）
 """
-from datetime import datetime
-
 from django.db import models
 from django.utils import timezone
 from tool.password_hasher import hash_password
 
 
-class WeChatUser(models.Model):
+class CustomerUser(models.Model):
     """
-    微信小程序用户模型
+    C 端客户账户（邮箱 + 密码），与后台管理员 User 分离。
     """
-    # 用户唯一标识
-    open_id = models.CharField(max_length=64, unique=True, verbose_name="用户OpenID")
-    # 用户昵称
-    username = models.CharField(max_length=100, blank=True, null=True, verbose_name="用户名")
-    # 用户头像URL
-    user_avatar = models.TextField(blank=True, null=True, verbose_name="用户头像")
-    GENDER_TYPE = {'male': '男', 'female': '女', 'unknown': '未知'}
-    user_gender = models.CharField(blank=True, null=True, choices=GENDER_TYPE, verbose_name="性别")
-    user_telphone = models.CharField(max_length=30, blank=True, null=True, verbose_name="手机号")
-    # 是否为VIP用户
-    is_vip = models.BooleanField(default=False, verbose_name="是否为VIP")
-    # VIP类型选择
-    MONTHLY = 'monthly'
-    ONCE = 'once'
-    VIP_TYPE_CHOICES = [(MONTHLY, '月付'), (ONCE, '单次')]
-    vip_type = models.CharField(max_length=20, choices=VIP_TYPE_CHOICES, blank=True, null=True, verbose_name="VIP类型")
-    session_key = models.CharField(max_length=120, blank=True, null=True, verbose_name="Session Key")
-    # 分享次数统计
-    share_success_count = models.PositiveIntegerField(default=0, verbose_name="分享成功次数")
-    # 成功次数统计
-    allow_count = models.PositiveIntegerField(default=0, verbose_name="允许使用次数")
-    # 失败次数统计
-    fail_count = models.PositiveIntegerField(default=0, verbose_name="失败次数")
-    # VIP到期日期
-    vip_expire_date = models.DateTimeField(blank=True, null=True, verbose_name="VIP到期日")
-    # 创建时间
+    email = models.EmailField(unique=True, verbose_name="邮箱")
+    password = models.CharField(max_length=256, verbose_name="密码（哈希）")
+    last_login = models.DateTimeField(blank=True, null=True, verbose_name="最后登录时间")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
-    STATUS_CHOICES = (
-        (0, '正常'),
-        (1, '冻结'),
-        (2, '注销'),
-        (3, '注销中'),
-    )
-    status = models.IntegerField(choices=STATUS_CHOICES, default=0, verbose_name="用户状态")
-    platform = models.CharField(max_length=20, blank=True, null=True, verbose_name="平台")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
 
-    is_deleted = models.BooleanField(default=False, verbose_name="是否已注销")
-    delete_requested_at = models.DateTimeField(null=True, blank=True, verbose_name="注销请求时间")
-    deletion_deadline = models.DateTimeField(null=True, blank=True, verbose_name="注销截止时间（7天后）")
-
-    # xhs_mini fbook_mini ins_mini google_mini ios_mini apk_mini wechat_mini mock_mini
     class Meta:
-        db_table = 'wx_wechat_user'
-        verbose_name = '微信用户'
-        verbose_name_plural = '微信用户'
-        managed = False
+        db_table = 't_customer_user'
+        verbose_name = '客户用户'
+        verbose_name_plural = '客户用户'
+        ordering = ['-created_at']
+
+    def save(self, *args, **kwargs):
+        if self.password and not self.password.startswith('$2b$'):
+            self.password = hash_password(self.password[:72])
+        super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.username} ({self.open_id})"
-
-    def get_invitees_count(self):
-        """
-        获取该用户邀请的人数
-        """
-        return self.invitations_sent.count()
-
-    def request_account_deletion(self):
-        """
-        请求账户注销，设置7天冷静期
-        """
-        from datetime import datetime, timedelta
-        self.is_deleted = True
-        self.delete_requested_at = datetime.now()
-        self.deletion_deadline = datetime.now() + timedelta(days=7)
-        self.status = 2  # 设置为注销状态
-        self.save()
-
-    def cancel_account_deletion(self):
-        """
-        取消账户注销请求
-        """
-        self.is_deleted = False
-        self.delete_requested_at = None
-        self.deletion_deadline = None
-        self.status = 0  # 恢复为正常状态
-        self.save()
-
-    def is_in_deletion_period(self):
-        """检查是否仍在删除期限内"""
-        if not self.is_deleted or not self.deletion_deadline:
-            return False
-
-        # 使用带时区的当前时间进行比较
-        from django.utils import timezone
-        current_time = timezone.now()
-
-        # 比较当前时间是否仍在删除截止日期之前
-        return current_time < self.deletion_deadline
-
-    def can_be_permanently_deleted(self):
-        """
-        检查用户是否可以被永久删除（冷静期已过）
-        """
-        if self.is_deleted and self.deletion_deadline:
-            from datetime import datetime
-            return datetime.now() >= self.deletion_deadline
-        return False
+        return self.email
 
 
 class User(models.Model):
@@ -156,26 +76,6 @@ class User(models.Model):
 
     def __str__(self):
         return f"{self.username} ({self.get_role_display()})"
-
-
-class InvitationRecord(models.Model):
-    """
-    邀请记录模型：记录用户之间的邀请关系
-    """
-    inviter = models.ForeignKey(WeChatUser, on_delete=models.CASCADE, related_name="invitations_sent",
-                                verbose_name="邀请人")
-    invitee = models.OneToOneField(WeChatUser, on_delete=models.CASCADE, related_name="invitation_received",
-                                   verbose_name="被邀请人")
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name="邀请时间")
-
-    class Meta:
-        db_table = 'wx_invitation_record'
-        verbose_name = '邀请记录'
-        verbose_name_plural = '邀请记录'
-        unique_together = ('invitee',)  # 确保每个用户只能被邀请一次
-
-    def __str__(self):
-        return f"{self.inviter.username} 邀请了 {self.invitee.username}"
 
 
 # 壁纸分类
@@ -225,6 +125,9 @@ class Wallpapers(models.Model):
     is_live = models.BooleanField(default=False, verbose_name="是否Live壁纸")
     is_hd = models.BooleanField(default=False, verbose_name="是否高清壁纸")
     hot_score = models.IntegerField(default=0, verbose_name="热门分值（越高越热门）")
+    like_count = models.PositiveIntegerField(default=0, verbose_name="点赞数")
+    collect_count = models.PositiveIntegerField(default=0, verbose_name="收藏数")
+    download_count = models.PositiveIntegerField(default=0, verbose_name="下载量")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
 
     class Meta:
@@ -249,9 +152,44 @@ class Wallpapers(models.Model):
         return self.width >= 1920 or self.height >= 1080
 
 
+class WallpaperLike(models.Model):
+    customer = models.ForeignKey(
+        CustomerUser,
+        on_delete=models.CASCADE,
+        related_name="wallpaper_likes",
+        verbose_name="用户",
+    )
+    wallpaper = models.ForeignKey(
+        Wallpapers,
+        on_delete=models.CASCADE,
+        related_name="likes",
+        verbose_name="壁纸",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="点赞时间")
+
+    class Meta:
+        db_table = 't_wallpaper_like'
+        verbose_name = '壁纸点赞'
+        verbose_name_plural = '壁纸点赞'
+        unique_together = ('customer', 'wallpaper')
+
+    def __str__(self):
+        return f"{self.customer.email} → {self.wallpaper.name[:30]}"
+
+
 class WallpaperCollection(models.Model):
-    user = models.ForeignKey(WeChatUser, on_delete=models.CASCADE, verbose_name="收藏用户", db_constraint=False)
-    wallpaper = models.ForeignKey(Wallpapers, on_delete=models.CASCADE, verbose_name="收藏壁纸")
+    user = models.ForeignKey(
+        CustomerUser,
+        on_delete=models.CASCADE,
+        related_name="wallpaper_collections",
+        verbose_name="收藏用户",
+    )
+    wallpaper = models.ForeignKey(
+        Wallpapers,
+        on_delete=models.CASCADE,
+        related_name="collections",
+        verbose_name="收藏壁纸",
+    )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="收藏时间")
 
     class Meta:
@@ -261,7 +199,7 @@ class WallpaperCollection(models.Model):
         unique_together = ('user', 'wallpaper')
 
     def __str__(self):
-        return f"{self.user.username} - {self.wallpaper.name}"
+        return f"{self.user.email} - {self.wallpaper.name}"
 
 
 class NavigationTag(models.Model):
@@ -297,3 +235,24 @@ class NavigationTag(models.Model):
         if not self.nav_name:
             self.nav_name = self.tag.name
         super().save(*args, **kwargs)
+
+
+class CarouselBanner(models.Model):
+    """
+    轮播图表
+    存储下载量最高的前6名壁纸ID
+    """
+    wallpaper = models.ForeignKey(Wallpapers, on_delete=models.CASCADE, verbose_name="壁纸", related_name="carousel_banners")
+    sort = models.IntegerField(default=0, verbose_name="轮播排序（数字越小越靠前）")
+    download_count = models.IntegerField(default=0, verbose_name="下载量")
+    is_active = models.BooleanField(default=True, verbose_name="是否启用")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+    class Meta:
+        db_table = 't_carousel_banner'
+        verbose_name = '轮播图'
+        verbose_name_plural = '轮播图'
+        ordering = ['sort', '-download_count']
+
+    def __str__(self):
+        return f"轮播图 {self.sort} - {self.wallpaper.name[:30]}"

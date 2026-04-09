@@ -183,6 +183,36 @@ class CustomTokenTool:
         if token:
             _redis.delKey(token)
 
+    @classmethod
+    def generate_customer_token(cls, customer_id: int) -> str:
+        """C 端客户 Token（Redis 中的 key 与后台 Token 不同，避免混淆）。"""
+        expire_timestamp = int(time.time()) + int(timedelta(hours=TOKEN_EXPIRE_HOURS).total_seconds())
+        token_core = f"c:{customer_id}:{expire_timestamp}".encode("utf-8")
+        encrypted_core, iv = cls._aes_encrypt(token_core)
+        token_bytes = iv + encrypted_core
+        token = "CToken" + base64.b64encode(token_bytes).decode("utf-8")
+        expire_seconds = 7 * 24 * 3600
+        _redis.setKey(token, str(customer_id), expire_seconds)
+        return token
+
+    @classmethod
+    def verify_customer_token(cls, token: str) -> tuple[bool, int | None]:
+        try:
+            if not token or not token.startswith("CToken"):
+                return False, None
+            token_key = _redis.getKey(token)
+            if token_key:
+                return True, int(token_key)
+            return False, None
+        except Exception as e:
+            print(f"Customer Token 校验失败：{str(e)}")
+            return False, None
+
+    @classmethod
+    def delete_customer_token(cls, token):
+        if token:
+            _redis.delKey(token)
+
 """
 是否生成token，如果token已有且有效则不生成 
 """

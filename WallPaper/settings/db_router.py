@@ -1,8 +1,8 @@
 class AppDBRouter:
     """
     数据库路由适配：
-    - 老库（old_db）：仅读取 User/WeChatUser，禁止写入/迁移
-    - 新库（default）：所有新建模型的读写+迁移，django_migrations 也存在于此
+    - 老库（old_db）：仅读取后台 User，禁止写入/迁移
+    - 新库（default）：客户与壁纸等模型的读写+迁移
     """
     # 老库只读的模型（小写，匹配 Django 内部 model_name）
     OLD_DB_READ_ONLY_MODELS = [

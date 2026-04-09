@@ -22,34 +22,16 @@ from Cryptodome.Hash import SHA256
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from django.forms import model_to_dict
 
-from models.models import WeChatUser as _
 from tool.tools import getEnvConfig, logger
 from tool.token_tools import _redis
 
 
-@transaction.atomic
 def checkWechatUserIsExist(openId: str, session_key: str, types: str, username: str = None, avatar: str = None,
-                           phone: str = None,gender: str=None,platform: str=None) -> _ or bool:
+                           phone: str = None, gender: str = None, platform: str = None):
     """
-    获取用户是否存在
-    :param openId: 用户唯一标识
-    :param session_key: session
-    :param types: create update
-    :param username: 用户昵称
-    :param avatar: 头像
-    :param phone: 手机号
-    :return:
+    历史微信建联逻辑；微信用户表已移除，请使用 /client/ 邮箱账户。
     """
-    if types == "update":
-        _.objects.filter(open_id=openId).update(user_telphone=phone)
-        return True
-    try:
-        data = _.objects.get(open_id=openId)
-
-    except _.DoesNotExist:
-        data = _.objects.create(open_id=openId, is_vip=False, session_key=session_key, share_success_count=0, allow_count=0,
-                                fail_count=0, created_at=datetime.now(),username=username, user_avatar=avatar, user_gender=gender,platform=platform)
-    return data
+    raise NotImplementedError("微信用户表已移除，请使用 POST /client/users/register/ 注册客户账户")
 
 
 def getWechatAccessToken():

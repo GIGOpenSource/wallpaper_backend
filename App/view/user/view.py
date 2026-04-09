@@ -5,7 +5,7 @@ from rest_framework import viewsets, serializers
 from rest_framework.decorators import action
 from drf_spectacular.utils import extend_schema, extend_schema_view
 
-from models.models import User, WeChatUser
+from models.models import User
 from tool.password_hasher import verify_password
 from tool.permissions import IsTokenValid, IsOwnerOrAdmin
 from tool.token_tools import CustomTokenTool, generate_is_user_token
@@ -138,41 +138,9 @@ class UserViewSet(viewsets.ViewSet):
 
 def deactivate_user_and_delete_posters(open_id):
     """
-    注销用户并删除其相关海报数据
-    Args:
-        open_id (str): 用户的OpenID
-    Returns:
-        dict: 操作结果信息
+    历史微信注销流程占位。微信用户表已移除，请使用 client 邮箱账户体系。
     """
-    from datetime import datetime
-    import pytz
-    try:
-        # 1. 根据open_id查询用户
-        user = WeChatUser.objects.get(open_id=open_id)
-        user_id = user.id
-        # 检查删除截止时间，只有在截止时间已过的情况下才执行删除
-        if user.deletion_deadline and user.deletion_deadline < datetime.now(pytz.UTC):
-            # 删除用户的所有海报数据
-
-            return {
-                "success": True,
-                "message": f"用户已删除",
-            }
-        else:
-            # 删除截止时间未到，不执行删除操作
-            return {
-                "success": True,
-                "message": "用户删除截止时间未到，暂不执行删除操作",
-                "deleted_user_count": 0,
-                "deleted_posters_count": 0
-            }
-    except WeChatUser.DoesNotExist:
-        return {
-            "success": False,
-            "message": "用户不存在"
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "message": f"注销过程中出现错误: {str(e)}"
-        }
+    return {
+        "success": False,
+        "message": "微信账户已下线，请使用邮箱注册登录（/client/users/register/）",
+    }
