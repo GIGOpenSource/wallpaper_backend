@@ -32,6 +32,33 @@ except Exception as e:
 from PIL import Image
 import io
 
+
+def bytes_from_uploaded_image(uploaded_file, quality=100):
+    """
+    读取上传文件字节。
+    - quality 为 100（默认）时：不做转码，保留原图（jpg/png/webp 等）。
+    - quality 1–99 且为图片时：转为 JPEG 并压缩（与历史 UploadResourceView 行为一致）。
+    """
+    try:
+        q = int(quality)
+    except (TypeError, ValueError):
+        q = 100
+    q = max(1, min(100, q))
+    ct = (getattr(uploaded_file, "content_type", None) or "").lower()
+    data = uploaded_file.read()
+    if not ct.startswith("image/") or q >= 100:
+        return data
+    try:
+        image = Image.open(io.BytesIO(data))
+        if image.mode in ("RGBA", "LA"):
+            image = image.convert("RGB")
+        output_buffer = io.BytesIO()
+        image.save(output_buffer, format="JPEG", quality=q, optimize=True)
+        return output_buffer.getvalue()
+    except Exception:
+        return data
+
+
 @extend_schema(tags=['上传管理'])
 class UploadResourceView(APIView):
     """
@@ -165,24 +192,7 @@ class UploadResourceView(APIView):
             else:
                 full_file_name = file_name
 
-            # 处理图像文件
-            if uploaded_file.content_type.startswith('image/') and quality < 100:
-                # 使用PIL处理图像
-                image = Image.open(uploaded_file)
-
-                # 转换为RGB模式（如果需要）
-                if image.mode in ('RGBA', 'LA'):
-                    image = image.convert('RGB')
-
-                # 创建输出缓冲区
-                output_buffer = io.BytesIO()
-
-                # 保存为JPEG格式并指定质量
-                image.save(output_buffer, format='JPEG', quality=quality, optimize=True)
-                file_content = output_buffer.getvalue()
-            else:
-                # 直接读取文件内容
-                file_content = uploaded_file.read()
+            file_content = bytes_from_uploaded_image(uploaded_file, quality=quality)
 
             # 上传到COS
             response = cos_client.put_object(

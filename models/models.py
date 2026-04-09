@@ -118,16 +118,18 @@ class Wallpapers(models.Model):
     height = models.IntegerField(default=0, verbose_name="图片高度")  # 新增：高度
     image_format = models.CharField(max_length=20, blank=True, null=True, verbose_name="图片格式")  # 新增：格式(jpg/png)
     source_url = models.URLField(max_length=500, blank=True, null=True, verbose_name="图片来源链接")  # 新增：来源链接
-    has_watermark = models.BooleanField(default=False, verbose_name="是否有水印")  # 新增：水印标识
+    has_watermark = models.BooleanField(default=False, verbose_name="是否有水印",null= True,blank=True)  # 新增：水印标识
+    description = models.TextField(blank=True, null=True, verbose_name="描述")
+
     # 原有字段
     category = models.ManyToManyField(WallpaperCategory, blank=True, verbose_name="所属分类")
     tags = models.ManyToManyField(WallpaperTag, blank=True, verbose_name="标签")
-    is_live = models.BooleanField(default=False, verbose_name="是否Live壁纸")
-    is_hd = models.BooleanField(default=False, verbose_name="是否高清壁纸")
-    hot_score = models.IntegerField(default=0, verbose_name="热门分值（越高越热门）")
-    like_count = models.PositiveIntegerField(default=0, verbose_name="点赞数")
-    collect_count = models.PositiveIntegerField(default=0, verbose_name="收藏数")
-    download_count = models.PositiveIntegerField(default=0, verbose_name="下载量")
+    is_live = models.BooleanField(default=False, verbose_name="是否Live壁纸",null= True,blank=True)
+    is_hd = models.BooleanField(default=False, verbose_name="是否高清壁纸",null= True,blank=True)
+    hot_score = models.IntegerField(default=0, verbose_name="热门分值（越高越热门）",null= True,blank=True)
+    like_count = models.PositiveIntegerField(default=0, verbose_name="点赞数",null= True,blank=True)
+    collect_count = models.PositiveIntegerField(default=0, verbose_name="收藏数",null= True,blank=True)
+    download_count = models.PositiveIntegerField(default=0, verbose_name="下载量",null= True,blank=True)
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
 
     class Meta:
@@ -150,6 +152,35 @@ class Wallpapers(models.Model):
         """根据分辨率自动判断是否高清（可选）"""
         # 简单判断：宽度≥1920 或 高度≥1080 视为高清
         return self.width >= 1920 or self.height >= 1080
+
+
+class CustomerWallpaperUpload(models.Model):
+    """
+    用户上传记录：与爬取的 Wallpapers 主数据分离，仅当有 C 端上传时存在一行。
+    """
+    wallpaper = models.OneToOneField(
+        Wallpapers,
+        on_delete=models.CASCADE,
+        related_name="customer_upload",
+        verbose_name="壁纸",
+    )
+    customer = models.ForeignKey(
+        CustomerUser,
+        on_delete=models.CASCADE,
+        related_name="wallpaper_uploads",
+        verbose_name="上传用户",
+    )
+    cos_key = models.CharField(max_length=500, blank=True, null=True, verbose_name="COS 对象键")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="上传时间")
+
+    class Meta:
+        db_table = "t_customer_wallpaper_upload"
+        verbose_name = "用户壁纸上传"
+        verbose_name_plural = "用户壁纸上传"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.customer.email} → #{self.wallpaper_id}"
 
 
 class WallpaperLike(models.Model):

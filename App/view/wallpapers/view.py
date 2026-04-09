@@ -5,21 +5,30 @@
 @Date    ：2026/3/4 17:09
 @description : 壁纸相关视图逻辑
 """
+import io
+import json
+import os
+import uuid
+
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
 from django.db.models import F
 from django.db.models.functions import Greatest
+from PIL import Image
 
 from App.view.wallpapers.search_models.search_models import TAG_MAPPING
 from tool.base_views import BaseViewSet
 from tool.middleware import logger
 from tool.permissions import IsCustomerTokenValid
 from tool.token_tools import CustomTokenTool
+from tool.uploader_data import bytes_from_uploaded_image, upload_image_to_cos
 from tool.utils import CustomPagination, ApiResponse
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
 from django.utils.translation import get_language, gettext as _, activate
 import pandas as pd
 from rest_framework.decorators import api_view, action
 from rest_framework import serializers
+from rest_framework.parsers import MultiPartParser, FormParser
 from models.models import (
     Wallpapers,
     WallpaperTag,
@@ -27,7 +36,78 @@ from models.models import (
     NavigationTag,
     WallpaperLike,
     WallpaperCollection,
+    CustomerWallpaperUpload,
 )
+
+
+def _parse_tag_ids(raw):
+    if raw is None or raw == "":
+        return []
+    if isinstance(raw, list):
+        out = []
+        for x in raw:
+            try:
+                out.append(int(x))
+            except (TypeError, ValueError):
+                continue
+        return out
+    s = str(raw).strip()
+    if not s:
+        return []
+    if s.startswith("["):
+        try:
+            arr = json.loads(s)
+            out = []
+            for x in arr:
+                try:
+                    out.append(int(x))
+                except (TypeError, ValueError):
+                    continue
+            return out
+        except json.JSONDecodeError:
+            return []
+    return [int(x) for x in s.split(",") if x.strip().isdigit()]
+
+
+def _parse_tag_names(raw):
+    if raw is None or raw == "":
+        return []
+    if isinstance(raw, list):
+        return [str(x).strip() for x in raw if str(x).strip()]
+    s = str(raw).strip()
+    if not s:
+        return []
+    if s.startswith("["):
+        try:
+            arr = json.loads(s)
+            return [str(x).strip() for x in arr if str(x).strip()]
+        except json.JSONDecodeError:
+            return []
+    return [x.strip() for x in s.split(",") if x.strip()]
+
+
+def _person_wallpaper_cos_key(title: str, original_filename: str) -> tuple[str, str]:
+    """COS 对象键 person_wallpaper/{title}.{ext}，扩展名随上传文件。"""
+    _, ext = os.path.splitext(original_filename or "")
+    ext = (ext or ".jpg").lower()
+    if ext not in (".jpg", ".jpeg", ".png", ".webp", ".gif"):
+        ext = ".jpg"
+    base = (title or "").strip()
+    for ch in '<>:"|?*\\/\x00':
+        base = base.replace(ch, "")
+    base = base.strip(" .")[:180]
+    if not base:
+        base = uuid.uuid4().hex[:12]
+    return f"person_wallpaper/{base}{ext}", ext.lstrip(".").lower()
+
+
+def _image_meta_from_bytes(content: bytes):
+    try:
+        with Image.open(io.BytesIO(content)) as im:
+            fmt = (im.format or "").lower() or None
+            return im.width, im.height, fmt
+    except Exception:
+        return 0, 0, None
 
 
 # ==================== 壁纸相关视图 ====================
@@ -38,16 +118,28 @@ class WallpapersSerializer(serializers.ModelSerializer):
     aspect_ratio = serializers.SerializerMethodField()
     is_liked = serializers.SerializerMethodField()
     is_collected = serializers.SerializerMethodField()
+    person_upload = serializers.SerializerMethodField()
 
     class Meta:
         model = Wallpapers
         fields = [
             'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
-            'source_url', 'has_watermark', 'category', 'tags', 'is_live', 'is_hd',
-            'hot_score', 'like_count', 'collect_count', 'download_count', 'created_at',
-            'aspect_ratio', 'is_liked', 'is_collected',
+            'source_url', 'description', 'has_watermark', 'category', 'tags',
+            'is_live', 'is_hd', 'hot_score', 'like_count', 'collect_count', 'download_count',
+            'created_at', 'aspect_ratio', 'is_liked', 'is_collected', 'person_upload',
         ]
         read_only_fields = ['id', 'created_at', 'like_count', 'collect_count', 'download_count']
+
+    def get_person_upload(self, obj):
+        try:
+            u = obj.customer_upload
+        except ObjectDoesNotExist:
+            return None
+        return {
+            "customer_id": u.customer_id,
+            "uploaded_at": u.created_at.isoformat() if u.created_at else None,
+            "cos_key": u.cos_key,
+        }
 
     def get_tags(self, obj):
         return [
@@ -426,6 +518,117 @@ class WallpapersViewSet(BaseViewSet):
         return ApiResponse(data=data, message="获取收藏列表成功")
 
     @extend_schema(
+        summary="上传个人壁纸到 COS（person_wallpaper/，质量 100）",
+        description=(
+            "需客户 Token（CToken）。multipart：file、title（文件名主体）；"
+            "可选 description；tag_ids（逗号或 JSON 数组）；tag_names（新标签，逗号或 JSON 数组）。"
+        ),
+        request={
+            "multipart/form-data": {
+                "type": "object",
+                "properties": {
+                    "file": {"type": "string", "format": "binary"},
+                    "title": {"type": "string", "description": "展示名/文件名主体（不含扩展名）"},
+                    "description": {"type": "string"},
+                    "tag_ids": {"type": "string", "description": "已有标签 id，如 1,2 或 [1,2]"},
+                    "tag_names": {"type": "string", "description": "新标签名称，多个用逗号或 JSON 数组"},
+                },
+                "required": ["file", "title"],
+            }
+        },
+    )
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="upload-person",
+        permission_classes=[IsCustomerTokenValid],
+        parser_classes=[MultiPartParser, FormParser],
+    )
+    def upload_person(self, request):
+        token = request.headers.get("token")
+        is_valid, customer_id = CustomTokenTool.verify_customer_token(token)
+        if not is_valid or not customer_id:
+            return ApiResponse(code=401, message="客户 Token 无效或已过期")
+
+        uploaded_file = request.FILES.get("file")
+        if not uploaded_file:
+            return ApiResponse(code=400, message="请上传文件 file")
+
+        title = (request.data.get("title") or "").strip()
+        if not title:
+            return ApiResponse(code=400, message="请提供 title")
+        description = (request.data.get("description") or "").strip() or None
+        tag_ids = _parse_tag_ids(request.data.get("tag_ids"))
+        tag_names = _parse_tag_names(request.data.get("tag_names"))
+
+        orig_name = uploaded_file.name or "image.jpg"
+        cos_key, _ext_hint = _person_wallpaper_cos_key(title, orig_name)
+
+        try:
+            file_content = bytes_from_uploaded_image(uploaded_file, quality=100)
+        except Exception as e:
+            logger.error(f"读取上传文件失败: {e}", exc_info=True)
+            return ApiResponse(code=400, message=f"读取文件失败：{e}")
+
+        cos_ret = upload_image_to_cos(file_content, cos_key)
+        if not cos_ret:
+            return ApiResponse(code=500, message="上传到云存储失败，请检查 COS 配置")
+
+        file_url = cos_ret["url"]
+        w, h, pil_fmt = _image_meta_from_bytes(file_content)
+        fmt = (pil_fmt or _ext_hint or "").lower()
+        if fmt == "jpeg":
+            fmt = "jpg"
+        is_hd = w >= 1920 or h >= 1080 if (w and h) else False
+
+        try:
+            with transaction.atomic():
+                wp = Wallpapers.objects.create(
+                    name=title[:200],
+                    url=file_url[:500],
+                    thumb_url=file_url[:500],
+                    width=w or 0,
+                    height=h or 0,
+                    image_format=(fmt[:20] if fmt else None),
+                    description=description,
+                    has_watermark=False,
+                    is_hd=is_hd,
+                )
+                CustomerWallpaperUpload.objects.create(
+                    wallpaper=wp,
+                    customer_id=customer_id,
+                    cos_key=cos_key[:500] if cos_key else None,
+                )
+                tag_objs = []
+                for tid in tag_ids:
+                    t = WallpaperTag.objects.filter(pk=tid).first()
+                    if t:
+                        tag_objs.append(t)
+                for nm in tag_names:
+                    nm_clean = nm[:50].strip()
+                    if not nm_clean:
+                        continue
+                    t, _ = WallpaperTag.objects.get_or_create(name=nm_clean)
+                    tag_objs.append(t)
+                dedup = list({t.id: t for t in tag_objs}.values())
+                wp.tags.set(dedup)
+        except Exception as e:
+            logger.error(f"保存壁纸记录失败: {e}", exc_info=True)
+            return ApiResponse(code=500, message=f"保存壁纸失败：{e}")
+
+        data = WallpapersSerializer(
+            wp, context=self.get_serializer_context()
+        ).data
+        return ApiResponse(
+            data={
+                **data,
+                "cos_key": cos_key,
+                "url": file_url,
+            },
+            message="上传成功",
+        )
+
+    @extend_schema(
             summary="获取所有壁纸标签",
             responses={
                 200: {
@@ -463,6 +666,28 @@ class WallpapersViewSet(BaseViewSet):
             for tag in tags
         ]
         return ApiResponse(data=data, message="标签获取成功")
+
+    @extend_schema(
+        summary="标签联想/建议（可选关键词）",
+        parameters=[
+            OpenApiParameter(name="q", type=str, required=False, description="关键词"),
+            OpenApiParameter(name="limit", type=int, required=False, description="返回条数，默认 20，最大 50"),
+        ],
+    )
+    @action(detail=False, methods=["get"], url_path="suggest-tags")
+    def suggest_tags(self, request):
+        q = (request.query_params.get("q") or "").strip()
+        try:
+            limit = int(request.query_params.get("limit", 20))
+        except ValueError:
+            limit = 20
+        limit = max(1, min(50, limit))
+        qs = WallpaperTag.objects.all().order_by("-created_at")
+        if q:
+            qs = qs.filter(name__icontains=q)
+        qs = qs[:limit]
+        data = [{"id": t.id, "name": t.name} for t in qs]
+        return ApiResponse(data=data, message="ok")
 
     @extend_schema(
         summary="获取所有壁纸分类",
