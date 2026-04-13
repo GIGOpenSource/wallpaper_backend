@@ -262,9 +262,10 @@ class WallpapersViewSet(BaseViewSet):
         """
         instance = self.get_object()
         Wallpapers.objects.filter(pk=instance.pk).update(
-            view_count=F("view_count") + 1
+            view_count=F("view_count") + 1,
+            hot_score=F("hot_score") + 10
         )
-        instance.refresh_from_db(fields=["view_count"])
+        instance.refresh_from_db(fields=["view_count", "hot_score"])
         serializer = self.get_serializer(instance)
         return ApiResponse(serializer.data)
 
@@ -447,14 +448,18 @@ class WallpapersViewSet(BaseViewSet):
                     customer_id=cid, wallpaper=wp
                 )
                 if created:
-                    Wallpapers.objects.filter(pk=wp.pk).update(like_count=F("like_count") + 1)
+                    Wallpapers.objects.filter(pk=wp.pk).update(
+                        like_count=F("like_count") + 1,
+                        hot_score=F("hot_score") + 50  # 点赞一次加 50 分
+                    )
                     liked = True
                     message = "点赞成功"
                 else:
                     like.delete()
                     message = "取消点赞成功"
                     Wallpapers.objects.filter(pk=wp.pk).update(
-                        like_count=Greatest(F("like_count") - 1, 0)
+                        like_count=Greatest(F("like_count") - 1, 0),
+                        hot_score=Greatest(F("hot_score") - 50, 0)  # 取消点赞减 50 分
                     )
                     liked = False
                 wp.refresh_from_db(fields=["like_count"])
@@ -489,7 +494,8 @@ class WallpapersViewSet(BaseViewSet):
                 )
                 if created:
                     Wallpapers.objects.filter(pk=wp.pk).update(
-                        collect_count=F("collect_count") + 1
+                        collect_count=F("collect_count") + 1,
+                        hot_score=F("hot_score") + 200  # 收藏一次加 200 分
                     )
                     CustomerUser.objects.filter(pk=cid).update(
                         collection_count=F("collection_count") + 1
@@ -498,7 +504,8 @@ class WallpapersViewSet(BaseViewSet):
                 else:
                     row.delete()
                     Wallpapers.objects.filter(pk=wp.pk).update(
-                        collect_count=Greatest(F("collect_count") - 1, 0)
+                        collect_count=Greatest(F("collect_count") - 1, 0),
+                        hot_score=Greatest(F("hot_score") - 200, 0)  # 取消收藏减 200 分
                     )
                     CustomerUser.objects.filter(pk=cid).update(
                         collection_count=Greatest(F("collection_count") - 1, 0)
@@ -531,9 +538,10 @@ class WallpapersViewSet(BaseViewSet):
             with transaction.atomic():
                 wp = Wallpapers.objects.select_for_update().get(pk=wid)
                 Wallpapers.objects.filter(pk=wp.pk).update(
-                    download_count=F("download_count") + 1
+                    download_count=F("download_count") + 1,
+                    hot_score=F("hot_score") + 400
                 )
-                wp.refresh_from_db(fields=["download_count"])
+                wp.refresh_from_db(fields=["download_count", "hot_score"])
         except Wallpapers.DoesNotExist:
             return ApiResponse(code=404, message="壁纸不存在")
         return ApiResponse(
