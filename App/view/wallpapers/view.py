@@ -681,11 +681,26 @@ class WallpapersViewSet(BaseViewSet):
         description = (request.data.get("description") or "").strip() or None
         tag_ids = _parse_tag_ids(request.data.get("tag_ids"))
         tag_names = _parse_tag_names(request.data.get("tag_names"))
-
         orig_name = uploaded_file.name or "image.jpg"
-        cos_key, _ext_hint = _person_wallpaper_cos_key(title, orig_name)
-        thumb_cos_key = cos_key.rsplit(".", 1)[0] + "_thumb." + _ext_hint
 
+        token_suffix = token[-8:] if token and len(token) >= 8 else (token or "00000000")[-8:].ljust(8, '0')
+        name_part, ext = os.path.splitext(orig_name)
+        ext = ext.lower()
+        if ext not in (".jpg", ".jpeg", ".png", ".webp", ".gif"):
+            ext = ".jpg"
+
+        # 清理 title 中的非法字符，用于展示名，不用于文件名以防冲突
+        safe_title = (title or "").strip()
+        for ch in '<>:"|?*\\/\x00':
+            safe_title = safe_title.replace(ch, "")
+        safe_title = safe_title.strip(" .")[:180]
+        if not safe_title:
+            safe_title = uuid.uuid4().hex[:12]
+        # 构造唯一文件名：token后8位_原始文件名
+        unique_base = f"{token_suffix}_{name_part}"
+        cos_key = f"person_wallpaper/{unique_base}{ext}"
+        thumb_cos_key = f"person_wallpaper/{unique_base}_thumb{ext}"
+        _ext_hint = ext.lstrip(".")
         try:
             file_content = bytes_from_uploaded_image(uploaded_file, quality=100)
         except Exception as e:
