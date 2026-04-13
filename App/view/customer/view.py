@@ -51,6 +51,7 @@ class CustomerUserViewSet(viewsets.ViewSet):
         "register": [],
         "login": [],
         "logout": [IsCustomerTokenValid],
+        "profile": [IsCustomerTokenValid],
     }
 
     def get_permissions(self):
