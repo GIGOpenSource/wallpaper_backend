@@ -199,6 +199,10 @@ class CollectionItemSerializer(serializers.ModelSerializer):
             OpenApiParameter(name="category_id", type=str, required=False,description="分类 ID 筛选，支持单个或多个（逗号分隔）"),
             OpenApiParameter(name="media_live", type=str, required=False,description="静态false或动态true"),
             OpenApiParameter(name="platform", type=str, required=False,description="平台电脑PC或手机PHONE "),
+            OpenApiParameter(name="resolution", type=str, required=False,
+                             description="分辨率多选，逗号分隔，如 3840x2160,2560x1440,1920x1080"),
+            OpenApiParameter(name="aspect_ratio", type=str, required=False,
+                             description="宽高比多选，逗号分隔，如 16:9,21:9,9:16"),
         ],
         responses={
             200: {
@@ -306,7 +310,7 @@ class WallpapersViewSet(BaseViewSet):
             else:
                 # 4. 未匹配到任何TAG_MAPPING关键词 → 降级为原有的名称模糊搜索
                 queryset = queryset.filter(name__icontains=user_input)
-
+        from django.db.models import F, Q
         # 筛选参数：tag_id（支持单个和多个，逗号分隔）
         tag_ids = self.request.query_params.get("tag_id")
         if tag_ids:
@@ -314,7 +318,43 @@ class WallpapersViewSet(BaseViewSet):
             if tag_id_list:
                 # 使用 filter 进行多对多查询，会匹配包含任一标签的壁纸
                 queryset = queryset.filter(tags__id__in=tag_id_list).distinct()
+        resolution = self.request.query_params.get("resolution", "")
+        if resolution:
+            res_list = [r.strip() for r in resolution.split(',') if r.strip()]
+            if res_list:
+                q_resolution = Q()
+                for res in res_list:
+                    if 'x' in res.lower():
+                        parts = res.lower().split('x')
+                        if len(parts) == 2:
+                            try:
+                                w, h = int(parts[0]), int(parts[1])
+                                q_resolution |= Q(width=w, height=h)
+                            except ValueError:
+                                continue
+                if q_resolution:
+                    queryset = queryset.filter(q_resolution).distinct()
+
+        aspect_ratio = self.request.query_params.get("aspect_ratio", "")
+        if aspect_ratio:
+            ratio_list = [r.strip() for r in aspect_ratio.split(',') if r.strip()]
+            if ratio_list:
+                q_ratio = Q()
+                for ratio in ratio_list:
+                    if ':' in ratio:
+                        try:
+                            w_ratio, h_ratio = map(int, ratio.split(':'))
+                            if w_ratio > 0 and h_ratio > 0:
+                                # 使用 F 表达式在数据库层面计算比例
+                                q_ratio |= Q(width__gt=0, height__gt=0) & Q(
+                                    F('width') * h_ratio == F('height') * w_ratio
+                                )
+                        except (ValueError, ZeroDivisionError):
+                            continue
+                if q_ratio:
+                    queryset = queryset.filter(q_ratio).distinct()
         return queryset
+
 
     @extend_schema(
         summary="猜你喜欢",
@@ -501,7 +541,14 @@ class WallpapersViewSet(BaseViewSet):
             message="记录成功",
         )
 
-    @extend_schema(summary="我的收藏列表（仅需客户 Token）")
+    @extend_schema(
+        summary="我的收藏列表（仅需客户 Token）",
+        parameters=[
+            OpenApiParameter(name="currentPage", type=int, required=False, description="当前页码"),
+            OpenApiParameter(name="pageSize", type=int, required=False, description="每页数量"),
+            OpenApiParameter(name="platform", type=str, required=False, description="平台筛选：PC 或 PHONE"),
+        ],
+    )
     @action(
         detail=False,
         methods=["get"],
@@ -521,6 +568,13 @@ class WallpapersViewSet(BaseViewSet):
             .prefetch_related("wallpaper__tags", "wallpaper__category")
             .order_by("-created_at")
         )
+
+        platform = request.query_params.get("platform", "").upper()
+        if platform == 'PC':
+            qs = qs.filter(wallpaper__category__id=1)
+        elif platform == 'PHONE':
+            qs = qs.filter(wallpaper__category__id=2)
+
         page = self.paginate_queryset(qs)
         if page is not None:
             data = CollectionItemSerializer(
