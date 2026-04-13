@@ -697,44 +697,6 @@ class WallpapersViewSet(BaseViewSet):
             message="上传成功",
         )
 
-    @extend_schema(
-            summary="获取所有壁纸标签",
-            responses={
-                200: {
-                    "type": "object",
-                    "properties": {
-                        "code": {"type": "integer", "example": 200},
-                        "message": {"type": "string", "example": "标签获取成功"},
-                        "data": {
-                            "type": "array",
-                            "items": {
-                                "type": "object",
-                                "properties": {
-                                    "id": {"type": "integer", "example": 1},
-                                    "name": {"type": "string", "example": "风景"},
-                                    "created_at": {"type": "string", "format": "date-time"}
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        )
-    @action(detail=False, methods=['get'], url_path='tags')
-    def tags(self, request):
-        """
-        获取所有壁纸标签列表
-        """
-        tags = WallpaperTag.objects.all().order_by('-created_at')
-        data = [
-            {
-                'id': tag.id,
-                'name': tag.name,
-                'created_at': tag.created_at.strftime('%Y-%m-%d %H:%M:%S')
-            }
-            for tag in tags
-        ]
-        return ApiResponse(data=data, message="标签获取成功")
 
     @extend_schema(
         summary="标签联想/建议（可选关键词）",
@@ -928,60 +890,3 @@ class WallpapersViewSet(BaseViewSet):
             logger.error(f"批量导入失败：{str(e)}", exc_info=True)
             return ApiResponse(code=500, message=_("批量导入失败：%(error)s") % {"error": str(e)})
 
-
-class NavigationTagSerializer(serializers.ModelSerializer):
-    """壁纸序列化器"""
-
-    class Meta:
-        model = NavigationTag
-        fields = '__all__'
-
-@extend_schema(tags=["导航管理"])
-@extend_schema_view(
-    list=extend_schema(
-        summary="获取导航列表",
-        parameters=[
-            OpenApiParameter(name="currentPage", type=int, required=False, description="当前页码"),
-            OpenApiParameter(name="pageSize", type=int, required=False, description="每页数量"),
-        ],
-        responses={
-            200: {
-                "type": "object",
-                "properties": {
-                    "code": {"type": "integer", "example": 200},
-                    "data": {
-                        "type": "object",
-                        "properties": {
-                            "results": {"type": "array", "items": {"$ref": "#/components/schemas/NavigationTag"}},
-                            "total": {"type": "integer", "example": 50}
-                        }
-                    },
-                    "message": {"type": "string", "example": "列表获取成功"}
-                }
-            }
-        }
-    ),
-    retrieve=extend_schema(summary="获取导航详情", responses={200: NavigationTagSerializer, 404: "导航不存在"}),
-    create=extend_schema(summary="创建导航", request=NavigationTagSerializer),
-    update=extend_schema(summary="更新导航", request=NavigationTagSerializer),
-    partial_update=extend_schema(summary="部分更新导航", request=NavigationTagSerializer),
-    destroy=extend_schema(summary="删除导航", description="删除指定导航记录",
-                          responses={204: "删除成功", 404: "导航不存在"})
-)
-class NavigationTagViewSet(BaseViewSet):
-    """
-    导航管理 ViewSet
-    提供导航的增删改查功能
-    """
-    queryset = NavigationTag.objects.all()
-    serializer_class = NavigationTagSerializer
-    pagination_class = CustomPagination
-
-    def list(self, request, *args, **kwargs):
-        queryset = self.filter_queryset(self.get_queryset())
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
-        serializer = self.get_serializer(queryset, many=True)
-        return ApiResponse(serializer.data)

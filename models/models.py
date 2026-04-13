@@ -250,6 +250,7 @@ class NavigationTag(models.Model):
     region = models.CharField(max_length=20,default='global',verbose_name="所属地区")
     # 导航展示相关字段
     nav_name = models.CharField(max_length=50,verbose_name="导航显示名称",help_text="可自定义导航栏显示的名称，不填则使用标签名称")
+    wallpaper_count = models.PositiveIntegerField(default=0, verbose_name="壁纸总数")  # 新增
     sort = models.IntegerField(default=0,verbose_name="导航排序（数字越小越靠前）")
     is_show = models.BooleanField(default=True,verbose_name="是否在前端显示")
     created_at = models.DateTimeField(auto_now_add=True,verbose_name="创建时间")

@@ -11,11 +11,13 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
 from App.view.wallpapers.view import WallpapersViewSet, NavigationTagViewSet
+from App.view.wallpapers.tags import urls as tags_urls
 
 router = DefaultRouter()
 router.register(r'wallpaper', WallpapersViewSet, basename='wallpaper')
 router.register(r'navigation_tag', NavigationTagViewSet, basename='navigation_tag')
 urlpatterns = [
     path('', include(router.urls)),
+    path('tags/', include(tags_urls)),
 
 ]
