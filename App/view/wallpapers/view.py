@@ -337,23 +337,30 @@ class WallpapersViewSet(BaseViewSet):
                     queryset = queryset.filter(q_resolution).distinct()
 
         aspect_ratio = self.request.query_params.get("aspect_ratio", "")
+        print("aspect_ratio:", aspect_ratio)
+        aspect_ratio = self.request.query_params.get("aspect_ratio", "")
         if aspect_ratio:
+            # 支持 16:9 和 16-9 两种格式
+            aspect_ratio = aspect_ratio.replace('-', ':')
             ratio_list = [r.strip() for r in aspect_ratio.split(',') if r.strip()]
             if ratio_list:
-                q_ratio = Q()
+                where_clauses = []
+                params = []
                 for ratio in ratio_list:
                     if ':' in ratio:
                         try:
                             w_ratio, h_ratio = map(int, ratio.split(':'))
                             if w_ratio > 0 and h_ratio > 0:
-                                # 使用 F 表达式在数据库层面计算比例
-                                q_ratio |= Q(width__gt=0, height__gt=0) & Q(
-                                    F('width') * h_ratio == F('height') * w_ratio
-                                )
-                        except (ValueError, ZeroDivisionError):
+                                # 使用原生 SQL 片段进行比例计算： width * h_ratio = height * w_ratio
+                                where_clauses.append("(width * %s = height * %s AND width > 0 AND height > 0)")
+                                params.extend([h_ratio, w_ratio])
+                        except ValueError:
                             continue
-                if q_ratio:
-                    queryset = queryset.filter(q_ratio).distinct()
+
+                if where_clauses:
+                    # 将多个比例条件用 OR 连接，例如：(条件1) OR (条件2)
+                    sql_or = " OR ".join(where_clauses)
+                    queryset = queryset.extra(where=[f"({sql_or})"], params=params)
         return queryset
 
 
