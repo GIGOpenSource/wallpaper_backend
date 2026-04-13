@@ -650,6 +650,7 @@ class WallpapersViewSet(BaseViewSet):
                 "properties": {
                     "file": {"type": "string", "format": "binary"},
                     "title": {"type": "string", "description": "展示名/文件名主体（不含扩展名）"},
+                    "platform": {"type": "string", "description": "平台：PC 或 PHONE"},
                     "description": {"type": "string"},
                     "tag_ids": {"type": "string", "description": "已有标签 id，如 1,2 或 [1,2]"},
                     "tag_names": {"type": "string", "description": "新标签名称，多个用逗号或 JSON 数组"},
@@ -678,29 +679,37 @@ class WallpapersViewSet(BaseViewSet):
         title = (request.data.get("title") or "").strip()
         if not title:
             return ApiResponse(code=400, message="请提供 title")
+
+        platform = (request.data.get("platform") or "").upper()
+        if platform not in ['PC', 'PHONE']:
+            return ApiResponse(code=400, message="平台参数错误，请输入 PC 或 PHONE")
+
         description = (request.data.get("description") or "").strip() or None
         tag_ids = _parse_tag_ids(request.data.get("tag_ids"))
         tag_names = _parse_tag_names(request.data.get("tag_names"))
+
         orig_name = uploaded_file.name or "image.jpg"
+        _, orig_ext = os.path.splitext(orig_name)
+        orig_ext = orig_ext.lower()
 
         token_suffix = token[-8:] if token and len(token) >= 8 else (token or "00000000")[-8:].ljust(8, '0')
         name_part, ext = os.path.splitext(orig_name)
         ext = ext.lower()
-        if ext not in (".jpg", ".jpeg", ".png", ".webp", ".gif"):
+        if ext not in (".jpg", ".jpeg", ".png", ".webp", ".gif", ".mp4"):
             ext = ".jpg"
 
-        # 清理 title 中的非法字符，用于展示名，不用于文件名以防冲突
         safe_title = (title or "").strip()
         for ch in '<>:"|?*\\/\x00':
             safe_title = safe_title.replace(ch, "")
         safe_title = safe_title.strip(" .")[:180]
         if not safe_title:
             safe_title = uuid.uuid4().hex[:12]
-        # 构造唯一文件名：token后8位_原始文件名
+
         unique_base = f"{token_suffix}_{name_part}"
         cos_key = f"person_wallpaper/{unique_base}{ext}"
         thumb_cos_key = f"person_wallpaper/{unique_base}_thumb{ext}"
         _ext_hint = ext.lstrip(".")
+
         try:
             file_content = bytes_from_uploaded_image(uploaded_file, quality=100)
         except Exception as e:
@@ -712,31 +721,45 @@ class WallpapersViewSet(BaseViewSet):
             return ApiResponse(code=500, message="上传到云存储失败，请检查 COS 配置")
 
         file_url = cos_ret["url"]
-        uploaded_file.seek(0)  # 重置文件指针，否则第二次读取为空
-        thumb_content = bytes_from_uploaded_image(uploaded_file, quality=10)
-        thumb_ret = upload_image_to_cos(thumb_content, thumb_cos_key)
-        if thumb_ret:
-            thumb_url = thumb_ret["url"]
+
+        if ext == ".mp4":
+            thumb_url = ""
+            w, h = 0, 0
+            pil_fmt = "mp4"
         else:
-            thumb_url = file_url.rsplit(".", 1)[0] + "_thumb." + _ext_hint
-        w, h, pil_fmt = _image_meta_from_bytes(file_content)
+            uploaded_file.seek(0)
+            thumb_content = bytes_from_uploaded_image(uploaded_file, quality=10)
+            thumb_ret = upload_image_to_cos(thumb_content, thumb_cos_key)
+            if thumb_ret:
+                thumb_url = thumb_ret["url"]
+            else:
+                thumb_url = file_url.rsplit(".", 1)[0] + "_thumb." + _ext_hint
+            w, h, pil_fmt = _image_meta_from_bytes(file_content)
+
         fmt = (pil_fmt or _ext_hint or "").lower()
         if fmt == "jpeg":
             fmt = "jpg"
         is_hd = w >= 1920 or h >= 1080 if (w and h) else False
+
+        is_live = (ext == ".mp4")
+        category_id = 4 if is_live else (1 if platform == 'PC' else 2)
+
         try:
             with transaction.atomic():
                 wp = Wallpapers.objects.create(
                     name=title[:200],
                     url=file_url[:500],
-                    thumb_url=thumb_url[:500],
+                    thumb_url=thumb_url[:500] if thumb_url else None,
                     width=w or 0,
                     height=h or 0,
                     image_format=(fmt[:20] if fmt else None),
                     description=description,
                     has_watermark=False,
                     is_hd=is_hd,
+                    is_live=is_live,
                 )
+                wp.category.add(category_id)
+
                 CustomerWallpaperUpload.objects.create(
                     wallpaper=wp,
                     customer_id=customer_id,
