@@ -43,6 +43,14 @@ class CustomerLoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
 
+class CustomerProfileSerializer(serializers.ModelSerializer):
+    """用户信息序列化器"""
+    class Meta:
+        model = CustomerUser
+        fields = ("id", "email", "nickname", "gender", "avatar_url", "badge", "points", "level")
+        read_only_fields = ("id", "email", "points", "level")
+
+
 
 @extend_schema(tags=["客户账户"])
 @extend_schema_view()
@@ -52,6 +60,7 @@ class CustomerUserViewSet(viewsets.ViewSet):
         "login": [],
         "logout": [IsCustomerTokenValid],
         "profile": [IsCustomerTokenValid],
+        "update_profile": [IsCustomerTokenValid],
     }
 
     def get_permissions(self):
@@ -123,6 +132,10 @@ class CustomerUserViewSet(viewsets.ViewSet):
             data={
                 "customer_id": user.id,
                 "email": user.email,
+                "nickname": user.nickname,
+                "gender": user.gender,
+                "avatar_url": user.avatar_url,
+                "badge": user.badge,
                 "upload_count": user.upload_count,
                 "collection_count": user.collection_count,
                 "points": user.points,
@@ -133,3 +146,29 @@ class CustomerUserViewSet(viewsets.ViewSet):
             message=_("获取成功"),
         )
 
+    @extend_schema(
+        summary="保存用户信息",
+        request=CustomerProfileSerializer,
+    )
+    @action(detail=False, methods=["post"], url_path="update-profile")
+    def update_profile(self, request):
+        customer_id = request.customer_id
+        try:
+            user = CustomerUser.objects.get(id=customer_id)
+        except CustomerUser.DoesNotExist:
+            return ApiResponse(message=_("用户不存在"), code=404)
+        ser = CustomerProfileSerializer(user, data=request.data, partial=True)
+        if not ser.is_valid():
+            return ApiResponse(data=ser.errors, message=_("参数校验失败"), code=400)
+
+        ser.save()
+        return ApiResponse(
+            data={
+                "customer_id": user.id,
+                "nickname": user.nickname,
+                "gender": user.gender,
+                "avatar_url": user.avatar_url,
+                "badge": user.badge,
+            },
+            message=_("保存成功"),
+        )

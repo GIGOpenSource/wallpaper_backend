@@ -17,6 +17,10 @@ class CustomerUser(models.Model):
     """
     email = models.EmailField(unique=True, verbose_name="邮箱")
     password = models.CharField(max_length=256, verbose_name="密码（哈希）")
+    nickname = models.CharField(max_length=50, blank=True, null=True, verbose_name="昵称")
+    gender = models.SmallIntegerField(default=0, choices=[(0, "未知"), (1, "男"), (2, "女")], verbose_name="性别")
+    avatar_url = models.URLField(max_length=500, blank=True, null=True, verbose_name="头像URL")
+    badge = models.JSONField(blank=True, null=True, default=list, verbose_name="用户勋章")
     last_login = models.DateTimeField(blank=True, null=True, verbose_name="最后登录时间")
     points = models.IntegerField(default=0, verbose_name="积分")
     level = models.IntegerField(default=1, verbose_name="等级")
@@ -24,6 +28,7 @@ class CustomerUser(models.Model):
     collection_count = models.IntegerField(default=0, verbose_name="收藏数")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+
 
     class Meta:
         db_table = 't_customer_user'
