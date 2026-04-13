@@ -684,6 +684,7 @@ class WallpapersViewSet(BaseViewSet):
 
         orig_name = uploaded_file.name or "image.jpg"
         cos_key, _ext_hint = _person_wallpaper_cos_key(title, orig_name)
+        thumb_cos_key = cos_key.rsplit(".", 1)[0] + "_thumb." + _ext_hint
 
         try:
             file_content = bytes_from_uploaded_image(uploaded_file, quality=100)
@@ -696,18 +697,24 @@ class WallpapersViewSet(BaseViewSet):
             return ApiResponse(code=500, message="上传到云存储失败，请检查 COS 配置")
 
         file_url = cos_ret["url"]
+        uploaded_file.seek(0)  # 重置文件指针，否则第二次读取为空
+        thumb_content = bytes_from_uploaded_image(uploaded_file, quality=10)
+        thumb_ret = upload_image_to_cos(thumb_content, thumb_cos_key)
+        if thumb_ret:
+            thumb_url = thumb_ret["url"]
+        else:
+            thumb_url = file_url.rsplit(".", 1)[0] + "_thumb." + _ext_hint
         w, h, pil_fmt = _image_meta_from_bytes(file_content)
         fmt = (pil_fmt or _ext_hint or "").lower()
         if fmt == "jpeg":
             fmt = "jpg"
         is_hd = w >= 1920 or h >= 1080 if (w and h) else False
-
         try:
             with transaction.atomic():
                 wp = Wallpapers.objects.create(
                     name=title[:200],
                     url=file_url[:500],
-                    thumb_url=file_url[:500],
+                    thumb_url=thumb_url[:500],
                     width=w or 0,
                     height=h or 0,
                     image_format=(fmt[:20] if fmt else None),
@@ -750,7 +757,6 @@ class WallpapersViewSet(BaseViewSet):
             },
             message="上传成功",
         )
-
 
     @extend_schema(
         summary="标签联想/建议（可选关键词）",
