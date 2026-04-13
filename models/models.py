@@ -11,7 +11,6 @@ from django.db import models
 from django.utils import timezone
 from tool.password_hasher import hash_password
 
-
 class CustomerUser(models.Model):
     """
     C 端客户账户（邮箱 + 密码），与后台管理员 User 分离。
@@ -19,6 +18,10 @@ class CustomerUser(models.Model):
     email = models.EmailField(unique=True, verbose_name="邮箱")
     password = models.CharField(max_length=256, verbose_name="密码（哈希）")
     last_login = models.DateTimeField(blank=True, null=True, verbose_name="最后登录时间")
+    points = models.IntegerField(default=0, verbose_name="积分")
+    level = models.IntegerField(default=1, verbose_name="等级")
+    upload_count = models.IntegerField(default=0, verbose_name="上传数")
+    collection_count = models.IntegerField(default=0, verbose_name="收藏数")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
 
@@ -35,7 +38,6 @@ class CustomerUser(models.Model):
 
     def __str__(self):
         return self.email
-
 
 class User(models.Model):
     username = models.CharField(max_length=20, unique=True)

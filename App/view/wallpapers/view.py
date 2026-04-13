@@ -37,6 +37,7 @@ from models.models import (
     WallpaperLike,
     WallpaperCollection,
     CustomerWallpaperUpload,
+    CustomerUser,
 )
 
 
@@ -438,11 +439,17 @@ class WallpapersViewSet(BaseViewSet):
                     Wallpapers.objects.filter(pk=wp.pk).update(
                         collect_count=F("collect_count") + 1
                     )
+                    CustomerUser.objects.filter(pk=cid).update(
+                        collection_count=F("collection_count") + 1
+                    )
                     collected = True
                 else:
                     row.delete()
                     Wallpapers.objects.filter(pk=wp.pk).update(
                         collect_count=Greatest(F("collect_count") - 1, 0)
+                    )
+                    CustomerUser.objects.filter(pk=cid).update(
+                        collection_count=Greatest(F("collection_count") - 1, 0)
                     )
                     collected = False
                 wp.refresh_from_db(fields=["collect_count"])
@@ -599,6 +606,9 @@ class WallpapersViewSet(BaseViewSet):
                     customer_id=customer_id,
                     cos_key=cos_key[:500] if cos_key else None,
                 )
+                CustomerUser.objects.filter(pk=customer_id).update(
+                    upload_count=F("upload_count") + 1
+                )
                 tag_objs = []
                 for tid in tag_ids:
                     t = WallpaperTag.objects.filter(pk=tid).first()
@@ -615,7 +625,6 @@ class WallpapersViewSet(BaseViewSet):
         except Exception as e:
             logger.error(f"保存壁纸记录失败: {e}", exc_info=True)
             return ApiResponse(code=500, message=f"保存壁纸失败：{e}")
-
         data = WallpapersSerializer(
             wp, context=self.get_serializer_context()
         ).data

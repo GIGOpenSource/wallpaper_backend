@@ -122,7 +122,7 @@ REST_FRAMEWORK = {
 }
 
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'Crashcheck 账户管理 API',
+    'TITLE': 'WallPaper 项目 API',
     'DESCRIPTION': '简化版后端接口文档（中文）',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,

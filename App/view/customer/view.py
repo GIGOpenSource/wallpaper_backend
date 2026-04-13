@@ -108,3 +108,27 @@ class CustomerUserViewSet(viewsets.ViewSet):
             return ApiResponse(message=_("未提供 Token"), code=400)
         CustomTokenTool.delete_customer_token(token)
         return ApiResponse(message=_("登出成功"))
+
+    @extend_schema(summary="我的信息")
+    @action(detail=False, methods=["get"], url_path="profile")
+    def profile(self, request):
+        customer_id = request.customer_id
+        try:
+            user = CustomerUser.objects.get(id=customer_id)
+        except CustomerUser.DoesNotExist:
+            return ApiResponse(message=_("用户不存在"), code=404)
+
+        return ApiResponse(
+            data={
+                "customer_id": user.id,
+                "email": user.email,
+                "upload_count": user.upload_count,
+                "collection_count": user.collection_count,
+                "points": user.points,
+                "level": user.level,
+                "last_login": user.last_login,
+                "created_at": user.created_at,
+            },
+            message=_("获取成功"),
+        )
+
