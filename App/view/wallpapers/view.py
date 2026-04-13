@@ -127,7 +127,7 @@ class WallpapersSerializer(serializers.ModelSerializer):
             'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
             'source_url', 'description', 'has_watermark', 'category', 'tags',
             'is_live', 'is_hd', 'hot_score', 'like_count', 'collect_count', 'download_count',
-            'created_at', 'aspect_ratio', 'is_liked', 'is_collected', 'person_upload',
+            'view_count','created_at', 'aspect_ratio', 'is_liked', 'is_collected', 'person_upload',
         ]
         read_only_fields = ['id', 'created_at', 'like_count', 'collect_count', 'download_count']
 
@@ -250,6 +250,18 @@ class WallpapersViewSet(BaseViewSet):
             serializer = self.get_serializer(page, many=True)
             return self.get_paginated_response(serializer.data)
         serializer = self.get_serializer(queryset, many=True)
+        return ApiResponse(serializer.data)
+
+    def retrieve(self, request, *args, **kwargs):
+        """
+        获取壁纸详情，并自动增加浏览量
+        """
+        instance = self.get_object()
+        Wallpapers.objects.filter(pk=instance.pk).update(
+            view_count=F("view_count") + 1
+        )
+        instance.refresh_from_db(fields=["view_count"])
+        serializer = self.get_serializer(instance)
         return ApiResponse(serializer.data)
 
     def get_queryset(self):
@@ -523,6 +535,54 @@ class WallpapersViewSet(BaseViewSet):
             context=self.get_serializer_context(),
         ).data
         return ApiResponse(data=data, message="获取收藏列表成功")
+
+    @extend_schema(
+        summary="精选壁纸（按平台推荐）",
+        description="根据平台（PC/手机）返回精选壁纸，支持自定义数量（5-10张）",
+        parameters=[
+            OpenApiParameter(name="platform", type=str, required=True, description="平台：PC 或 PHONE"),
+            OpenApiParameter(name="limit", type=int, required=False, description="返回数量，默认 6，范围 5-10"),
+        ],
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "integer", "example": 200},
+                    "message": {"type": "string", "example": "精选壁纸获取成功"},
+                    "data": {
+                        "type": "array",
+                        "items": {"$ref": "#/components/schemas/Wallpapers"}
+                    }
+                }
+            },
+            400: {"description": "参数错误"}
+        }
+    )
+    @action(detail=False, methods=['get'], url_path='featured')
+    def featured(self, request):
+        """
+        精选壁纸：根据平台返回高质量壁纸
+        """
+        platform = request.query_params.get("platform", "").upper()
+        if platform not in ['PC', 'PHONE']:
+            return ApiResponse(code=400, message="平台参数错误，请输入 PC 或 PHONE")
+        try:
+            limit = int(request.query_params.get("limit", 6))
+        except (TypeError, ValueError):
+            limit = 6
+        limit = max(5, min(10, limit))
+        if platform == 'PC':
+            queryset = Wallpapers.objects.filter(
+                category__id=1,
+                is_hd=True
+            ).distinct().order_by('-hot_score', '-like_count', '-created_at')[:limit]
+        else:
+            queryset = Wallpapers.objects.filter(
+                category__id=2,
+                is_hd=True
+            ).distinct().order_by('-hot_score', '-like_count', '-created_at')[:limit]
+        serializer = self.get_serializer(queryset, many=True)
+        return ApiResponse(data=serializer.data, message="精选壁纸获取成功")
 
     @extend_schema(
         summary="上传个人壁纸到 COS（person_wallpaper/，质量 100）",
@@ -875,6 +935,7 @@ class NavigationTagSerializer(serializers.ModelSerializer):
     class Meta:
         model = NavigationTag
         fields = '__all__'
+
 @extend_schema(tags=["导航管理"])
 @extend_schema_view(
     list=extend_schema(

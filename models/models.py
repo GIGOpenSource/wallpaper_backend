@@ -132,6 +132,7 @@ class Wallpapers(models.Model):
     like_count = models.PositiveIntegerField(default=0, verbose_name="点赞数",null= True,blank=True)
     collect_count = models.PositiveIntegerField(default=0, verbose_name="收藏数",null= True,blank=True)
     download_count = models.PositiveIntegerField(default=0, verbose_name="下载量",null= True,blank=True)
+    view_count = models.PositiveIntegerField(default=0, verbose_name="浏览量", null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
 
     class Meta:
