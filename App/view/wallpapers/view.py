@@ -591,6 +591,61 @@ class WallpapersViewSet(BaseViewSet):
         return ApiResponse(data=data, message="获取收藏列表成功")
 
     @extend_schema(
+        summary="我的上传列表（仅需客户 Token）",
+        description="查看当前用户上传的所有壁纸记录，支持分页和平台筛选",
+        parameters=[
+            OpenApiParameter(name="currentPage", type=int, required=False, description="当前页码"),
+            OpenApiParameter(name="pageSize", type=int, required=False, description="每页数量"),
+            OpenApiParameter(name="platform", type=str, required=False, description="平台筛选：PC 或 PHONE"),
+        ],
+    )
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="my-uploads",
+        permission_classes=[IsCustomerTokenValid],
+    )
+    def my_uploads(self, request):
+        token = request.headers.get("token")
+        is_valid, customer_id = CustomTokenTool.verify_customer_token(token)
+        if not is_valid or not customer_id:
+            return ApiResponse(code=401, message="客户 Token 无效或已过期")
+
+        # 通过 CustomerWallpaperUpload 关联查询壁纸
+        qs = (
+            CustomerWallpaperUpload.objects
+            .filter(customer_id=customer_id)
+            .select_related("wallpaper")
+            .prefetch_related("wallpaper__tags", "wallpaper__category")
+            .order_by("-created_at")
+        )
+
+        platform = request.query_params.get("platform", "").upper()
+        if platform == 'PC':
+            qs = qs.filter(wallpaper__category__id=1)
+        elif platform == 'PHONE':
+            qs = qs.filter(wallpaper__category__id=2)
+
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            # 序列化壁纸数据
+            wallpapers = [item.wallpaper for item in page]
+            serializer = WallpapersSerializer(
+                wallpapers,
+                many=True,
+                context=self.get_serializer_context(),
+            )
+            return self.get_paginated_response(serializer.data)
+
+        wallpapers = [item.wallpaper for item in qs]
+        data = WallpapersSerializer(
+            wallpapers,
+            many=True,
+            context=self.get_serializer_context(),
+        ).data
+        return ApiResponse(data=data, message="获取上传列表成功")
+
+    @extend_schema(
         summary="精选壁纸（按平台推荐）",
         description="根据平台（PC/手机）返回精选壁纸，支持自定义数量（5-10张）",
         parameters=[
