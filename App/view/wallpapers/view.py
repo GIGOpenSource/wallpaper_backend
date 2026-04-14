@@ -1,8 +1,8 @@
 """
-@Project ：Crush_check StarSign
+@Project ：wallpaper
 @File    ：view.py
 @Author  ：LiangHB
-@Date    ：2026/3/4 17:09
+@Date    ：2026/4/14 17:13
 @description : 壁纸相关视图逻辑
 """
 import io
@@ -111,108 +111,6 @@ def _image_meta_from_bytes(content: bytes):
         return 0, 0, None
 
 
-# ==================== 壁纸相关视图 ====================
-class WallpapersSerializer(serializers.ModelSerializer):
-    """壁纸序列化器"""
-    tags = serializers.SerializerMethodField()
-    aspect_ratio = serializers.SerializerMethodField()
-    is_liked = serializers.SerializerMethodField()
-    is_collected = serializers.SerializerMethodField()
-    uploader = serializers.SerializerMethodField()
-
-    class Meta:
-        model = Wallpapers
-        fields = [
-            'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
-            'source_url', 'description', 'has_watermark', 'category', 'tags',
-            'is_live', 'is_hd', 'hot_score', 'like_count', 'collect_count', 'download_count',
-            'view_count','created_at', 'aspect_ratio', 'is_liked', 'is_collected',
-            'uploader',
-        ]
-        read_only_fields = ['id', 'created_at', 'like_count', 'collect_count', 'download_count']
-
-    def __init__(self, *args, **kwargs):
-        super(WallpapersSerializer, self).__init__(*args, **kwargs)
-        # 如果上下文中没有标记需要详情数据，则移除 uploader 字段以提升列表页性能
-        if not self.context.get('include_detail_info'):
-            self.fields.pop('uploader', None)
-
-    def get_uploader(self, obj):
-        """获取上传者简要信息"""
-        # 利用 select_related 预加载的数据，避免额外查询
-        logger.debug(
-            f"get_uploader called for wallpaper {obj.id}, include_detail_info: {self.context.get('include_detail_info')}")
-
-        try:
-            # 使用 getattr 安全访问反向关联字段
-            upload_record = getattr(obj, 'customer_upload', None)
-            if not upload_record:
-                return None
-
-            customer = getattr(upload_record, 'customer', None)
-            if not customer:
-                return None
-
-            return {
-                "id": customer.id,
-                "email": customer.email,
-                "nickname": customer.nickname,
-                "gender": customer.gender,
-                "avatar_url": customer.avatar_url,
-                "badge": customer.badge,
-                "points": customer.points,
-                "level": customer.level,
-                "upload_count": customer.upload_count,
-                "collection_count": customer.collection_count,
-                "last_login": customer.last_login.isoformat() if customer.last_login else None,
-                "created_at": customer.created_at.isoformat() if customer.created_at else None,
-            }
-        except ObjectDoesNotExist:
-            # 如果该壁纸是系统爬取/后台导入的，没有上传记录，会进入这里
-            return None
-
-    def get_tags(self, obj):
-        return [
-            {
-                'id': tag.id,
-                'name': tag.name,
-            }
-            for tag in obj.tags.all()
-        ]
-
-    def get_aspect_ratio(self, obj):
-        """计算宽高比，格式如 16:9"""
-        if not obj.width or not obj.height:
-            return None
-
-        # 计算最大公约数
-        def gcd(a, b):
-            while b:
-                a, b = b, a % b
-            return a
-        common_divisor = gcd(obj.width, obj.height)
-        width_ratio = obj.width // common_divisor
-        height_ratio = obj.height // common_divisor
-        return f"{width_ratio}:{height_ratio}"
-
-    def get_is_liked(self, obj):
-        cid = self.context.get("customer_id")
-        if not cid:
-            return False
-        liked_cache = self.context.get("liked_wallpaper_ids")
-        if liked_cache is not None:
-            return obj.id in liked_cache
-        return WallpaperLike.objects.filter(customer_id=cid, wallpaper_id=obj.pk).exists()
-
-    def get_is_collected(self, obj):
-        cid = self.context.get("customer_id")
-        if not cid:
-            return False
-        collected_cache = self.context.get("collected_wallpaper_ids")
-        if collected_cache is not None:
-            return obj.id in collected_cache
-        return WallpaperCollection.objects.filter(user_id=cid, wallpaper_id=obj.pk).exists()
-
 # ====================优化查询218start===============================
 class WallpapersListSerializer(serializers.ModelSerializer):
     """壁纸列表序列化器（轻量级，只包含必要字段）"""
@@ -237,10 +135,12 @@ class WallpapersListSerializer(serializers.ModelSerializer):
     def get_aspect_ratio(self, obj):
         if not obj.width or not obj.height:
             return None
+
         def gcd(a, b):
             while b:
                 a, b = b, a % b
             return a
+
         common_divisor = gcd(obj.width, obj.height)
         return f"{obj.width // common_divisor}:{obj.height // common_divisor}"
 
@@ -268,7 +168,7 @@ class WallpapersSerializer(serializers.ModelSerializer):
             'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
             'source_url', 'description', 'has_watermark', 'category', 'tags',
             'is_live', 'is_hd', 'hot_score', 'like_count', 'collect_count', 'download_count',
-            'view_count','created_at', 'aspect_ratio', 'is_liked', 'is_collected',
+            'view_count', 'created_at', 'aspect_ratio', 'is_liked', 'is_collected',
             'uploader',
         ]
         read_only_fields = ['id', 'created_at', 'like_count', 'collect_count', 'download_count']
@@ -328,10 +228,12 @@ class WallpapersSerializer(serializers.ModelSerializer):
         """计算宽高比，格式如 16:9"""
         if not obj.width or not obj.height:
             return None
+
         def gcd(a, b):
             while b:
                 a, b = b, a % b
             return a
+
         common_divisor = gcd(obj.width, obj.height)
         width_ratio = obj.width // common_divisor
         height_ratio = obj.height // common_divisor
@@ -354,17 +256,16 @@ class WallpapersSerializer(serializers.ModelSerializer):
         if collected_cache is not None:
             return obj.id in collected_cache
         return WallpaperCollection.objects.filter(user_id=cid, wallpaper_id=obj.pk).exists()
+
+
 # ======================优化结束end================================
-
-
-
-
 class CollectionItemSerializer(serializers.ModelSerializer):
     wallpaper = WallpapersSerializer(read_only=True)
 
     class Meta:
         model = WallpaperCollection
         fields = ["id", "created_at", "wallpaper"]
+
 
 @extend_schema(tags=["壁纸管理"])
 @extend_schema_view(
@@ -376,9 +277,10 @@ class CollectionItemSerializer(serializers.ModelSerializer):
             OpenApiParameter(name="name", type=str, required=False, description="壁纸名称搜索"),
             OpenApiParameter(name="tag_id", type=str, required=False,
                              description="标签 ID 查询，支持单个或多个（逗号分隔）"),
-            OpenApiParameter(name="category_id", type=str, required=False,description="分类 ID 筛选，支持单个或多个（逗号分隔）"),
-            OpenApiParameter(name="media_live", type=str, required=False,description="静态false或动态true"),
-            OpenApiParameter(name="platform", type=str, required=False,description="平台电脑PC或手机PHONE "),
+            OpenApiParameter(name="category_id", type=str, required=False,
+                             description="分类 ID 筛选，支持单个或多个（逗号分隔）"),
+            OpenApiParameter(name="media_live", type=str, required=False, description="静态false或动态true"),
+            OpenApiParameter(name="platform", type=str, required=False, description="平台电脑PC或手机PHONE "),
             OpenApiParameter(name="resolution", type=str, required=False,
                              description="分辨率多选，逗号分隔，如 3840x2160,2560x1440,1920x1080"),
             OpenApiParameter(name="aspect_ratio", type=str, required=False,
@@ -588,7 +490,6 @@ class WallpapersViewSet(BaseViewSet):
                     queryset = queryset.extra(where=[f"({sql_or})"], params=params)
         return queryset
 
-
     @extend_schema(
         summary="猜你喜欢",
         description="根据传入的壁纸 ID，推荐具有相同标签的其他壁纸（按匹配标签数量排序）",
@@ -617,24 +518,18 @@ class WallpapersViewSet(BaseViewSet):
         猜你喜欢：根据传入的壁纸 ID，推荐具有相同标签的其他壁纸
         """
         from django.db.models import Count, Q
-
         wallpaper_id = request.query_params.get("wallpaper_id")
         limit = int(request.query_params.get("limit", 10))
-
         if not wallpaper_id:
             return ApiResponse(code=400, message="请提供壁纸 ID")
-
         try:
             # 获取指定壁纸及其标签
             target_wallpaper = Wallpapers.objects.prefetch_related('tags').get(id=wallpaper_id)
             target_tags = target_wallpaper.tags.all()
-
             if not target_tags.exists():
                 # 如果该壁纸没有标签，返回空列表
                 return ApiResponse(data=[], message="该壁纸没有标签，无法推荐")
-
             target_tag_ids = list(target_tags.values_list('id', flat=True))
-
             # 查询具有相同标签的其他壁纸（排除自身）
             # 使用 annotate 计算匹配的标签数量
             recommended_wallpapers = Wallpapers.objects.filter(
@@ -646,11 +541,9 @@ class WallpapersViewSet(BaseViewSet):
             ).order_by(
                 '-match_count', '-hot_score', '-created_at'
             ).distinct()[:limit]
-
             # 序列化返回数据
             serializer = self.get_serializer(recommended_wallpapers, many=True)
             return ApiResponse(data=serializer.data, message=f"为您找到{len(serializer.data)}个相关推荐")
-
         except Wallpapers.DoesNotExist:
             return ApiResponse(code=404, message="指定的壁纸不存在")
         except Exception as e:
@@ -936,8 +829,8 @@ class WallpapersViewSet(BaseViewSet):
     @extend_schema(
         summary="上传个人壁纸到 COS（person_wallpaper/，质量 100）",
         description=(
-            "需客户 Token（CToken）。multipart：file、title（文件名主体）；"
-            "可选 description；tag_ids（逗号或 JSON 数组）；tag_names（新标签，逗号或 JSON 数组）。"
+                "需客户 Token（CToken）。multipart：file、title（文件名主体）；"
+                "可选 description；tag_ids（逗号或 JSON 数组）；tag_names（新标签，逗号或 JSON 数组）。"
         ),
         request={
             "multipart/form-data": {
@@ -1222,6 +1115,7 @@ class WallpapersViewSet(BaseViewSet):
                     code=400,
                     message=_("Excel 文件缺少必要字段，需要包含：%(cols)s") % {"cols": ", ".join(required_columns)}
                 )
+
             # 6. 定义数据处理函数
             def process_cell_value(value):
                 """处理单元格值，转换类型和处理空值"""
@@ -1282,4 +1176,3 @@ class WallpapersViewSet(BaseViewSet):
         except Exception as e:
             logger.error(f"批量导入失败：{str(e)}", exc_info=True)
             return ApiResponse(code=500, message=_("批量导入失败：%(error)s") % {"error": str(e)})
-

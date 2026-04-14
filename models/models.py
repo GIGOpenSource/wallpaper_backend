@@ -134,11 +134,11 @@ class Wallpapers(models.Model):
     tags = models.ManyToManyField(WallpaperTag, blank=True, verbose_name="标签", related_name='wallpapers')
     is_live = models.BooleanField(default=False, verbose_name="是否Live壁纸",null= True,blank=True)
     is_hd = models.BooleanField(default=False, verbose_name="是否高清壁纸",null= True,blank=True)
-    hot_score = models.IntegerField(default=0, verbose_name="热门分值（越高越热门）",null= True,blank=True)
-    like_count = models.PositiveIntegerField(default=0, verbose_name="点赞数",null= True,blank=True)
-    collect_count = models.PositiveIntegerField(default=0, verbose_name="收藏数",null= True,blank=True)
-    download_count = models.PositiveIntegerField(default=0, verbose_name="下载量",null= True,blank=True)
-    view_count = models.PositiveIntegerField(default=0, verbose_name="浏览量", null=True, blank=True)
+    hot_score = models.IntegerField(default=0, verbose_name="热门分值（越高越热门）",blank=True)
+    like_count = models.PositiveIntegerField(default=0, verbose_name="点赞数",blank=True)
+    collect_count = models.PositiveIntegerField(default=0, verbose_name="收藏数",blank=True)
+    download_count = models.PositiveIntegerField(default=0, verbose_name="下载量",blank=True)
+    view_count = models.PositiveIntegerField(default=0, verbose_name="浏览量", blank=True)
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
 
     class Meta:
