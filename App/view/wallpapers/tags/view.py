@@ -27,7 +27,7 @@ class WallpaperTagSerializer(serializers.ModelSerializer):
         count = cache.get(cache_key)
         if count is None:
             try:
-                count = obj.wallpapers.count()
+                count = obj.wallpapers_set.count()
             except AttributeError:
                 count = 0
             cache.set(cache_key, count, timeout=86400)
@@ -117,7 +117,7 @@ class WallpaperTagViewSet(BaseViewSet):
             return ApiResponse(data=cached_data, message="热门标签获取成功（缓存）")
         
         tags = WallpaperTag.objects.annotate(
-            wallpaper_count=Count('wallpapers')
+            wallpaper_count=Count('wallpapers_set')
         ).order_by('-wallpaper_count')[:limit]
         
         data = []
