@@ -14,24 +14,11 @@ from django.utils.translation import gettext as _
 
 class WallpaperTagSerializer(serializers.ModelSerializer):
     """壁纸标签序列化器"""
-    wallpaper_count = serializers.SerializerMethodField()
-
     class Meta:
         model = WallpaperTag
         fields = ['id', 'name', 'created_at', 'wallpaper_count']
         read_only_fields = ['id', 'created_at', 'wallpaper_count']
 
-    def get_wallpaper_count(self, obj):
-        """获取标签关联的壁纸总数"""
-        cache_key = f"tag_{obj.id}_wallpaper_count"
-        count = cache.get(cache_key)
-        if count is None:
-            try:
-                count = obj.wallpapers_set.count()
-            except AttributeError:
-                count = 0
-            cache.set(cache_key, count, timeout=86400)
-        return count
 
 
 @extend_schema(tags=["标签管理"])
@@ -61,36 +48,37 @@ class WallpaperTagViewSet(BaseViewSet):
         now = timezone.now()
         cache_reset_key = "tag_list_cache_reset_time"
         last_reset_time = cache.get(cache_reset_key)
-        
+
         today_8am = now.replace(hour=8, minute=0, second=0, microsecond=0)
         if now.hour < 8:
             today_8am = today_8am - timezone.timedelta(days=1)
-        
-        if last_reset_time is None or last_reset_time < today_8am:
+
+        need_refresh = last_reset_time is None or last_reset_time < today_8am
+
+        if need_refresh:
             cache.set(cache_reset_key, now, timeout=None)
-        
-        cache_key = "all_tags_with_count"
-        
-        if last_reset_time and last_reset_time >= today_8am:
-            cached_data = cache.get(cache_key)
-            if cached_data:
-                return ApiResponse(data=cached_data, message="标签列表获取成功（缓存）")
+            qs = WallpaperTag.objects.all()
+            if q:
+                qs = qs.filter(name__icontains=q)
+            tags_to_update = []
+            for tag in qs:
+                count = Wallpapers.objects.filter(tags=tag).count()
+                tag.wallpaper_count = count
+                tags_to_update.append(tag)
+            if tags_to_update:
+                WallpaperTag.objects.bulk_update(tags_to_update, ['wallpaper_count'])
+
         qs = WallpaperTag.objects.all().order_by('-created_at')
         if q:
             qs = qs.filter(name__icontains=q)
-        tags = list(qs)
-        data = []
-        for tag in tags:
-            count = Wallpapers.objects.filter(tags=tag).count()
-            cache.set(f"tag_{tag.id}_wallpaper_count", count, timeout=86400)
-            data.append({
-                'id': tag.id,
-                'name': tag.name,
-                'created_at': tag.created_at.strftime('%Y-%m-%d %H:%M:%S'),
-                'wallpaper_count': count
-            })
-        cache.set(cache_key, data, timeout=86400)
-        return ApiResponse(data=data, message="标签列表获取成功")
+
+        data = list(qs.values('id', 'name', 'created_at', 'wallpaper_count'))
+        for item in data:
+            if item['created_at']:
+                item['created_at'] = item['created_at'].strftime('%Y-%m-%d %H:%M:%S')
+
+        message = "标签列表获取成功（已更新计数）" if need_refresh else "标签列表获取成功（缓存）"
+        return ApiResponse(data=data, message=message)
 
     @extend_schema(
         summary="获取热门标签（按壁纸数量排序）",
@@ -108,28 +96,45 @@ class WallpaperTagViewSet(BaseViewSet):
             limit = int(request.query_params.get("limit", 10))
         except (TypeError, ValueError):
             limit = 10
-        
+
         limit = max(1, min(20, limit))
-        
+
         cache_key = f"hot_tags_{limit}"
         cached_data = cache.get(cache_key)
         if cached_data:
             return ApiResponse(data=cached_data, message="热门标签获取成功（缓存）")
-        
-        tags = WallpaperTag.objects.annotate(
-            wallpaper_count=Count('wallpapers_set')
-        ).order_by('-wallpaper_count')[:limit]
-        
-        data = []
-        for tag in tags:
-            count = tag.wallpaper_count
-            cache.set(f"tag_{tag.id}_wallpaper_count", count, timeout=86400)
-            data.append({
-                'id': tag.id,
-                'name': tag.name,
-                'wallpaper_count': count
-            })
-        
+
+        now = timezone.now()
+        cache_reset_key = "tag_list_cache_reset_time"
+        last_reset_time = cache.get(cache_reset_key)
+
+        today_8am = now.replace(hour=8, minute=0, second=0, microsecond=0)
+        if now.hour < 8:
+            today_8am = today_8am - timezone.timedelta(days=1)
+
+        need_refresh = last_reset_time is None or last_reset_time < today_8am
+
+        if need_refresh:
+            cache.set(cache_reset_key, now, timeout=None)
+
+            all_tags = WallpaperTag.objects.all()
+            tags_to_update = []
+            for tag in all_tags:
+                count = Wallpapers.objects.filter(tags=tag).count()
+                tag.wallpaper_count = count
+                tags_to_update.append(tag)
+
+            if tags_to_update:
+                WallpaperTag.objects.bulk_update(tags_to_update, ['wallpaper_count'])
+
+        tags = WallpaperTag.objects.order_by('-wallpaper_count')[:limit]
+
+        data = [{
+            'id': tag.id,
+            'name': tag.name,
+            'wallpaper_count': tag.wallpaper_count
+        } for tag in tags]
+
         cache.set(cache_key, data, timeout=3600)
         return ApiResponse(data=data, message="热门标签获取成功")
 

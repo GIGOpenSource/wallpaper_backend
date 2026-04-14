@@ -105,6 +105,7 @@ class WallpaperCategory(models.Model):
 # 壁纸标签，可以有很多
 class WallpaperTag(models.Model):
     name = models.CharField(max_length=50, verbose_name="标签名称", unique=True)
+    wallpaper_count = models.PositiveIntegerField(default=0, verbose_name="壁纸总数")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
 
     class Meta:
@@ -130,7 +131,7 @@ class Wallpapers(models.Model):
 
     # 原有字段
     category = models.ManyToManyField(WallpaperCategory, blank=True, verbose_name="所属分类")
-    tags = models.ManyToManyField(WallpaperTag, blank=True, verbose_name="标签")
+    tags = models.ManyToManyField(WallpaperTag, blank=True, verbose_name="标签", related_name='wallpapers')
     is_live = models.BooleanField(default=False, verbose_name="是否Live壁纸",null= True,blank=True)
     is_hd = models.BooleanField(default=False, verbose_name="是否高清壁纸",null= True,blank=True)
     hot_score = models.IntegerField(default=0, verbose_name="热门分值（越高越热门）",null= True,blank=True)
