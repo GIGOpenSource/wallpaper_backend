@@ -119,7 +119,7 @@ class WallpapersSerializer(serializers.ModelSerializer):
     aspect_ratio = serializers.SerializerMethodField()
     is_liked = serializers.SerializerMethodField()
     is_collected = serializers.SerializerMethodField()
-    person_upload = serializers.SerializerMethodField()
+    uploader = serializers.SerializerMethodField()
 
     class Meta:
         model = Wallpapers
@@ -127,20 +127,41 @@ class WallpapersSerializer(serializers.ModelSerializer):
             'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
             'source_url', 'description', 'has_watermark', 'category', 'tags',
             'is_live', 'is_hd', 'hot_score', 'like_count', 'collect_count', 'download_count',
-            'view_count','created_at', 'aspect_ratio', 'is_liked', 'is_collected', 'person_upload',
+            'view_count','created_at', 'aspect_ratio', 'is_liked', 'is_collected',
+            'uploader',
         ]
         read_only_fields = ['id', 'created_at', 'like_count', 'collect_count', 'download_count']
 
-    def get_person_upload(self, obj):
+    def __init__(self, *args, **kwargs):
+        super(WallpapersSerializer, self).__init__(*args, **kwargs)
+        # 如果上下文中没有标记需要详情数据，则移除 uploader 字段以提升列表页性能
+        if not self.context.get('include_detail_info'):
+            self.fields.pop('uploader', None)
+
+    def get_uploader(self, obj):
+        """获取上传者简要信息"""
+        # 利用 select_related 预加载的数据，避免额外查询
+        logger.debug(
+            f"get_uploader called for wallpaper {obj.id}, include_detail_info: {self.context.get('include_detail_info')}")
+
         try:
-            u = obj.customer_upload
+            # 使用 getattr 安全访问反向关联字段
+            upload_record = getattr(obj, 'customer_upload', None)
+            if not upload_record:
+                return None
+
+            customer = getattr(upload_record, 'customer', None)
+            if not customer:
+                return None
+
+            return {
+                "id": customer.id,
+                "nickname": customer.nickname or f"用户{customer.id}",
+                "avatar_url": customer.avatar_url,
+            }
         except ObjectDoesNotExist:
+            # 如果该壁纸是系统爬取/后台导入的，没有上传记录，会进入这里
             return None
-        return {
-            "customer_id": u.customer_id,
-            "uploaded_at": u.created_at.isoformat() if u.created_at else None,
-            "cos_key": u.cos_key,
-        }
 
     def get_tags(self, obj):
         return [
@@ -266,7 +287,9 @@ class WallpapersViewSet(BaseViewSet):
             hot_score=F("hot_score") + 10
         )
         instance.refresh_from_db(fields=["view_count", "hot_score"])
-        serializer = self.get_serializer(instance)
+        ctx = self.get_serializer_context()
+        ctx['include_detail_info'] = True
+        serializer = self.get_serializer(instance, context=ctx)
         return ApiResponse(serializer.data)
 
     def get_queryset(self):
@@ -274,6 +297,9 @@ class WallpapersViewSet(BaseViewSet):
         动态过滤查询
         """
         queryset = super().get_queryset()
+        if self.action == 'retrieve':
+            queryset = queryset.select_related('customer_upload__customer')
+
         # 筛选参数：name
         platform = self.request.query_params.get("platform", "")
         if platform.upper() == 'PC':
@@ -336,8 +362,6 @@ class WallpapersViewSet(BaseViewSet):
                 if q_resolution:
                     queryset = queryset.filter(q_resolution).distinct()
 
-        aspect_ratio = self.request.query_params.get("aspect_ratio", "")
-        print("aspect_ratio:", aspect_ratio)
         aspect_ratio = self.request.query_params.get("aspect_ratio", "")
         if aspect_ratio:
             # 支持 16:9 和 16-9 两种格式
