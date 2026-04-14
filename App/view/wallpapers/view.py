@@ -112,7 +112,6 @@ def _image_meta_from_bytes(content: bytes):
 
 
 # ==================== 壁纸相关视图 ====================
-
 class WallpapersSerializer(serializers.ModelSerializer):
     """壁纸序列化器"""
     tags = serializers.SerializerMethodField()
@@ -214,6 +213,151 @@ class WallpapersSerializer(serializers.ModelSerializer):
             return obj.id in collected_cache
         return WallpaperCollection.objects.filter(user_id=cid, wallpaper_id=obj.pk).exists()
 
+# ====================优化查询218start===============================
+class WallpapersListSerializer(serializers.ModelSerializer):
+    """壁纸列表序列化器（轻量级，只包含必要字段）"""
+    tags = serializers.SerializerMethodField()
+    aspect_ratio = serializers.SerializerMethodField()
+    is_liked = serializers.SerializerMethodField()
+    is_collected = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Wallpapers
+        fields = [
+            'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
+            'has_watermark', 'is_live', 'is_hd', 'hot_score', 'like_count',
+            'collect_count', 'download_count', 'view_count', 'created_at',
+            'aspect_ratio', 'is_liked', 'is_collected', 'tags'
+        ]
+        read_only_fields = fields
+
+    def get_tags(self, obj):
+        return [{'id': tag.id, 'name': tag.name} for tag in obj.tags.all()]
+
+    def get_aspect_ratio(self, obj):
+        if not obj.width or not obj.height:
+            return None
+        def gcd(a, b):
+            while b:
+                a, b = b, a % b
+            return a
+        common_divisor = gcd(obj.width, obj.height)
+        return f"{obj.width // common_divisor}:{obj.height // common_divisor}"
+
+    def get_is_liked(self, obj):
+        liked_ids = self.context.get("liked_wallpaper_ids")
+        return obj.id in liked_ids if liked_ids else False
+
+    def get_is_collected(self, obj):
+        collected_ids = self.context.get("collected_wallpaper_ids")
+        return obj.id in collected_ids if collected_ids else False
+
+
+class WallpapersSerializer(serializers.ModelSerializer):
+    """壁纸详情序列化器（包含完整信息）"""
+    category = serializers.SerializerMethodField()
+    tags = serializers.SerializerMethodField()
+    aspect_ratio = serializers.SerializerMethodField()
+    is_liked = serializers.SerializerMethodField()
+    is_collected = serializers.SerializerMethodField()
+    uploader = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Wallpapers
+        fields = [
+            'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
+            'source_url', 'description', 'has_watermark', 'category', 'tags',
+            'is_live', 'is_hd', 'hot_score', 'like_count', 'collect_count', 'download_count',
+            'view_count','created_at', 'aspect_ratio', 'is_liked', 'is_collected',
+            'uploader',
+        ]
+        read_only_fields = ['id', 'created_at', 'like_count', 'collect_count', 'download_count']
+
+    def __init__(self, *args, **kwargs):
+        super(WallpapersSerializer, self).__init__(*args, **kwargs)
+        if not self.context.get('include_detail_info'):
+            self.fields.pop('uploader', None)
+
+    def get_uploader(self, obj):
+        """获取上传者简要信息"""
+        logger.debug(
+            f"get_uploader called for wallpaper {obj.id}, include_detail_info: {self.context.get('include_detail_info')}")
+        try:
+            upload_record = getattr(obj, 'customer_upload', None)
+            if not upload_record:
+                return None
+            customer = getattr(upload_record, 'customer', None)
+            if not customer:
+                return None
+            return {
+                "id": customer.id,
+                "email": customer.email,
+                "nickname": customer.nickname,
+                "gender": customer.gender,
+                "avatar_url": customer.avatar_url,
+                "badge": customer.badge,
+                "points": customer.points,
+                "level": customer.level,
+                "upload_count": customer.upload_count,
+                "collection_count": customer.collection_count,
+                "last_login": customer.last_login.isoformat() if customer.last_login else None,
+                "created_at": customer.created_at.isoformat() if customer.created_at else None,
+            }
+        except ObjectDoesNotExist:
+            return None
+
+    def get_category(self, obj):
+        return [
+            {
+                'id': cat.id,
+                'name': cat.name,
+            }
+            for cat in obj.category.all()
+        ]
+
+    def get_tags(self, obj):
+        return [
+            {
+                'id': tag.id,
+                'name': tag.name,
+            }
+            for tag in obj.tags.all()
+        ]
+
+    def get_aspect_ratio(self, obj):
+        """计算宽高比，格式如 16:9"""
+        if not obj.width or not obj.height:
+            return None
+        def gcd(a, b):
+            while b:
+                a, b = b, a % b
+            return a
+        common_divisor = gcd(obj.width, obj.height)
+        width_ratio = obj.width // common_divisor
+        height_ratio = obj.height // common_divisor
+        return f"{width_ratio}:{height_ratio}"
+
+    def get_is_liked(self, obj):
+        cid = self.context.get("customer_id")
+        if not cid:
+            return False
+        liked_cache = self.context.get("liked_wallpaper_ids")
+        if liked_cache is not None:
+            return obj.id in liked_cache
+        return WallpaperLike.objects.filter(customer_id=cid, wallpaper_id=obj.pk).exists()
+
+    def get_is_collected(self, obj):
+        cid = self.context.get("customer_id")
+        if not cid:
+            return False
+        collected_cache = self.context.get("collected_wallpaper_ids")
+        if collected_cache is not None:
+            return obj.id in collected_cache
+        return WallpaperCollection.objects.filter(user_id=cid, wallpaper_id=obj.pk).exists()
+# ======================优化结束end================================
+
+
+
 
 class CollectionItemSerializer(serializers.ModelSerializer):
     wallpaper = WallpapersSerializer(read_only=True)
@@ -276,6 +420,12 @@ class WallpapersViewSet(BaseViewSet):
     serializer_class = WallpapersSerializer
     pagination_class = CustomPagination
 
+    def get_serializer_class(self):
+        """根据动作返回不同的序列化器"""
+        if self.action == 'list':
+            return WallpapersListSerializer
+        return WallpapersSerializer
+
     def get_serializer_context(self):
         ctx = super().get_serializer_context()
         ctx["customer_id"] = None
@@ -288,11 +438,10 @@ class WallpapersViewSet(BaseViewSet):
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
-        queryset = queryset.prefetch_related('tags', 'category').only(
+        queryset = queryset.prefetch_related('tags').only(
             'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
-            'source_url', 'description', 'has_watermark', 'is_live', 'is_hd',
-            'hot_score', 'like_count', 'collect_count', 'download_count',
-            'view_count', 'created_at'
+            'has_watermark', 'is_live', 'is_hd', 'hot_score', 'like_count',
+            'collect_count', 'download_count', 'view_count', 'created_at'
         )
         order = request.query_params.get("order", "").lower()
         order_mapping = {
@@ -304,7 +453,6 @@ class WallpapersViewSet(BaseViewSet):
         if order in order_mapping:
             queryset = queryset.order_by(order_mapping[order])
         customer_id = self.get_serializer_context().get("customer_id")
-
         if customer_id:
             liked_ids = set(
                 WallpaperLike.objects.filter(customer_id=customer_id)
@@ -317,17 +465,14 @@ class WallpapersViewSet(BaseViewSet):
         else:
             liked_ids = set()
             collected_ids = set()
-
         page = self.paginate_queryset(queryset)
         if page is not None:
             context = self.get_serializer_context()
-            context['include_detail_info'] = False
             context['liked_wallpaper_ids'] = liked_ids
             context['collected_wallpaper_ids'] = collected_ids
             serializer = self.get_serializer(page, many=True, context=context)
             return self.get_paginated_response(serializer.data)
         context = self.get_serializer_context()
-        context['include_detail_info'] = False
         context['liked_wallpaper_ids'] = liked_ids
         context['collected_wallpaper_ids'] = collected_ids
         serializer = self.get_serializer(queryset, many=True, context=context)
