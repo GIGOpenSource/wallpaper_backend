@@ -74,7 +74,17 @@ class CustomerUserViewSet(viewsets.ViewSet):
     def register(self, request):
         ser = CustomerRegisterSerializer(data=request.data)
         if not ser.is_valid():
-            return ApiResponse(data=ser.errors, message=_("参数校验失败"), code=400)
+            errors = ser.errors
+            message_parts = []
+            for field, field_errors in errors.items():
+                for error in field_errors:
+                    message_parts.append(error)
+            if message_parts:
+                raw_message = message_parts[0]
+                clean_message = raw_message.replace(" ", "").replace("的", "").replace("。", "").replace("，", "")
+            else:
+                clean_message = _("参数校验失败")
+            return ApiResponse(data=errors, message=clean_message, code=400)
         try:
             user = ser.save()
         except IntegrityError:
