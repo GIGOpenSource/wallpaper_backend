@@ -200,12 +200,18 @@ class WallpapersSerializer(serializers.ModelSerializer):
         cid = self.context.get("customer_id")
         if not cid:
             return False
+        liked_cache = self.context.get("liked_wallpaper_ids")
+        if liked_cache is not None:
+            return obj.id in liked_cache
         return WallpaperLike.objects.filter(customer_id=cid, wallpaper_id=obj.pk).exists()
 
     def get_is_collected(self, obj):
         cid = self.context.get("customer_id")
         if not cid:
             return False
+        collected_cache = self.context.get("collected_wallpaper_ids")
+        if collected_cache is not None:
+            return obj.id in collected_cache
         return WallpaperCollection.objects.filter(user_id=cid, wallpaper_id=obj.pk).exists()
 
 
@@ -282,7 +288,12 @@ class WallpapersViewSet(BaseViewSet):
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
-        # 获取排序参数
+        queryset = queryset.prefetch_related('tags', 'category').only(
+            'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
+            'source_url', 'description', 'has_watermark', 'is_live', 'is_hd',
+            'hot_score', 'like_count', 'collect_count', 'download_count',
+            'view_count', 'created_at'
+        )
         order = request.query_params.get("order", "").lower()
         order_mapping = {
             "latest": "-created_at",
@@ -290,14 +301,36 @@ class WallpapersViewSet(BaseViewSet):
             "downloads": "-download_count",
             "hot": "-hot_score",
         }
-        # 如果传了有效的排序参数，则覆盖默认排序
         if order in order_mapping:
             queryset = queryset.order_by(order_mapping[order])
+        customer_id = self.get_serializer_context().get("customer_id")
+
+        if customer_id:
+            liked_ids = set(
+                WallpaperLike.objects.filter(customer_id=customer_id)
+                .values_list('wallpaper_id', flat=True)
+            )
+            collected_ids = set(
+                WallpaperCollection.objects.filter(user_id=customer_id)
+                .values_list('wallpaper_id', flat=True)
+            )
+        else:
+            liked_ids = set()
+            collected_ids = set()
+
         page = self.paginate_queryset(queryset)
         if page is not None:
-            serializer = self.get_serializer(page, many=True)
+            context = self.get_serializer_context()
+            context['include_detail_info'] = False
+            context['liked_wallpaper_ids'] = liked_ids
+            context['collected_wallpaper_ids'] = collected_ids
+            serializer = self.get_serializer(page, many=True, context=context)
             return self.get_paginated_response(serializer.data)
-        serializer = self.get_serializer(queryset, many=True)
+        context = self.get_serializer_context()
+        context['include_detail_info'] = False
+        context['liked_wallpaper_ids'] = liked_ids
+        context['collected_wallpaper_ids'] = collected_ids
+        serializer = self.get_serializer(queryset, many=True, context=context)
         return ApiResponse(serializer.data)
 
     def retrieve(self, request, *args, **kwargs):

@@ -297,3 +297,93 @@ class CarouselBanner(models.Model):
 
     def __str__(self):
         return f"轮播图 {self.sort} - {self.wallpaper.name[:30]}"
+
+
+class WallpaperComment(models.Model):
+    """
+    壁纸评论表
+    """
+    customer = models.ForeignKey(CustomerUser,on_delete=models.CASCADE,related_name="comments",verbose_name="评论用户"
+    )
+    wallpaper = models.ForeignKey(Wallpapers,on_delete=models.CASCADE,related_name="comments",verbose_name="壁纸"
+    )
+    parent = models.ForeignKey('self',on_delete=models.CASCADE,null=True,blank=True,related_name="replies",verbose_name="父评论（用于回复）"
+    )
+    content = models.TextField(verbose_name="评论内容")
+    like_count = models.PositiveIntegerField(default=0, verbose_name="点赞数")
+    is_hidden = models.BooleanField(default=False, verbose_name="是否隐藏")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+
+    class Meta:
+        db_table = 't_wallpaper_comment'
+        verbose_name = '壁纸评论'
+        verbose_name_plural = '壁纸评论'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['wallpaper', '-created_at']),
+            models.Index(fields=['customer', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.customer.email} → {self.wallpaper.name[:30]}"
+
+
+class Notification(models.Model):
+    """
+    通知表（点赞提示、评论提示、粉丝提示统一存储）
+    使用 JSONField 存储不同类型通知的扩展数据，减少表数量
+    """
+    NOTIFICATION_TYPES = [
+        ('like', '点赞'),('comment', '评论'),('follow', '关注'),('reply', '回复'),
+    ]
+
+    recipient = models.ForeignKey(CustomerUser,on_delete=models.CASCADE,related_name="notifications",verbose_name="接收者"
+    )
+    sender = models.ForeignKey(CustomerUser,on_delete=models.CASCADE,related_name="sent_notifications",verbose_name="发送者"
+    )
+    notification_type = models.CharField(max_length=20,choices=NOTIFICATION_TYPES,verbose_name="通知类型"
+    )
+    target_id = models.PositiveIntegerField(verbose_name="目标对象ID（壁纸ID或评论ID）")
+    target_type = models.CharField(max_length=50, verbose_name="目标类型（wallpaper/comment/user）")
+    extra_data = models.JSONField(blank=True, null=True, default=dict, verbose_name="扩展数据")
+    is_read = models.BooleanField(default=False, verbose_name="是否已读")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+
+    class Meta:
+        db_table = 't_notification'
+        verbose_name = '用户通知'
+        verbose_name_plural = '用户通知'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['recipient', '-created_at']),
+            models.Index(fields=['recipient', 'is_read']),
+            models.Index(fields=['recipient', 'notification_type']),
+        ]
+
+    def __str__(self):
+        return f"{self.sender.email} → {self.recipient.email} [{self.notification_type}]"
+
+
+class UserFollow(models.Model):
+    """
+    用户关注表（粉丝关系）
+    """
+    follower = models.ForeignKey(CustomerUser,on_delete=models.CASCADE,related_name="following",verbose_name="关注者"
+    )
+    following = models.ForeignKey(CustomerUser,on_delete=models.CASCADE,related_name="followers",verbose_name="被关注者"
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="关注时间")
+
+    class Meta:
+        db_table = 't_user_follow'
+        verbose_name = '用户关注'
+        verbose_name_plural = '用户关注'
+        unique_together = ('follower', 'following')
+        indexes = [
+            models.Index(fields=['following', '-created_at']),
+            models.Index(fields=['follower', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.follower.email} → {self.following.email}"
