@@ -26,7 +26,10 @@ class WallpaperTagSerializer(serializers.ModelSerializer):
         cache_key = f"tag_{obj.id}_wallpaper_count"
         count = cache.get(cache_key)
         if count is None:
-            count = obj.wallpapers.count()
+            try:
+                count = obj.wallpapers.count()
+            except AttributeError:
+                count = 0
             cache.set(cache_key, count, timeout=86400)
         return count
 
@@ -37,6 +40,8 @@ class WallpaperTagViewSet(BaseViewSet):
     标签管理 ViewSet
     提供标签列表、热门标签等功能
     """
+    queryset = WallpaperTag.objects.all()
+    serializer_class = WallpaperTagSerializer
     @extend_schema(
         summary="获取所有标签列表（含壁纸总数）",
         description="每日早8点第一次调用会查询实际总数并缓存，之后24小时内直接返回缓存值",
@@ -50,6 +55,7 @@ class WallpaperTagViewSet(BaseViewSet):
         获取所有标签列表，包含每个标签的壁纸总数
         缓存策略：每日早8点第一次调用时刷新缓存
         """
+
         q = (request.query_params.get("q") or "").strip()
         
         now = timezone.now()
