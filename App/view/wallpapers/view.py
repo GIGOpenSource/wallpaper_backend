@@ -156,8 +156,17 @@ class WallpapersSerializer(serializers.ModelSerializer):
 
             return {
                 "id": customer.id,
-                "nickname": customer.nickname or f"用户{customer.id}",
+                "email": customer.email,
+                "nickname": customer.nickname,
+                "gender": customer.gender,
                 "avatar_url": customer.avatar_url,
+                "badge": customer.badge,
+                "points": customer.points,
+                "level": customer.level,
+                "upload_count": customer.upload_count,
+                "collection_count": customer.collection_count,
+                "last_login": customer.last_login.isoformat() if customer.last_login else None,
+                "created_at": customer.created_at.isoformat() if customer.created_at else None,
             }
         except ObjectDoesNotExist:
             # 如果该壁纸是系统爬取/后台导入的，没有上传记录，会进入这里
@@ -224,6 +233,9 @@ class CollectionItemSerializer(serializers.ModelSerializer):
                              description="分辨率多选，逗号分隔，如 3840x2160,2560x1440,1920x1080"),
             OpenApiParameter(name="aspect_ratio", type=str, required=False,
                              description="宽高比多选，逗号分隔，如 16:9,21:9,9:16"),
+            OpenApiParameter(name="order", type=str, required=False,
+                             description="排序规则（只能传一个）：latest=最新, views=最多浏览, downloads=最多下载, hot=热度"),
+
         ],
         responses={
             200: {
@@ -270,6 +282,17 @@ class WallpapersViewSet(BaseViewSet):
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
+        # 获取排序参数
+        order = request.query_params.get("order", "").lower()
+        order_mapping = {
+            "latest": "-created_at",
+            "views": "-view_count",
+            "downloads": "-download_count",
+            "hot": "-hot_score",
+        }
+        # 如果传了有效的排序参数，则覆盖默认排序
+        if order in order_mapping:
+            queryset = queryset.order_by(order_mapping[order])
         page = self.paginate_queryset(queryset)
         if page is not None:
             serializer = self.get_serializer(page, many=True)
