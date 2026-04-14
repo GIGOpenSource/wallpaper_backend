@@ -6,7 +6,7 @@ from App.view.wallpapers.tags.view import WallpaperTagViewSet, NavigationTagView
 
 router = DefaultRouter()
 router.register(r'', WallpaperTagViewSet, basename='wallpaper-tag')
-router.register(r'navigation_tag', NavigationTagViewSet, basename='navigation_tag')
+# router.register(r'navigation_tag', NavigationTagViewSet, basename='navigation_tag')
 
 urlpatterns = [
     path('', include(router.urls)),
