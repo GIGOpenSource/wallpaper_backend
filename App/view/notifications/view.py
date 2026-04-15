@@ -48,27 +48,30 @@ class NotificationSerializer(serializers.ModelSerializer):
         from models.models import Wallpapers, WallpaperComment
         try:
             if obj.target_type == 'wallpaper':
-                wallpaper = Wallpapers.objects.only('name', 'thumb_url').get(id=obj.target_id)
+                # 场景：别人评论/点赞了我的壁纸
+                wallpaper = Wallpapers.objects.only('name', 'thumb_url', 'description').get(id=obj.target_id)
                 return {
                     'type': 'wallpaper',
-                    'name': wallpaper.name,
-                    'thumb_url': wallpaper.thumb_url,
-                    'id': wallpaper.id
+                    'id': wallpaper.id,
+                    'source_data': {
+                        'name': wallpaper.name,
+                        'thumb_url': wallpaper.thumb_url,
+                        'description': wallpaper.description or '',
+                        'obj_type': 'wallpaper'
+                    }
                 }
             elif obj.target_type == 'comment':
-                # 获取当前触发动作的评论
+                # 场景：别人回复了我的评论，或点赞了某条评论
                 comment = WallpaperComment.objects.select_related('parent__customer', 'wallpaper').get(id=obj.target_id)
-                
                 result = {
                     'type': 'comment',
                     'content': comment.content[:50],
                     'wallpaper_name': comment.wallpaper.name,
                     'wallpaper_id': comment.wallpaper.id
                 }
-                
                 # 确定 source_data：如果是回复，显示被回复的评论；如果是首评，显示壁纸信息
                 if comment.parent:
-                    # 情况1：回复了别人的评论
+                    # 情况1：回复了别人的评论 -> source_data 是被回复的那条
                     source_obj = comment.parent
                     result['source_data'] = {
                         'id': source_obj.id,
@@ -77,14 +80,13 @@ class NotificationSerializer(serializers.ModelSerializer):
                         'obj_type': 'comment'
                     }
                 else:
-                    # 情况2：首次评论壁纸（或点赞了首评），显示壁纸原内容
+                    # 情况2：首次评论壁纸 -> source_data 是该壁纸
                     wallpaper = comment.wallpaper
                     result['source_data'] = {
                         'id': wallpaper.id,
-                        'content': wallpaper.description or f"壁纸：{wallpaper.name}",
-                        'author': '上传者', # 这里可以根据需要改为获取 uploader 的昵称
-                        'obj_type': 'wallpaper',
-                        'thumb_url': wallpaper.thumb_url
+                        'name': wallpaper.name,
+                        'thumb_url': wallpaper.thumb_url,
+                        'obj_type': 'wallpaper'
                     }
                 return result
         except Exception:
