@@ -1,7 +1,7 @@
 # -*- coding: UTF-8 -*-
 from django.db import IntegrityError
 from django.utils import timezone
-from drf_spectacular.utils import extend_schema, extend_schema_view
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
 from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
 
@@ -129,29 +129,56 @@ class CustomerUserViewSet(viewsets.ViewSet):
         CustomTokenTool.delete_customer_token(token)
         return ApiResponse(message=_("登出成功"))
 
-    @extend_schema(summary="我的信息")
-    @action(detail=False, methods=["get"], url_path="profile")
+    @extend_schema(
+        summary="我的信息/查看他人信息",
+        parameters=[
+            OpenApiParameter(name="other_id", type=int, required=False, location=OpenApiParameter.QUERY, description="要查看的用户ID（不传则查看自己）"),
+        ]
+    )
+    @action(detail=False, methods=["get"], url_path="profile", authentication_classes=[], permission_classes=[])
     def profile(self, request):
-        customer_id = request.customer_id
-        try:
-            user = CustomerUser.objects.get(id=customer_id)
-        except CustomerUser.DoesNotExist:
-            return ApiResponse(message=_("用户不存在"), code=404)
+        # 获取当前登录用户 ID
+        current_customer_id = request.customer_id
+        
+        # 判断是查看自己还是查看他人
+        other_id = request.query_params.get('other_id')
+        if other_id:
+            try:
+                target_user = CustomerUser.objects.get(id=other_id)
+            except CustomerUser.DoesNotExist:
+                return ApiResponse(message=_("用户不存在"), code=404)
+        else:
+            target_user = CustomerUser.objects.get(id=current_customer_id)
+
+        # 计算粉丝数 (假设粉丝关系存储在 UserFollow 表中，following_id 是被关注者)
+        from models.models import UserFollow
+        followers_count = UserFollow.objects.filter(following_id=target_user.id).count()
+        
+        # 判断当前用户是否关注了目标用户
+        is_following = False
+        if current_customer_id and current_customer_id != target_user.id:
+            is_following = UserFollow.objects.filter(
+                follower_id=current_customer_id, 
+                following_id=target_user.id
+            ).exists()
 
         return ApiResponse(
             data={
-                "customer_id": user.id,
-                "email": user.email,
-                "nickname": user.nickname,
-                "gender": user.gender,
-                "avatar_url": user.avatar_url,
-                "badge": user.badge,
-                "upload_count": user.upload_count,
-                "collection_count": user.collection_count,
-                "points": user.points,
-                "level": user.level,
-                "last_login": user.last_login,
-                "created_at": user.created_at,
+                "customer_id": target_user.id,
+                "email": target_user.email,
+                "nickname": target_user.nickname,
+                "gender": target_user.gender,
+                "avatar_url": target_user.avatar_url,
+                "badge": target_user.badge,
+                "upload_count": target_user.upload_count,
+                "collection_count": target_user.collection_count,
+                "points": target_user.points,
+                "level": target_user.level,
+                "last_login": target_user.last_login,
+                "created_at": target_user.created_at,
+                # 新增字段
+                "followers_count": followers_count,
+                "is_following": is_following,
             },
             message=_("获取成功"),
         )
