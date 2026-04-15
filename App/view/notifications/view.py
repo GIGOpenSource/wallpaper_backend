@@ -125,15 +125,27 @@ class NotificationSerializer(serializers.ModelSerializer):
             OpenApiParameter(name="pageSize", type=int, required=False, description="每页数量"),
         ],
     ),
+    destroy=extend_schema(
+        summary="删除通知",
+        description="删除指定的一条通知",
+        responses={204: "删除成功", 404: "通知不存在或无权操作"}
+    ),
 )
 class NotificationViewSet(BaseViewSet):
     """
     消息通知 ViewSet
     """
-    queryset = Notification.objects.none()
+    queryset = Notification.objects.all()
     serializer_class = NotificationSerializer
     pagination_class = CustomPagination
     permission_classes = [IsCustomerTokenValid]
+
+    def get_queryset(self):
+        """只返回当前用户的通知"""
+        current_user_id = self.get_serializer_context().get('current_user_id')
+        if current_user_id:
+            return Notification.objects.filter(recipient_id=current_user_id)
+        return Notification.objects.none()
 
     def get_serializer_context(self):
         ctx = super().get_serializer_context()
