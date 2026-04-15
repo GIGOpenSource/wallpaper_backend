@@ -223,37 +223,32 @@ class WallpaperCommentViewSet(BaseViewSet):
                 content=content
             )
             
-            # 发送通知（如果不是回复自己）
+            # 发送通知（使用统一通知中心）
             try:
-                upload_record = getattr(wallpaper, 'customer_upload', None)
-                if upload_record and upload_record.customer_id != customer_id:
-                    Notification.objects.create(
-                        recipient_id=upload_record.customer_id,
+                from App.view.notifications.notification_center import NotificationCenter
+                
+                # 1. 如果是回复评论，通知被回复者
+                if parent_comment and parent_comment.customer_id != customer_id:
+                    NotificationCenter.send_reply(
+                        recipient_id=parent_comment.customer_id,
                         sender_id=customer_id,
-                        notification_type='comment',
-                        target_id=wallpaper_id,
-                        target_type='wallpaper',
-                        extra_data={
-                            'wallpaper_name': wallpaper.name[:50],
-                            'comment_content': content[:100],
-                        }
+                        comment_id=comment.id,
+                        wallpaper_name=wallpaper.name[:50],
+                        reply_content=content
                     )
+                else:
+                    # 2. 否则通知壁纸上传者（如果不是自己上传的）
+                    upload_record = getattr(wallpaper, 'customer_upload', None)
+                    if upload_record and upload_record.customer_id != customer_id:
+                        NotificationCenter.send_comment(
+                            recipient_id=upload_record.customer_id,
+                            sender_id=customer_id,
+                            wallpaper_id=wallpaper.id,
+                            wallpaper_name=wallpaper.name[:50],
+                            comment_content=content
+                        )
             except Exception:
                 pass
-            
-            if parent_comment and parent_comment.customer_id != customer_id:
-                # 回复评论通知
-                Notification.objects.create(
-                    recipient_id=parent_comment.customer_id,
-                    sender_id=customer_id,
-                    notification_type='reply',
-                    target_id=comment.id,
-                    target_type='comment',
-                    extra_data={
-                        'wallpaper_name': wallpaper.name[:50],
-                        'comment_content': content[:100],
-                    }
-                )
             
             serializer = self.get_serializer(comment)
             return ApiResponse(data=serializer.data, message="评论成功", code=201)

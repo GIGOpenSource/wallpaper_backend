@@ -187,6 +187,18 @@ class UserFollowViewSet(BaseViewSet):
         )
 
         if created:
+            # 发送关注通知
+            try:
+                from App.view.notifications.notification_center import NotificationCenter
+                current_user = CustomerUser.objects.get(id=current_user_id)
+                NotificationCenter.send_follow(
+                    recipient_id=following_id,
+                    sender_id=current_user_id,
+                    follower_nickname=current_user.nickname or current_user.email
+                )
+            except Exception:
+                pass
+                
             return ApiResponse(
                 data={'is_followed': True},
                 message=f"关注 {target_user.nickname or target_user.email} 成功"

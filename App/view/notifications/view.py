@@ -114,6 +114,28 @@ class NotificationViewSet(BaseViewSet):
         serializer = self.get_serializer(queryset, many=True)
         return ApiResponse(data=serializer.data, message="通知列表获取成功")
 
+    @extend_schema(
+        summary="标记通知为已读",
+        description="传入通知ID或 'all' 来标记单条或全部通知为已读",
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "id": {"oneOf": [{"type": "integer"}, {"type": "string", "enum": ["all"]}], "description": "通知ID 或 'all'"}
+                },
+                "required": ["id"]
+            }
+        },
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "integer", "example": 200},
+                    "message": {"type": "string", "example": "标记成功"}
+                }
+            }
+        }
+    )
     @action(detail=False, methods=['post'], url_path='mark-read')
     def mark_read(self, request):
         """标记通知为已读（传 id 或 all）"""
@@ -132,6 +154,20 @@ class NotificationViewSet(BaseViewSet):
         except Notification.DoesNotExist:
             return ApiResponse(code=404, message="通知不存在")
 
+    @extend_schema(
+        summary="获取未读通知数量",
+        description="返回当前用户未读消息的总数",
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "integer", "example": 200},
+                    "data": {"count": {"type": "integer"}},
+                    "message": {"type": "string"}
+                }
+            }
+        }
+    )
     @action(detail=False, methods=['get'], url_path='unread-count')
     def unread_count(self, request):
         """获取未读通知数量"""

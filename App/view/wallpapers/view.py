@@ -579,6 +579,20 @@ class WallpapersViewSet(BaseViewSet):
                     )
                     liked = True
                     message = "点赞成功"
+                    
+                    # 发送点赞通知（如果不是给自己点赞）
+                    try:
+                        upload_record = getattr(wp, 'customer_upload', None)
+                        if upload_record and upload_record.customer_id != cid:
+                            from App.view.notifications.notification_center import NotificationCenter
+                            NotificationCenter.send_like(
+                                recipient_id=upload_record.customer_id,
+                                sender_id=cid,
+                                wallpaper_id=wp.id,
+                                wallpaper_name=wp.name[:50]
+                            )
+                    except Exception:
+                        pass
                 else:
                     like.delete()
                     message = "取消点赞成功"
