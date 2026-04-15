@@ -21,6 +21,7 @@ from tool.utils import ApiResponse, CustomPagination
 class NotificationSerializer(serializers.ModelSerializer):
     """通知序列化器"""
     sender_info = serializers.SerializerMethodField()
+    content_display = serializers.SerializerMethodField()
     
     class Meta:
         model = Notification
@@ -50,8 +51,14 @@ class NotificationSerializer(serializers.ModelSerializer):
             return f"{nickname} 回复了你的评论"
         elif obj.notification_type == 'follow':
             return f"{nickname} 关注了你"
+        elif obj.notification_type == 'reward':
+            points = obj.extra_data.get('points', 0)
+            reason = obj.extra_data.get('reason', '系统奖励')
+            return f"{reason} {points} 积分"
+        elif obj.notification_type == 'announcement':
+            return obj.extra_data.get('title', '系统公告')
         else:
-            return obj.extra_data.get('title', obj.content) if hasattr(obj, 'content') else str(obj.extra_data)
+            return "收到一条新消息"
 
 
 @extend_schema(tags=["消息通知"])
