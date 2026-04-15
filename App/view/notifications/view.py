@@ -56,22 +56,35 @@ class NotificationSerializer(serializers.ModelSerializer):
                     'id': wallpaper.id
                 }
             elif obj.target_type == 'comment':
-                # 获取当前触发动作的评论（比如最新的回复）
+                # 获取当前触发动作的评论
                 comment = WallpaperComment.objects.select_related('parent__customer', 'wallpaper').get(id=obj.target_id)
                 
                 result = {
                     'type': 'comment',
-                    'content': comment.content[:50], # 最新这条的内容
+                    'content': comment.content[:50],
                     'wallpaper_name': comment.wallpaper.name,
                     'wallpaper_id': comment.wallpaper.id
                 }
                 
-                # 如果是回复类型，额外返回“被回复的原始评论”内容
-                if obj.notification_type == 'reply' and comment.parent:
+                # 确定 source_data：如果是回复，显示被回复的评论；如果是首评，显示壁纸信息
+                if comment.parent:
+                    # 情况1：回复了别人的评论
+                    source_obj = comment.parent
                     result['source_data'] = {
-                        'id': comment.parent.id,
-                        'content': comment.parent.content,
-                        'author': comment.parent.customer.nickname or comment.parent.customer.email
+                        'id': source_obj.id,
+                        'content': source_obj.content,
+                        'author': source_obj.customer.nickname or source_obj.customer.email,
+                        'obj_type': 'comment'
+                    }
+                else:
+                    # 情况2：首次评论壁纸（或点赞了首评），显示壁纸原内容
+                    wallpaper = comment.wallpaper
+                    result['source_data'] = {
+                        'id': wallpaper.id,
+                        'content': wallpaper.description or f"壁纸：{wallpaper.name}",
+                        'author': '上传者', # 这里可以根据需要改为获取 uploader 的昵称
+                        'obj_type': 'wallpaper',
+                        'thumb_url': wallpaper.thumb_url
                     }
                 return result
         except Exception:
