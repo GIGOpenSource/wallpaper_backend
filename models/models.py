@@ -329,6 +329,37 @@ class WallpaperComment(models.Model):
         return f"{self.customer.email} → {self.wallpaper.name[:30]}"
 
 
+class WallpaperCommentLike(models.Model):
+    """
+    壁纸评论点赞表
+    """
+    customer = models.ForeignKey(
+        CustomerUser,
+        on_delete=models.CASCADE,
+        related_name="comment_likes",
+        verbose_name="用户",
+    )
+    comment = models.ForeignKey(
+        WallpaperComment,
+        on_delete=models.CASCADE,
+        related_name="likes",
+        verbose_name="评论",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="点赞时间")
+
+    class Meta:
+        db_table = 't_wallpaper_comment_like'
+        verbose_name = '评论点赞'
+        verbose_name_plural = '评论点赞'
+        unique_together = ('customer', 'comment')
+        indexes = [
+            models.Index(fields=['comment', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.customer.email} → Comment #{self.comment_id}"
+
+
 class Notification(models.Model):
     """
     通知表（点赞提示、评论提示、粉丝提示统一存储）

@@ -12,7 +12,7 @@ from rest_framework import serializers
 from rest_framework.decorators import action
 from django.db.models import F
 
-from models.models import WallpaperComment, Wallpapers, Notification
+from models.models import WallpaperComment, Wallpapers, Notification, WallpaperCommentLike
 from tool.base_views import BaseViewSet
 from tool.permissions import IsCustomerTokenValid
 from tool.token_tools import CustomTokenTool
@@ -26,15 +26,16 @@ class WallpaperCommentSerializer(serializers.ModelSerializer):
     customer_info = serializers.SerializerMethodField()
     parent_comment = serializers.SerializerMethodField()
     replies_count = serializers.SerializerMethodField()
+    is_liked = serializers.SerializerMethodField()
     
     class Meta:
         model = WallpaperComment
         fields = [
             'id', 'customer_info', 'wallpaper', 'parent', 'parent_comment',
-            'content', 'like_count', 'is_hidden', 'replies_count',
+            'content', 'like_count', 'is_hidden', 'replies_count', 'is_liked',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'customer_info', 'like_count', 'created_at', 'updated_at', 'replies_count']
+        read_only_fields = ['id', 'customer_info', 'like_count', 'created_at', 'updated_at', 'replies_count', 'is_liked']
     
     def get_customer_info(self, obj):
         """获取评论用户信息"""
@@ -58,10 +59,17 @@ class WallpaperCommentSerializer(serializers.ModelSerializer):
     
     def get_replies_count(self, obj):
         """获取回复数量"""
-        # 使用预加载的数据或缓存，避免 N+1 查询
         if hasattr(obj, '_replies_count'):
             return obj._replies_count
         return obj.replies.count()
+
+    def get_is_liked(self, obj):
+        """判断当前用户是否点赞了该评论（直接查询数据库）"""
+        customer_id = self.context.get('customer_id')
+        if not customer_id:
+            return False
+        # 查询当前用户(customer_id)是否点赞了当前评论(obj.id)
+        return WallpaperCommentLike.objects.filter(customer_id=customer_id, comment_id=obj.id).exists()
 
 
 @extend_schema(tags=["壁纸评论"])
@@ -178,12 +186,39 @@ class WallpaperCommentViewSet(BaseViewSet):
             is_hidden=False
         ).select_related('customer').order_by('-created_at')
         
+        # 获取当前用户点赞的评论 ID 集合（仅针对当前壁纸下的评论）
+        customer_id = self.get_serializer_context().get('customer_id')
+        liked_comment_ids = set()
+        if customer_id:
+            # 1. 获取当前筛选条件下所有评论的 ID（不分页，为了准确匹配点赞状态）
+            all_comment_ids = list(
+                WallpaperComment.objects.filter(
+                    wallpaper_id=wallpaper_id,
+                    parent__isnull=True,
+                    is_hidden=False
+                ).values_list('id', flat=True)
+            )
+            
+            if all_comment_ids:
+                # 2. 查询这些评论中，哪些被当前用户点赞过
+                liked_comment_ids = set(
+                    WallpaperCommentLike.objects.filter(
+                        customer_id=customer_id,
+                        comment_id__in=all_comment_ids
+                    ).values_list('comment_id', flat=True)
+                )
+                logger.info(f"用户 {customer_id} 在壁纸 {wallpaper_id} 下点赞了评论: {liked_comment_ids}")
+        
         page = self.paginate_queryset(queryset)
         if page is not None:
-            serializer = self.get_serializer(page, many=True)
+            context = self.get_serializer_context()
+            context['liked_comment_ids'] = liked_comment_ids
+            serializer = self.get_serializer(page, many=True, context=context)
             return self.get_paginated_response(serializer.data)
         
-        serializer = self.get_serializer(queryset, many=True)
+        context = self.get_serializer_context()
+        context['liked_comment_ids'] = liked_comment_ids
+        serializer = self.get_serializer(queryset, many=True, context=context)
         return ApiResponse(data=serializer.data, message="评论列表获取成功")
     
     def create(self, request, *args, **kwargs):
@@ -319,34 +354,60 @@ class WallpaperCommentViewSet(BaseViewSet):
         instance.delete()
         return ApiResponse(message="删除成功")
     
+    @extend_schema(summary="点赞/取消点赞评论")
     @action(detail=True, methods=['post'], url_path='toggle-like')
     def toggle_like(self, request, pk=None):
         """点赞/取消点赞评论"""
         comment = self.get_object()
-        
-        # 使用 Redis 记录点赞状态（避免重复点赞）
         customer_id = self.get_serializer_context().get('customer_id')
-        like_key = f"comment_like_{pk}_{customer_id}"
         
-        from django.core.cache import cache
-        liked = cache.get(like_key)
-        
-        if liked:
-            # 取消点赞
-            cache.delete(like_key)
-            comment.like_count = max(comment.like_count - 1, 0)
-            comment.save()
-            liked_status = False
-            message = "取消点赞"
-        else:
-            # 点赞
-            cache.set(like_key, True, timeout=86400)
-            comment.like_count = F('like_count') + 1
-            comment.save()
-            comment.refresh_from_db(fields=['like_count'])
-            liked_status = True
-            message = "点赞成功"
-        
+        try:
+            # 尝试获取点赞记录
+            like_record = WallpaperCommentLike.objects.filter(
+                customer_id=customer_id, 
+                comment=comment
+            ).first()
+            
+            if like_record:
+                # 取消点赞
+                like_record.delete()
+                # 简单递减，确保不为负数
+                if comment.like_count > 0:
+                    comment.like_count -= 1
+                    comment.save(update_fields=['like_count'])
+                liked_status = False
+                message = "取消点赞"
+            else:
+                # 点赞
+                WallpaperCommentLike.objects.create(
+                    customer_id=customer_id,
+                    comment=comment
+                )
+                comment.like_count = F('like_count') + 1
+                comment.save(update_fields=['like_count'])
+                comment.refresh_from_db(fields=['like_count'])
+                liked_status = True
+                message = "点赞成功"
+                
+                # 发送点赞通知（如果不是给自己点赞）
+                try:
+                    from App.view.notifications.notification_center import NotificationCenter
+                    if comment.customer_id != customer_id:
+                        NotificationCenter.send(
+                            recipient_id=comment.customer_id,
+                            notification_type='like',
+                            content=f"赞了你的评论",
+                            sender_id=customer_id,
+                            target_id=comment.id,
+                            target_type='comment',
+                            extra_data={'wallpaper_name': comment.wallpaper.name[:50]}
+                        )
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.error(f"评论点赞失败：{str(e)}", exc_info=True)
+            return ApiResponse(code=500, message="操作失败")
+            
         return ApiResponse(
             data={'liked': liked_status, 'like_count': comment.like_count},
             message=message
