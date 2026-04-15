@@ -944,7 +944,10 @@ class WallpapersViewSet(BaseViewSet):
         is_hd = w >= 1920 or h >= 1080 if (w and h) else False
 
         is_live = (ext == ".mp4")
-        category_id = 4 if is_live else (1 if platform == 'PC' else 2)
+        # 确定平台分类 (1:电脑, 2:手机)
+        platform_cat_id = 1 if platform == 'PC' else 2
+        # 确定类型分类 (3:静态, 4:动态), 默认 3
+        type_cat_id = 4 if is_live else 3
 
         try:
             with transaction.atomic():
@@ -960,7 +963,8 @@ class WallpapersViewSet(BaseViewSet):
                     is_hd=is_hd,
                     is_live=is_live,
                 )
-                wp.category.add(category_id)
+                # 同时添加平台分类和类型分类
+                wp.category.add(platform_cat_id, type_cat_id)
 
                 CustomerWallpaperUpload.objects.create(
                     wallpaper=wp,
