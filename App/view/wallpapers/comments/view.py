@@ -68,12 +68,11 @@ class WallpaperCommentSerializer(serializers.ModelSerializer):
 @extend_schema_view(
     list=extend_schema(
         summary="获取壁纸评论列表",
-        description="获取指定壁纸的所有评论（支持分页，默认只显示一级评论）",
+        description="获取指定壁纸的一级评论列表（支持分页）",
         parameters=[
             OpenApiParameter(name="wallpaper_id", type=int, required=True, description="壁纸ID"),
             OpenApiParameter(name="currentPage", type=int, required=False, description="当前页码"),
             OpenApiParameter(name="pageSize", type=int, required=False, description="每页数量"),
-            OpenApiParameter(name="with_replies", type=bool, required=False, description="是否包含回复（默认False）"),
         ],
         responses={
             200: {
@@ -84,7 +83,16 @@ class WallpaperCommentSerializer(serializers.ModelSerializer):
                         "type": "object",
                         "properties": {
                             "results": {"type": "array", "items": {"$ref": "#/components/schemas/WallpaperComment"}},
-                            "total": {"type": "integer", "example": 50}
+                            "total": {"type": "integer", "example": 50},
+                            "pagination": {
+                                "type": "object",
+                                "properties": {
+                                    "page": {"type": "integer"},
+                                    "page_size": {"type": "integer"},
+                                    "total": {"type": "integer"},
+                                    "total_pages": {"type": "integer"}
+                                }
+                            }
                         }
                     },
                     "message": {"type": "string", "example": "评论列表获取成功"}
@@ -142,6 +150,15 @@ class WallpaperCommentViewSet(BaseViewSet):
                 ctx["customer_id"] = cid
         return ctx
     
+    @extend_schema(
+        summary="获取壁纸评论列表",
+        description="获取指定壁纸的一级评论列表（支持分页）",
+        parameters=[
+            OpenApiParameter(name="wallpaper_id", type=int, required=True, location=OpenApiParameter.QUERY, description="壁纸ID"),
+            OpenApiParameter(name="currentPage", type=int, required=False, location=OpenApiParameter.QUERY, description="当前页码"),
+            OpenApiParameter(name="pageSize", type=int, required=False, location=OpenApiParameter.QUERY, description="每页数量"),
+        ],
+    )
     @action(detail=False, methods=['get'], url_path='list')
     def list_comments(self, request):
         """获取壁纸评论列表（只显示一级评论，按时间倒序，每页20条）"""
