@@ -12,9 +12,11 @@ from django.urls import path, include
 from App.view.user import urls as user
 from App.view.customer import urls as customer
 from App.view.wallpapers import urls as wallpapers
+from App.view.notifications import urls as notifications
 
 urlpatterns = [
     path('', include(user)),
     path('client/', include(customer)),
     path('wallpapers/', include(wallpapers)),
+    path('notifications/', include(notifications)),
 ]
