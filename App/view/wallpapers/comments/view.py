@@ -147,8 +147,8 @@ class WallpaperCommentViewSet(BaseViewSet):
     queryset = WallpaperComment.objects.all()
     serializer_class = WallpaperCommentSerializer
     pagination_class = CustomPagination
-    permission_classes = [IsCustomerTokenValid]
-    
+    permission_classes = []
+
     def get_serializer_context(self):
         ctx = super().get_serializer_context()
         tok = self.request.headers.get("token")
@@ -160,7 +160,7 @@ class WallpaperCommentViewSet(BaseViewSet):
     
     @extend_schema(
         summary="获取壁纸评论列表",
-        description="获取指定壁纸的一级评论列表（支持分页）",
+        description="获取指定壁纸的一级评论列表（支持分页，无需登录）",
         parameters=[
             OpenApiParameter(name="wallpaper_id", type=int, required=True, location=OpenApiParameter.QUERY, description="壁纸ID"),
             OpenApiParameter(name="currentPage", type=int, required=False, location=OpenApiParameter.QUERY, description="当前页码"),

@@ -113,12 +113,10 @@ REST_FRAMEWORK = {
         'tool.authentication.CustomBasicAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-
         # 'tool.permissions.IsTokenValid',
     ],
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'UNAUTHENTICATED_USER': None
-
 }
 
 SPECTACULAR_SETTINGS = {
