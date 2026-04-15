@@ -95,6 +95,18 @@ class WallpaperCommentSerializer(serializers.ModelSerializer):
     create=extend_schema(
         summary="发表评论",
         description="对指定壁纸发表评论，可选回复某条评论",
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "wallpaper_id": {"type": "integer", "description": "壁纸ID（评论壁纸时必填）"},
+                    "parent_id": {"type": "integer", "description": "父评论ID（回复评论时必填）"},
+                    "content": {"type": "string", "description": "评论内容"}
+                },
+                "required": ["content"]
+            }
+        },
+        responses={201: WallpaperCommentSerializer}
     ),
     retrieve=extend_schema(summary="获取评论详情", responses={200: WallpaperCommentSerializer, 404: "评论不存在"}),
     update=extend_schema(
