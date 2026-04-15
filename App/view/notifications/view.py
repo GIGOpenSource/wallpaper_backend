@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+
+
 # -*- coding: UTF-8 -*-
 """
 @Project ：wallpaper
@@ -22,12 +24,13 @@ class NotificationSerializer(serializers.ModelSerializer):
     """通知序列化器"""
     sender_info = serializers.SerializerMethodField()
     content_display = serializers.SerializerMethodField()
+    target_content = serializers.SerializerMethodField()  # 新增：目标对象（壁纸/评论）的内容摘要
     
     class Meta:
         model = Notification
         fields = [
             'id', 'sender_info', 'notification_type', 'content_display', 
-            'target_id', 'target_type', 'extra_data', 'is_read', 'created_at'
+            'target_id', 'target_type', 'target_content', 'extra_data', 'is_read', 'created_at'
         ]
         read_only_fields = fields
 
@@ -39,6 +42,41 @@ class NotificationSerializer(serializers.ModelSerializer):
                 'avatar_url': obj.sender.avatar_url,
             }
         return {'nickname': '系统通知', 'avatar_url': None}
+
+    def get_target_content(self, obj):
+        """获取被互动对象（如壁纸、评论）的简要内容及原始上下文"""
+        from models.models import Wallpapers, WallpaperComment
+        try:
+            if obj.target_type == 'wallpaper':
+                wallpaper = Wallpapers.objects.only('name', 'thumb_url').get(id=obj.target_id)
+                return {
+                    'type': 'wallpaper',
+                    'name': wallpaper.name,
+                    'thumb_url': wallpaper.thumb_url,
+                    'id': wallpaper.id
+                }
+            elif obj.target_type == 'comment':
+                # 获取当前触发动作的评论（比如最新的回复）
+                comment = WallpaperComment.objects.select_related('parent__customer', 'wallpaper').get(id=obj.target_id)
+                
+                result = {
+                    'type': 'comment',
+                    'content': comment.content[:50], # 最新这条的内容
+                    'wallpaper_name': comment.wallpaper.name,
+                    'wallpaper_id': comment.wallpaper.id
+                }
+                
+                # 如果是回复类型，额外返回“被回复的原始评论”内容
+                if obj.notification_type == 'reply' and comment.parent:
+                    result['source_data'] = {
+                        'id': comment.parent.id,
+                        'content': comment.parent.content,
+                        'author': comment.parent.customer.nickname or comment.parent.customer.email
+                    }
+                return result
+        except Exception:
+            pass
+        return None
 
     def get_content_display(self, obj):
         # 根据类型动态组合显示内容
