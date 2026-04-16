@@ -59,7 +59,7 @@ class CustomerUserViewSet(viewsets.ViewSet):
         "register": [],
         "login": [],
         "logout": [IsCustomerTokenValid],
-        "profile": [IsCustomerTokenValid],
+        "profile": [],
         "update_profile": [IsCustomerTokenValid],
     }
 
@@ -135,30 +135,47 @@ class CustomerUserViewSet(viewsets.ViewSet):
             OpenApiParameter(name="other_id", type=int, required=False, location=OpenApiParameter.QUERY, description="要查看的用户ID（不传则查看自己）"),
         ]
     )
-    @action(detail=False, methods=["get"], url_path="profile", authentication_classes=[], permission_classes=[])
+    @action(detail=False, methods=["get"], url_path="profile")
     def profile(self, request):
-        # 获取当前登录用户 ID
-        current_customer_id = request.customer_id
-        
+        # 尝试获取当前登录用户 ID（可选）
+        token = request.headers.get("token")
+        current_customer_id = None
+        if token:
+            is_valid, customer_id = CustomTokenTool.verify_customer_token(token)
+            if is_valid:
+                current_customer_id = int(customer_id)
+
         # 判断是查看自己还是查看他人
         other_id = request.query_params.get('other_id')
+
+        # 场景3：未登录且未提供 other_id，返回异常
+        if not current_customer_id and not other_id:
+            return ApiResponse(message=_("请先登录或提供用户ID"), code=401)
+
+        # 确定目标用户
         if other_id:
+            # 场景2：查询他人信息（无论是否登录）
             try:
                 target_user = CustomerUser.objects.get(id=other_id)
             except CustomerUser.DoesNotExist:
                 return ApiResponse(message=_("用户不存在"), code=404)
         else:
-            target_user = CustomerUser.objects.get(id=current_customer_id)
+            # 场景1：已登录，查询自己的信息
+            try:
+                target_user = CustomerUser.objects.get(id=current_customer_id)
+            except CustomerUser.DoesNotExist:
+                return ApiResponse(message=_("用户不存在"), code=404)
 
-        # 计算粉丝数 (假设粉丝关系存储在 UserFollow 表中，following_id 是被关注者)
+        # 计算粉丝数和关注数
         from models.models import UserFollow
         followers_count = UserFollow.objects.filter(following_id=target_user.id).count()
-        
-        # 判断当前用户是否关注了目标用户
+        following_count = UserFollow.objects.filter(follower_id=target_user.id).count()
+
+        # 判断当前用户是否关注了目标用户（仅当已登录且不是查看自己时）
         is_following = False
         if current_customer_id and current_customer_id != target_user.id:
             is_following = UserFollow.objects.filter(
-                follower_id=current_customer_id, 
+                follower_id=current_customer_id,
                 following_id=target_user.id
             ).exists()
 
@@ -176,12 +193,14 @@ class CustomerUserViewSet(viewsets.ViewSet):
                 "level": target_user.level,
                 "last_login": target_user.last_login,
                 "created_at": target_user.created_at,
-                # 新增字段
                 "followers_count": followers_count,
+                "following_count": following_count,
                 "is_following": is_following,
             },
             message=_("获取成功"),
         )
+
+
 
     @extend_schema(
         summary="保存用户信息",
