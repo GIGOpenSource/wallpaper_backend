@@ -75,7 +75,7 @@ class WallpaperCommentSerializer(serializers.ModelSerializer):
 @extend_schema(tags=["壁纸评论"])
 @extend_schema_view(
     list=extend_schema(
-        summary="获取壁纸评论列表",
+        summary="获取所有壁纸评论列表",
         description="获取指定壁纸的一级评论列表（支持分页）",
         parameters=[
             OpenApiParameter(name="wallpaper_id", type=int, required=True, description="壁纸ID"),
@@ -159,7 +159,7 @@ class WallpaperCommentViewSet(BaseViewSet):
         return ctx
     
     @extend_schema(
-        summary="获取壁纸评论列表",
+        summary="获取壁纸的评论列表",
         description="获取指定壁纸的一级评论列表（支持分页，无需登录）",
         parameters=[
             OpenApiParameter(name="wallpaper_id", type=int, required=True, location=OpenApiParameter.QUERY, description="壁纸ID"),

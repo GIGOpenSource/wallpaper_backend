@@ -13,7 +13,7 @@ from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiPara
 from rest_framework import serializers
 from rest_framework.decorators import action
 
-from models.models import Notification
+from models.models import Notification, UserNotificationSettings
 from tool.base_views import BaseViewSet
 from tool.permissions import IsCustomerTokenValid
 from tool.token_tools import CustomTokenTool
@@ -118,7 +118,7 @@ class NotificationSerializer(serializers.ModelSerializer):
 @extend_schema_view(
     list=extend_schema(
         summary="获取我的通知列表",
-        description="分页获取当前用户的通知，支持按类型筛选",
+        description="分页获取当前用户的通知，支持按类型筛选（显示所有历史消息，不受设置影响）",
         parameters=[
             OpenApiParameter(name="type", type=str, required=False, description="通知类型筛选 (like/comment/follow/reward/announcement)"),
             OpenApiParameter(name="currentPage", type=int, required=False, description="当前页码"),
@@ -221,7 +221,7 @@ class NotificationViewSet(BaseViewSet):
 
     @extend_schema(
         summary="获取未读通知数量",
-        description="返回当前用户未读消息的总数",
+        description="返回当前用户未读消息的总数（根据用户设置过滤）",
         responses={
             200: {
                 "type": "object",
@@ -235,10 +235,148 @@ class NotificationViewSet(BaseViewSet):
     )
     @action(detail=False, methods=['get'], url_path='unread-count')
     def unread_count(self, request):
-        """获取未读通知数量"""
+        """获取未读通知数量（根据用户设置过滤）"""
         current_user_id = self.get_serializer_context().get('current_user_id')
         if not current_user_id:
             return ApiResponse(code=401, message="请先登录")
-            
-        count = Notification.objects.filter(recipient_id=current_user_id, is_read=False).count()
+        
+        # 获取用户的通知设置
+        try:
+            settings = UserNotificationSettings.objects.get(user_id=current_user_id)
+        except UserNotificationSettings.DoesNotExist:
+            # 如果没有设置，默认全部开启，返回所有未读数
+            count = Notification.objects.filter(recipient_id=current_user_id, is_read=False).count()
+            return ApiResponse(data={'count': count})
+        
+        # 构建需要排除的通知类型列表
+        excluded_types = []
+        if not settings.enable_like_notification:
+            excluded_types.append('like')
+        if not settings.enable_comment_notification:
+            excluded_types.append('comment')
+        if not settings.enable_reply_notification:
+            excluded_types.append('reply')
+        if not settings.enable_follow_notification:
+            excluded_types.append('follow')
+        
+        # 查询未读通知
+        queryset = Notification.objects.filter(recipient_id=current_user_id, is_read=False)
+        if excluded_types:
+            queryset = queryset.exclude(notification_type__in=excluded_types)
+        
+        count = queryset.count()
         return ApiResponse(data={'count': count})
+
+    @extend_schema(
+        summary="获取通知设置",
+        description="获取当前用户的通知开关设置",
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "integer", "example": 200},
+                    "data": {
+                        "type": "object",
+                        "properties": {
+                            "enable_like_notification": {"type": "boolean", "description": "点赞通知"},
+                            "enable_comment_notification": {"type": "boolean", "description": "评论通知"},
+                            "enable_reply_notification": {"type": "boolean", "description": "回复通知"},
+                            "enable_follow_notification": {"type": "boolean", "description": "关注通知"}
+                        }
+                    },
+                    "message": {"type": "string"}
+                }
+            }
+        }
+    )
+    @action(detail=False, methods=['get'], url_path='notification-settings')
+    def get_notification_settings(self, request):
+        """获取通知设置"""
+        current_user_id = self.get_serializer_context().get('current_user_id')
+        if not current_user_id:
+            return ApiResponse(code=401, message="请先登录")
+        
+        # 使用 get_or_create 确保有默认值
+        settings, created = UserNotificationSettings.objects.get_or_create(
+            user_id=current_user_id,
+            defaults={
+                'enable_like_notification': True,
+                'enable_comment_notification': True,
+                'enable_reply_notification': True,
+                'enable_follow_notification': True,
+            }
+        )
+        
+        return ApiResponse(
+            data={
+                'enable_like_notification': settings.enable_like_notification,
+                'enable_comment_notification': settings.enable_comment_notification,
+                'enable_reply_notification': settings.enable_reply_notification,
+                'enable_follow_notification': settings.enable_follow_notification,
+            },
+            message="获取成功"
+        )
+
+    @extend_schema(
+        summary="更新通知设置",
+        description="更新当前用户的通知开关设置（只传需要修改的字段）",
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "enable_like_notification": {"type": "boolean", "description": "点赞通知"},
+                    "enable_comment_notification": {"type": "boolean", "description": "评论通知"},
+                    "enable_reply_notification": {"type": "boolean", "description": "回复通知"},
+                    "enable_follow_notification": {"type": "boolean", "description": "关注通知"}
+                }
+            }
+        },
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "integer", "example": 200},
+                    "message": {"type": "string", "example": "设置更新成功"}
+                }
+            }
+        }
+    )
+    @action(detail=False, methods=['post'], url_path='update-notification-settings')
+    def update_notification_settings(self, request):
+        """更新通知设置"""
+        current_user_id = self.get_serializer_context().get('current_user_id')
+        if not current_user_id:
+            return ApiResponse(code=401, message="请先登录")
+        
+        # 获取或创建设置
+        settings, created = UserNotificationSettings.objects.get_or_create(
+            user_id=current_user_id,
+            defaults={
+                'enable_like_notification': True,
+                'enable_comment_notification': True,
+                'enable_reply_notification': True,
+                'enable_follow_notification': True,
+            }
+        )
+        
+        # 更新字段（只更新传入的字段）
+        if 'enable_like_notification' in request.data:
+            settings.enable_like_notification = request.data['enable_like_notification']
+        if 'enable_comment_notification' in request.data:
+            settings.enable_comment_notification = request.data['enable_comment_notification']
+        if 'enable_reply_notification' in request.data:
+            settings.enable_reply_notification = request.data['enable_reply_notification']
+        if 'enable_follow_notification' in request.data:
+            settings.enable_follow_notification = request.data['enable_follow_notification']
+        
+        settings.save()
+        
+        return ApiResponse(
+            data={
+                'enable_like_notification': settings.enable_like_notification,
+                'enable_comment_notification': settings.enable_comment_notification,
+                'enable_reply_notification': settings.enable_reply_notification,
+                'enable_follow_notification': settings.enable_follow_notification,
+            },
+            message="设置更新成功"
+        )

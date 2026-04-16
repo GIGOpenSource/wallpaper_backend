@@ -418,3 +418,12 @@ class UserFollow(models.Model):
 
     def __str__(self):
         return f"{self.follower.email} → {self.following.email}"
+
+
+class UserNotificationSettings(models.Model):
+    user = models.OneToOneField(CustomerUser, on_delete=models.CASCADE, related_name='notification_settings')
+    enable_like_notification = models.BooleanField(default=True)
+    enable_comment_notification = models.BooleanField(default=True)
+    enable_reply_notification = models.BooleanField(default=True)
+    enable_follow_notification = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)

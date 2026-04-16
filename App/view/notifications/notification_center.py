@@ -7,7 +7,7 @@
 @Date    ：2026/4/15
 @description : 统一通知中心工具类
 """
-from models.models import Notification, CustomerUser
+from models.models import Notification, CustomerUser, UserNotificationSettings
 
 
 class NotificationCenter:
@@ -32,6 +32,23 @@ class NotificationCenter:
         """
         if not recipient_id:
             return None
+
+        # 检查用户的通知设置（仅针对需要屏蔽的类型）
+        if notification_type in ['like', 'comment', 'reply', 'follow']:
+            try:
+                settings = UserNotificationSettings.objects.get(user_id=recipient_id)
+                # 根据类型检查是否开启通知
+                if notification_type == 'like' and not settings.enable_like_notification:
+                    return None
+                elif notification_type == 'comment' and not settings.enable_comment_notification:
+                    return None
+                elif notification_type == 'reply' and not settings.enable_reply_notification:
+                    return None
+                elif notification_type == 'follow' and not settings.enable_follow_notification:
+                    return None
+            except UserNotificationSettings.DoesNotExist:
+                # 如果没有设置记录，默认开启所有通知
+                pass
 
         # 确保接收者存在
         try:
