@@ -116,8 +116,8 @@ class WallpapersListSerializer(serializers.ModelSerializer):
     """壁纸列表序列化器（轻量级，只包含必要字段）"""
     # tags = serializers.SerializerMethodField()
     aspect_ratio = serializers.SerializerMethodField()
-    is_liked = serializers.SerializerMethodField()
-    is_collected = serializers.SerializerMethodField()
+    # is_liked = serializers.SerializerMethodField()
+    # is_collected = serializers.SerializerMethodField()
 
     class Meta:
         model = Wallpapers
@@ -125,7 +125,7 @@ class WallpapersListSerializer(serializers.ModelSerializer):
             'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
             'has_watermark', 'is_live', 'is_hd', 'hot_score', 'like_count',
             'collect_count', 'download_count', 'view_count', 'created_at',
-            'aspect_ratio', 'is_liked', 'is_collected'
+            'aspect_ratio'
         ]
         read_only_fields = fields
 
