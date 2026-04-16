@@ -114,7 +114,7 @@ def _image_meta_from_bytes(content: bytes):
 # ====================优化查询218start===============================
 class WallpapersListSerializer(serializers.ModelSerializer):
     """壁纸列表序列化器（轻量级，只包含必要字段）"""
-    tags = serializers.SerializerMethodField()
+    # tags = serializers.SerializerMethodField()
     aspect_ratio = serializers.SerializerMethodField()
     is_liked = serializers.SerializerMethodField()
     is_collected = serializers.SerializerMethodField()
@@ -125,7 +125,7 @@ class WallpapersListSerializer(serializers.ModelSerializer):
             'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
             'has_watermark', 'is_live', 'is_hd', 'hot_score', 'like_count',
             'collect_count', 'download_count', 'view_count', 'created_at',
-            'aspect_ratio', 'is_liked', 'is_collected', 'tags'
+            'aspect_ratio', 'is_liked', 'is_collected'
         ]
         read_only_fields = fields
 
