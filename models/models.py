@@ -427,3 +427,36 @@ class UserNotificationSettings(models.Model):
     enable_reply_notification = models.BooleanField(default=True)
     enable_follow_notification = models.BooleanField(default=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+
+class SiteConfig(models.Model):
+    """
+    网站配置表：存储帮助与支持、关于、隐私政策等富文本内容
+    """
+    CONFIG_TYPE_CHOICES = [
+        ('help', '帮助与支持'),
+        ('about', '关于'),
+        ('privacy', '隐私政策'),
+        ('terms', '服务条款'),
+    ]
+    
+    config_type = models.CharField(
+        max_length=20,
+        choices=CONFIG_TYPE_CHOICES,
+        unique=True,
+        verbose_name="配置类型"
+    )
+    title = models.CharField(max_length=200, verbose_name="标题")
+    content = models.TextField(verbose_name="富文本内容")  # 存储 HTML 富文本
+    is_active = models.BooleanField(default=True, verbose_name="是否启用")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+    
+    class Meta:
+        db_table = 't_site_config'
+        verbose_name = '网站配置'
+        verbose_name_plural = '网站配置'
+        ordering = ['-updated_at']
+    
+    def __str__(self):
+        return f"{self.get_config_type_display()} - {self.title}"

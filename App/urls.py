@@ -13,10 +13,12 @@ from App.view.user import urls as user
 from App.view.customer import urls as customer
 from App.view.wallpapers import urls as wallpapers
 from App.view.notifications import urls as notifications
+from App.view.site import urls as site
 
 urlpatterns = [
     path('', include(user)),
     path('client/', include(customer)),
     path('wallpapers/', include(wallpapers)),
     path('notifications/', include(notifications)),
+    path('site/', include(site)),
 ]
