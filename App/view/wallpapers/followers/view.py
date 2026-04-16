@@ -68,7 +68,7 @@ class CustomerUserBriefSerializer(serializers.ModelSerializer):
         }
     ),
     create=extend_schema(
-        summary="关注/取消关注用户",
+        summary="创建关注/取消关注用户",
         description="传入 following_id，如果已关注则取消，未关注则关注",
     ),
 )

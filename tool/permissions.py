@@ -58,7 +58,7 @@ class IsCustomerTokenValid(BasePermission):
         if is_valid:
             request.customer_id = int(customer_id)
             return True
-        return False
+        raise AuthenticationFailed({"code": 401, "message": "请先登录"})
 
 
 class IsOwnerOrAdmin(BasePermission):

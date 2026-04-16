@@ -355,7 +355,7 @@ class WallpaperCommentViewSet(BaseViewSet):
         return ApiResponse(message="删除成功")
     
     @extend_schema(summary="点赞/取消点赞评论")
-    @action(detail=True, methods=['post'], url_path='toggle-like')
+    @action(detail=True, methods=['post'], url_path='toggle-like',permission_classes=[IsCustomerTokenValid])
     def toggle_like(self, request, pk=None):
         """点赞/取消点赞评论"""
         comment = self.get_object()
