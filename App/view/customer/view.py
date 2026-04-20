@@ -42,6 +42,11 @@ class CustomerRegisterSerializer(serializers.ModelSerializer):
 class CustomerLoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
+    platform = serializers.CharField(
+        required=False,
+        default="",
+        help_text="平台标识: PC, Phone, 或留空不区分"
+    )
 
 class CustomerProfileSerializer(serializers.ModelSerializer):
     """用户信息序列化器"""
@@ -89,7 +94,9 @@ class CustomerUserViewSet(viewsets.ViewSet):
             user = ser.save()
         except IntegrityError:
             return ApiResponse(message=_("该邮箱已被注册"), code=400)
-        token = CustomTokenTool.generate_customer_token(user.id)
+        platform = request.data.get("platform", "")
+        token = CustomTokenTool.generate_customer_token(user.id, platform=platform)
+
         return ApiResponse(
             data={"token": token, "customer_id": user.id, "email": user.email},
             message=_("注册成功"),
@@ -106,6 +113,8 @@ class CustomerUserViewSet(viewsets.ViewSet):
             return ApiResponse(data=ser.errors, message=_("参数校验失败"), code=400)
         email = ser.validated_data["email"].strip().lower()
         password = ser.validated_data["password"]
+        platform = ser.validated_data.get("platform", "")
+
         try:
             user = CustomerUser.objects.get(email=email)
         except CustomerUser.DoesNotExist:
@@ -114,9 +123,14 @@ class CustomerUserViewSet(viewsets.ViewSet):
             return ApiResponse(message=_("邮箱或密码错误"), code=400)
         user.last_login = timezone.now()
         user.save(update_fields=["last_login", "updated_at"])
-        token = CustomTokenTool.generate_customer_token(user.id)
+        token = CustomTokenTool.generate_customer_token(user.id, platform=platform)
         return ApiResponse(
-            data={"token": token, "customer_id": user.id, "email": user.email},
+            data={
+                "token": token,
+                "customer_id": user.id,
+                "email": user.email,
+                "platform": platform if platform else "default"
+            },
             message=_("登录成功"),
         )
 

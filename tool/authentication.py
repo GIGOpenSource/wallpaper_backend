@@ -6,7 +6,7 @@ from rest_framework.exceptions import AuthenticationFailed
 
 from django.utils.translation import gettext_lazy as _
 
-from models.models import User
+from models.models import User, CustomerUser
 # 导入你的密码验证函数
 from tool.password_hasher import verify_password
 from tool.token_tools import CustomTokenTool, generate_is_user_token, _redis
@@ -92,22 +92,23 @@ class TokenAuthentication(BasicAuthentication):
             # 未提供token，返回None（表示放弃认证，交给后续认证类处理，若没有后续则认证失败）
             return None
 
-        # 2. 验证token有效性（根据你的业务逻辑实现，示例如下）
+        # 2. 验证token有效性
         try:
-            # # 假设CustomTokenTool有验证token并返回用户ID的方法
-            # user_id = CustomTokenTool.verify_token(token)  # 需自行实现token验证逻辑
-            # if not user_id:
-            #     raise AuthenticationFailed(_('无效的token'))
-            #
-            # # 3. 根据user_id查询用户
-            # user = User.objects.get(id=user_id)
+            # verify_token 返回 (is_valid, user_id) 元组
+            is_valid, user_id = CustomTokenTool.verify_token(token)
+
+            if not is_valid or not user_id:
+                raise AuthenticationFailed(_('无效的token'))
+
+            # 3. 根据user_id查询用户
+            user = CustomerUser.objects.get(id=user_id)
             # if not user.is_active:  # 可选：检查用户是否激活
             #     raise AuthenticationFailed(_('用户已被禁用'))
-            #
-            # # 4. 认证通过，返回(user, token)
-            # return (user, token)
-            print("1")
-        except User.DoesNotExist:
+
+            # 4. 认证通过，返回(user, token)
+            return (user, token)
+
+        except CustomerUser.DoesNotExist:
             raise AuthenticationFailed(_('token对应的用户不存在'))
         except Exception as e:
             # 捕获其他可能的异常（如token过期、格式错误等）

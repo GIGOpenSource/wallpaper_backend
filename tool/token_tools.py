@@ -114,8 +114,13 @@ class RedisTool(object):
 
 _redis = RedisTool()
 
-
 class CustomTokenTool:
+
+    # Token 前缀常量
+    TOKEN_PREFIX_USER = "Login:Token"
+    TOKEN_PREFIX_CUSTOMER = "Login:CToken"
+    TOKEN_MAP_PREFIX_USER = "Login:user_token_map"
+    TOKEN_MAP_PREFIX_CUSTOMER = "Login:customer_token_map"
 
     @staticmethod
     def _aes_encrypt(data: bytes) -> tuple[bytes, bytes]:
@@ -133,51 +138,124 @@ class CustomTokenTool:
         return decrypted_data
 
     @classmethod
-    def generate_token(cls, user_id: int, expire_days: int = 7, reuse_existing: bool = True) -> str:
+    def _build_token(cls, prefix: str, token_core: str) -> str:
         """
-        生成 Token：基于用户 ID + 过期时间戳，AES 加密后 Base64 编码
-        :param user_id: 自定义 User 模型的主键 ID（关联用户）
-        :param expire_days: 过期天数（默认7天，支持动态调整）
-        :param reuse_existing: 是否复用现有 token（True=延长过期时间，False=总是生成新 token）
-        :return: 最终可传输的 Token 字符串
+        构建 Token 字符串
+        :param prefix: Token 前缀 (如 "Login:PC:CToken")
+        :param token_core: 加密后的核心数据
+        :return: 完整 Token 字符串
         """
+        return f"{prefix}{token_core}"
+
+    @classmethod
+    def _get_token_map_key(cls, prefix: str, user_id: int, is_customer: bool = False) -> str:
+        """
+        获取 Token 映射键
+        :param prefix: 平台前缀 (如 "PC", "Phone")
+        :param user_id: 用户 ID
+        :param is_customer: 是否是客户用户
+        :return: Redis 键名
+        """
+        map_prefix = cls.TOKEN_MAP_PREFIX_CUSTOMER if is_customer else cls.TOKEN_MAP_PREFIX_USER
+        return f"{map_prefix}:{prefix}:{user_id}"
+
+    @classmethod
+    def generate_token(cls, user_id: int, expire_days: int = 7, reuse_existing: bool = True,
+                      platform: str = "") -> str:
+        """
+        生成后台用户 Token
+        :param user_id: 用户 ID
+        :param expire_days: 过期天数
+        :param reuse_existing: 是否复用现有 token
+        :param platform: 平台标识 (如 "PC", "Phone", 留空则不区分)
+        :return: Token 字符串
+        """
+        # 构建前缀
+        token_prefix = f"{cls.TOKEN_PREFIX_USER}:{platform}" if platform else cls.TOKEN_PREFIX_USER
+
         # 如果允许复用，先检查是否有现有 token
         if reuse_existing:
-            existing_token_key = f"user_token_map:{user_id}"
-            existing_token = _redis.getKey(existing_token_key)
+            map_key = cls._get_token_map_key(platform, user_id, is_customer=False)
+            existing_token = _redis.getKey(map_key)
 
             if existing_token:
-                # 验证 token 是否仍然有效（存在于 Redis 中）
+                # 验证 token 是否仍然有效
                 token_exists = _redis.getKey(existing_token)
                 if token_exists:
                     # Token 有效，延长过期时间
                     expire_seconds = expire_days * 24 * 3600
                     _redis.expireKey(existing_token, expire_seconds)
-                    _redis.expireKey(existing_token_key, expire_seconds)
+                    _redis.expireKey(map_key, expire_seconds)
                     return existing_token
 
-        # 1. 构建 Token 核心数据（用户 ID + 过期时间戳）
+        # 生成新 token
         expire_timestamp = int(time.time()) + int(timedelta(hours=TOKEN_EXPIRE_HOURS).total_seconds())
-        token_core = f"{user_id}:{expire_timestamp}".encode("utf-8")  # 格式："用户ID:过期时间戳"
-        # 2. AES 加密核心数据
-        encrypted_core, iv = cls._aes_encrypt(token_core)
-        # 3. 拼接「IV + 加密后数据」，再 Base64 编码（便于 HTTP 传输，避免特殊字符）
-        token_bytes = iv + encrypted_core  # IV 需随 Token 一起传输，解密时需用
-        token = "Login:Token" + base64.b64encode(token_bytes).decode("utf-8")
+        token_core_data = f"{user_id}:{expire_timestamp}".encode("utf-8")
+        encrypted_core, iv = cls._aes_encrypt(token_core_data)
+        token_bytes = iv + encrypted_core
+        token_base64 = base64.b64encode(token_bytes).decode("utf-8")
+        token = cls._build_token(token_prefix, token_base64)
+
         expire_seconds = expire_days * 24 * 3600
-        # 存储 token -> user_id 的映射
         _redis.setKey(token, user_id, expire_seconds)
-        # 存储 user_id -> token 的映射（用于快速查找）
-        _redis.setKey(f"user_token_map:{user_id}", token, expire_seconds)
+
+        # 存储映射关系
+        map_key = cls._get_token_map_key(platform, user_id, is_customer=False)
+        _redis.setKey(map_key, token, expire_seconds)
+
         return token
 
+    @classmethod
+    def generate_customer_token(cls, customer_id: int, reuse_existing: bool = True,
+                               platform: str = "") -> str:
+        """
+        生成客户 Token
+        :param customer_id: 客户 ID
+        :param reuse_existing: 是否复用现有 token
+        :param platform: 平台标识 (如 "PC", "Phone", 留空则不区分)
+        :return: Token 字符串
+        """
+        # 构建前缀
+        token_prefix = f"{cls.TOKEN_PREFIX_CUSTOMER}:{platform}" if platform else cls.TOKEN_PREFIX_CUSTOMER
+
+        # 如果允许复用，先检查是否有现有 token
+        if reuse_existing:
+            map_key = cls._get_token_map_key(platform, customer_id, is_customer=True)
+            existing_token = _redis.getKey(map_key)
+
+            if existing_token:
+                # 验证 token 是否仍然有效
+                token_exists = _redis.getKey(existing_token)
+                if token_exists:
+                    # Token 有效，延长过期时间
+                    expire_seconds = 7 * 24 * 3600
+                    _redis.expireKey(existing_token, expire_seconds)
+                    _redis.expireKey(map_key, expire_seconds)
+                    return existing_token
+
+        # 生成新 token
+        expire_timestamp = int(time.time()) + int(timedelta(hours=TOKEN_EXPIRE_HOURS).total_seconds())
+        token_core_data = f"c:{customer_id}:{expire_timestamp}".encode("utf-8")
+        encrypted_core, iv = cls._aes_encrypt(token_core_data)
+        token_bytes = iv + encrypted_core
+        token_base64 = base64.b64encode(token_bytes).decode("utf-8")
+        token = cls._build_token(token_prefix, token_base64)
+
+        expire_seconds = 7 * 24 * 3600
+        _redis.setKey(token, str(customer_id), expire_seconds)
+
+        # 存储映射关系
+        map_key = cls._get_token_map_key(platform, customer_id, is_customer=True)
+        _redis.setKey(map_key, token, expire_seconds)
+
+        return token
 
     @classmethod
     def verify_token(cls, token: str) -> tuple[bool, int or str]:
         """
-        校验 Token：解密 + 检查过期 + 提取用户 ID
-        :param token: 客户端传入的 Token 字符串
-        :return: (是否有效, 有效则返回用户 ID，无效则返回 None)
+        校验 Token
+        :param token: Token 字符串
+        :return: (是否有效, 用户 ID)
         """
         try:
             if not token:
@@ -185,79 +263,28 @@ class CustomTokenTool:
             token_key = _redis.getKey(token)
             if token_key:
                 return True, token_key
-            else:
-                return False, None
+            return False, None
         except Exception as e:
-            # 捕获所有异常（Base64 解码失败、AES 解密失败、格式错误等），均视为 Token 无效
             print(f"Token 校验失败：{str(e)}")
             return False, None
 
     @classmethod
-    def delete_token(cls, token):
-        """
-        删除 Token（登出时使用）
-        :param token: 要删除的 Token 字符串
-        """
-        if token:
-            # 获取 user_id
-            user_id = _redis.getKey(token)
-            # 删除 token -> user_id 映射
-            _redis.delKey(token)
-            # 删除 user_id -> token 映射
-            if user_id:
-                _redis.delKey(f"user_token_map:{user_id}")
-
-
-    @classmethod
-    def generate_customer_token(cls, customer_id: int) -> str:
-        """C 端客户 Token（Redis 中的 key 与后台 Token 不同，避免混淆）。"""
-        expire_timestamp = int(time.time()) + int(timedelta(hours=TOKEN_EXPIRE_HOURS).total_seconds())
-        token_core = f"c:{customer_id}:{expire_timestamp}".encode("utf-8")
-        encrypted_core, iv = cls._aes_encrypt(token_core)
-        token_bytes = iv + encrypted_core
-        token = "Login:CToken" + base64.b64encode(token_bytes).decode("utf-8")
-        expire_seconds = 7 * 24 * 3600
-        _redis.setKey(token, str(customer_id), expire_seconds)
-        return token
-
-    @classmethod
-    def generate_customer_token(cls, customer_id: int, reuse_existing: bool = True) -> str:
-        """
-        C 端客户 Token（Redis 中的 key 与后台 Token 不同，避免混淆）。
-        :param customer_id: 客户 ID
-        :param reuse_existing: 是否复用现有 token（True=延长过期时间，False=总是生成新 token）
-        :return: Token 字符串
-        """
-        # 如果允许复用，先检查是否有现有 token
-        if reuse_existing:
-            existing_token_key = f"customer_token_map:{customer_id}"
-            existing_token = _redis.getKey(existing_token_key)
-            if existing_token:
-                # 验证 token 是否仍然有效（存在于 Redis 中）
-                token_exists = _redis.getKey(existing_token)
-                if token_exists:
-                    # Token 有效，延长过期时间
-                    expire_seconds = 7 * 24 * 3600
-                    _redis.expireKey(existing_token, expire_seconds)
-                    _redis.expireKey(existing_token_key, expire_seconds)
-                    return existing_token
-        # 生成新的 token
-        expire_timestamp = int(time.time()) + int(timedelta(hours=TOKEN_EXPIRE_HOURS).total_seconds())
-        token_core = f"c:{customer_id}:{expire_timestamp}".encode("utf-8")
-        encrypted_core, iv = cls._aes_encrypt(token_core)
-        token_bytes = iv + encrypted_core
-        token = "Login:CToken" + base64.b64encode(token_bytes).decode("utf-8")
-        expire_seconds = 7 * 24 * 3600
-        # 存储 token -> customer_id 的映射
-        _redis.setKey(token, str(customer_id), expire_seconds)
-        # 存储 customer_id -> token 的映射（用于快速查找）
-        _redis.setKey(f"customer_token_map:{customer_id}", token, expire_seconds)
-        return token
-
-    @classmethod
     def verify_customer_token(cls, token: str) -> tuple[bool, int | None]:
+        """
+        验证客户 Token
+        :param token: Token 字符串
+        :return: (is_valid, customer_id)
+        """
         try:
-            if not token or not token.startswith("CToken"):
+            if not token:
+                return False, None
+            # 兼容各种前缀格式
+            if not any(token.startswith(prefix) for prefix in [
+                cls.TOKEN_PREFIX_CUSTOMER,
+                "Login:PC:CToken",
+                "Login:Phone:CToken",
+                "CToken"
+            ]):
                 return False, None
             token_key = _redis.getKey(token)
             if token_key:
@@ -268,9 +295,34 @@ class CustomTokenTool:
             return False, None
 
     @classmethod
-    def delete_customer_token(cls, token):
+    def delete_token(cls, token: str):
+        """
+        删除 Token（登出时使用）
+        :param token: Token 字符串
+        """
         if token:
+            user_id = _redis.getKey(token)
             _redis.delKey(token)
+            if user_id:
+                # 尝试删除所有可能的映射键
+                for platform in ["", "PC", "Phone"]:
+                    map_key = cls._get_token_map_key(platform, user_id, is_customer=False)
+                    _redis.delKey(map_key)
+
+    @classmethod
+    def delete_customer_token(cls, token: str):
+        """
+        删除客户 Token（登出时使用）
+        :param token: Token 字符串
+        """
+        if token:
+            customer_id = _redis.getKey(token)
+            _redis.delKey(token)
+            if customer_id:
+                # 尝试删除所有可能的映射键
+                for platform in ["", "PC", "Phone"]:
+                    map_key = cls._get_token_map_key(platform, customer_id, is_customer=True)
+                    _redis.delKey(map_key)
 
 """
 是否生成token，如果token已有且有效则不生成 
