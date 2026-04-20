@@ -8,7 +8,7 @@ from rest_framework.decorators import action
 from models.models import CustomerUser
 from tool.password_hasher import verify_password
 from tool.permissions import IsCustomerTokenValid
-from tool.token_tools import CustomTokenTool
+from tool.token_tools import CustomTokenTool, generate_is_user_token
 from tool.utils import ApiResponse
 from django.utils.translation import gettext as _
 

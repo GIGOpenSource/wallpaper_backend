@@ -37,13 +37,18 @@ class CustomBasicAuthentication(BasicAuthentication):
             # 检查 session 中是否有有效的 token
         # token = generate_is_user_token(request,user)
         # token = _redis.getKey(userid)
-        request_token = request.headers.get("token")
-        tokenUserId = _redis.getKey(request_token)
-        if tokenUserId == userid:
-            return user, request_token
-        else:
-            token = generate_is_user_token(request, user)
-            return user, token
+        request_token = request.headers.get("token") if request else None
+
+        # 3. 如果提供了 token，验证其有效性
+        if request_token:
+            token_user_id = _redis.getKey(request_token)
+            # 确保 token_user_id 不为 None 且与当前用户匹配
+            if token_user_id and str(token_user_id) == str(userid):
+                return user, request_token
+
+        # 4. 生成新 token
+        token = generate_is_user_token(request, user)
+        return user, token
         # if token:
         #     return user, token
         # else:
