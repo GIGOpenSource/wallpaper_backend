@@ -19,11 +19,11 @@ from PIL import Image
 from App.view.wallpapers.search_models.search_models import TAG_MAPPING
 from tool.base_views import BaseViewSet
 from tool.middleware import logger
-from tool.permissions import IsCustomerTokenValid, IsOwnerOrAdmin
+from tool.permissions import IsCustomerTokenValid, IsOwnerOrAdmin, IsAdmin
 from tool.token_tools import CustomTokenTool
 from tool.uploader_data import bytes_from_uploaded_image, upload_image_to_cos
 from tool.utils import CustomPagination, ApiResponse
-from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiRequest, OpenApiExample
 from django.utils.translation import get_language, gettext as _, activate
 import pandas as pd
 from rest_framework.decorators import api_view, action
@@ -271,6 +271,7 @@ class CollectionItemSerializer(serializers.ModelSerializer):
 @extend_schema_view(
     list=extend_schema(
         summary="获取壁纸列表(Admin也可用)",
+        description="默认只显示审核通过或未审核的壁纸（排除审核不通过的）",
         parameters=[
             OpenApiParameter(name="currentPage", type=int, required=False, description="当前页码"),
             OpenApiParameter(name="pageSize", type=int, required=False, description="每页数量"),
@@ -329,6 +330,9 @@ class WallpapersViewSet(BaseViewSet):
         if self.action in ['update', 'partial_update', 'destroy']:
             # 写操作：需要是管理员或者是上传者本人
             return [IsOwnerOrAdmin()]
+        elif self.action in ['audit_approve', 'audit_reject']:
+            # 审核操作仅管理员可用
+            return [IsAdmin()]
         # 读操作无需权限
         return []
     def get_serializer_class(self):
@@ -371,7 +375,7 @@ class WallpapersViewSet(BaseViewSet):
         if self.action == 'retrieve':
             queryset = queryset.select_related('customer_upload__customer')
 
-        # 筛选参数：na
+        # 筛选参数：platform
         platform = self.request.query_params.get("platform", "")
         if platform.upper() == 'PC':
             queryset = queryset.filter(category__id=1).distinct()
@@ -515,6 +519,120 @@ class WallpapersViewSet(BaseViewSet):
         serializer = self.get_serializer(instance, context=ctx)
         return ApiResponse(serializer.data)
 
+    @extend_schema(
+        summary="审核通过单张壁纸",
+        request=None,
+        responses={200: {"type": "object", "properties": {"code": {"type": "integer"}, "message": {"type": "string"}}}}
+    )
+    @action(detail=True, methods=['post'], url_path='audit/approve')
+    def audit_approve(self, request, pk=None):
+        """
+        审核通过壁纸
+        仅管理员可用
+        """
+        from django.utils import timezone
+        try:
+            wallpaper = Wallpapers.objects.get(id=pk)
+        except Wallpapers.DoesNotExist:
+            return ApiResponse(code=404, message="壁纸不存在")
+        wallpaper.audit_status = 'approved'
+        wallpaper.audited_at = timezone.now()
+        wallpaper.audit_remark = request.data.get('remark', '')
+        wallpaper.save(update_fields=['audit_status', 'audited_at', 'audit_remark'])
+        logger.info(f"壁纸 #{pk} 审核通过 by {request.user.username}")
+        return ApiResponse(message="审核通过")
+
+    @extend_schema(
+        summary="审核拒绝单张",
+        request=None,
+        responses={200: {"type": "object", "properties": {"code": {"type": "integer"}, "message": {"type": "string"}}}}
+    )
+    @action(detail=True, methods=['post'], url_path='audit/reject')
+    def audit_reject(self, request, pk=None):
+        """
+        审核拒绝壁纸
+        仅管理员可用
+        """
+        from django.utils import timezone
+        try:
+            wallpaper = Wallpapers.objects.get(id=pk)
+        except Wallpapers.DoesNotExist:
+            return ApiResponse(code=404, message="壁纸不存在")
+
+            # 获取拒绝原因
+        remark = request.data.get('remark', '')
+        wallpaper.audit_status = 'rejected'
+        wallpaper.audited_at = timezone.now()
+        wallpaper.audit_remark = remark
+        wallpaper.save(update_fields=['audit_status', 'audited_at', 'audit_remark'])
+        logger.info(f"壁纸 #{pk} 审核拒绝 by {request.user.username}, 原因: {remark}")
+        return ApiResponse(message="审核拒绝")
+
+    @extend_schema(
+        summary="批量审核通过",
+        request=OpenApiRequest(
+            request={"wallpaper_ids": [1, 2, 3]},
+            examples=[
+                OpenApiExample(
+                    name="审核通过示例",
+                    value={"wallpaper_ids": [805471, 805472, 805473]},
+                    request_only=True
+                )
+            ]
+        ),
+        responses={200: {"type": "object", "properties": {"code": {"type": "integer"}, "data": {"type": "object"},
+                                                          "message": {"type": "string"}}}}
+    )
+    @action(detail=False, methods=['post'], url_path='audit/batch-approve')
+    def audit_batch_approve(self, request):
+        """
+        批量审核通过
+        仅管理员可用
+        """
+        from django.utils import timezone
+        wallpaper_ids = request.data.get('wallpaper_ids', [])
+        if not wallpaper_ids:
+            return ApiResponse(code=400, message="请提供壁纸ID列表")
+        count = Wallpapers.objects.filter(id__in=wallpaper_ids).update(
+            audit_status='approved',
+            audited_at=timezone.now()
+
+        )
+        logger.info(f"批量审核通过 {count} 张壁纸 by {request.user.username}")
+        return ApiResponse(data={'count': count}, message=f"已审核通过 {count} 张壁纸")
+
+    @extend_schema(
+        summary="批量审核拒绝",
+        request=OpenApiRequest(
+            request={"wallpaper_ids": [1, 2, 3], "remark": "拒绝原因"},
+            examples=[
+                OpenApiExample(
+                    name="审核拒绝示例",
+                    value={"wallpaper_ids": [805471, 805472, 805473], "remark": "图片模糊不清"},
+                    request_only=True
+                )
+            ]
+        ),
+        responses={200: {"type": "object", "properties": {"code": {"type": "integer"}, "data": {"type": "object"},
+                                                          "message": {"type": "string"}}}}
+    )
+    @action(detail=False, methods=['post'], url_path='audit/batch-reject')
+    def audit_batch_reject(self, request):
+        """
+        批量审核拒绝
+        仅管理员可用
+        """
+        from django.utils import timezone
+        wallpaper_ids = request.data.get('wallpaper_ids', [])
+        remark = request.data.get('remark', '')
+
+        count = Wallpapers.objects.filter(id__in=wallpaper_ids).update(
+            audit_status='rejected',
+            audited_at=timezone.now(),
+            audit_remark=remark
+        )
+        logger.info(f"批量审核拒绝 {count} 张壁纸 by {request.user.username}, 原因: {remark}")
+        return ApiResponse(data={'count': count}, message=f"已审核拒绝 {count} 张壁纸")
 
 
     @extend_schema(
@@ -714,6 +832,8 @@ class WallpapersViewSet(BaseViewSet):
             data={"download_count": wp.download_count},
             message="记录成功",
         )
+
+
 
     @extend_schema(
         summary="我的收藏列表（仅需客户 Token）",
