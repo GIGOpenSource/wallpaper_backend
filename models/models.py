@@ -71,9 +71,7 @@ class User(models.Model):
         if not self.password.startswith('$2b$'):  # bcrypt 哈希以 $2b$ 开头
             self.password = hash_password(self.password[:72])
         super().save(*args, **kwargs)
-
         # 最后登录时间
-
     class Meta:
         db_table = 'c_user'
         verbose_name = '后台管理员'
@@ -460,3 +458,33 @@ class SiteConfig(models.Model):
     
     def __str__(self):
         return f"{self.get_config_type_display()} - {self.title}"
+
+
+class DashboardStats(models.Model):
+    """
+    面板统计表：存储每日统计数据快照
+    每天8:00后第一次请求时更新当日数据，避免频繁查询数据库
+    """
+    stat_date = models.DateField(unique=True, verbose_name="统计日期")
+    total_users = models.IntegerField(default=0, verbose_name="总用户数量")
+    total_wallpapers = models.IntegerField(default=0, verbose_name="总壁纸数量")
+    total_views = models.BigIntegerField(default=0, verbose_name="总浏览量")
+    total_downloads = models.BigIntegerField(default=0, verbose_name="总下载量")
+    total_likes = models.IntegerField(default=0, verbose_name="总点赞数")
+    total_collections = models.IntegerField(default=0, verbose_name="总收藏数")
+    daily_active_users = models.IntegerField(default=0, verbose_name="日活跃用户数")
+    weekly_active_users = models.IntegerField(default=0, verbose_name="周活跃用户数")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+    
+    class Meta:
+        db_table = 't_dashboard_stats'
+        verbose_name = '面板统计数据'
+        verbose_name_plural = '面板统计数据'
+        ordering = ['-stat_date']
+        indexes = [
+            models.Index(fields=['-stat_date']),
+        ]
+    
+    def __str__(self):
+        return f"{self.stat_date} 统计数据"

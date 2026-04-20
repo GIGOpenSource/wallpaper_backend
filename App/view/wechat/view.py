@@ -28,7 +28,7 @@ from models.models import WeChatUser as ChatUser, InvitationRecord
 from models.models import WeChatUser
 from tool.permissions import IsTokenValid
 from tool.tools import getEnvConfig, logger, res, CustomStatus
-from tool.token_tools import CustomTokenTool, _redis, mbti_redis
+from tool.token_tools import CustomTokenTool, _redis
 from tool.tool_wechat import checkWechatUserIsExist
 from tool.utils import ApiResponse
 from django.utils.translation import gettext as _

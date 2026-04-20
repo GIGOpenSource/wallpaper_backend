@@ -43,7 +43,7 @@ class LoginSerializer(serializers.Serializer):
 
 @extend_schema(tags=["系统用户管理"])
 @extend_schema_view(
-    list=extend_schema(summary='获取用户列表（需有效 Token）'),
+    list=extend_schema(summary='获取管理员列表（需有效 Token）'),
     retrieve=extend_schema(summary='获取用户详情（需有效 Token）'),
     destroy=extend_schema(summary='删除用户'),
     update=extend_schema(summary='更新用户'),
@@ -68,14 +68,14 @@ class UserViewSet(viewsets.ViewSet):
         request=RegisterSerializer,
         responses={
             201: {"type": "object", "properties": {"token": {"type": "string"}, "user_id": {"type": "integer"}}}},
-        summary=_("用户注册（匿名可访问）"),
+        summary=_("管理员注册（匿名可访问）"),
     )
     @action(detail=False, methods=['post'], url_path='register')
     def register(self, request):
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
-            # 生成自定义 Token（用用户 ID 关联）
+            # 生成自定义 Token（用管理员 ID 关联）
             token = CustomTokenTool.generate_token(user_id=user.id)
             return ApiResponse(
                 {"token": token, "user_id": user.id, "username": user.username},
@@ -86,7 +86,7 @@ class UserViewSet(viewsets.ViewSet):
         request=LoginSerializer,
         responses={
             200: {"type": "object", "properties": {"token": {"type": "string"}, "user_id": {"type": "integer"}}}},
-        summary="用户登录（匿名可访问）"
+        summary="管理员登录（匿名可访问）"
     )
     @action(detail=False, methods=['post'], url_path='login')
     def login(self, request):
@@ -94,31 +94,31 @@ class UserViewSet(viewsets.ViewSet):
         password = request.data.get('password')
         # 1. 校验输入
         if not username or not password:
-            return ApiResponse(message=_('用户名和密码不能为空'),code=400)
-        # 2. 查询用户并校验密码
+            return ApiResponse(message=_('管理员名和密码不能为空'),code=400)
+        # 2. 查询管理员并校验密码
         try:
             user = User.objects.get(username=username)
         except User.DoesNotExist:
-            return ApiResponse(message= _('用户名不存在'),code=400)
-        except IntegrityError:  # 避免用户名重复（理论上 username 已设 unique，此处兜底）
-            return ApiResponse(message=_('用户名重复'),code=400)
+            return ApiResponse(message= _('管理员名不存在'),code=400)
+        except IntegrityError:  # 避免管理员名重复（理论上 username 已设 unique，此处兜底）
+            return ApiResponse(message=_('管理员名重复'),code=400)
 
         if verify_password(password, user.password):  # 注意参数顺序：原始密码在前，哈希密码在后
             token = generate_is_user_token(request,user)
             return ApiResponse(
                 {"token": token, "user_id": user.id, "username": user.username},
             )
-        return ApiResponse(message=_("用户名密码错误"),code=400)
+        return ApiResponse(message=_("管理员名密码错误"),code=400)
 
     def list(self, request):
-        # print(_("当前登录用户：%s") % request.user.username)
+        # print(_("当前登录管理员：%s") % request.user.username)
         users = self.queryset.all()
         serializer = RegisterSerializer(users, many=True)
         return ApiResponse(serializer.data)
 
     @extend_schema(
         responses={200: {"type": "object", "properties": {"message": {"type": "string"}}}},
-        summary=_("用户登出（需有效 Token）")
+        summary=_("管理员登出（需有效 Token）")
     )
     @action(detail=False, methods=['post'], url_path='logout')
     def logout(self, request):
@@ -138,7 +138,7 @@ class UserViewSet(viewsets.ViewSet):
 
 def deactivate_user_and_delete_posters(open_id):
     """
-    历史微信注销流程占位。微信用户表已移除，请使用 client 邮箱账户体系。
+    历史微信注销流程占位。微信管理员表已移除，请使用 client 邮箱账户体系。
     """
     return {
         "success": False,

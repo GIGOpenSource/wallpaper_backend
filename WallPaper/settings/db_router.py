@@ -6,9 +6,7 @@ class AppDBRouter:
     """
     # 老库只读的模型（小写，匹配 Django 内部 model_name）
     OLD_DB_READ_ONLY_MODELS = [
-        'models.wechatuser',
-        'models.user',
-        'models.invitationrecord'
+        'models.user'
     ]
 
     def db_for_read(self, model, **hints):
@@ -22,7 +20,7 @@ class AppDBRouter:
         """写入规则：禁止写入老库模型，所有写入都到新库"""
         model_path = f"{model._meta.app_label}.{model.__name__.lower()}"
         if model_path in self.OLD_DB_READ_ONLY_MODELS:
-            return None  # 返回 None 禁止写入老库（抛出错误，防止误写）
+            return 'old_db'  # 返回 None 禁止写入老库（抛出错误，防止误写）
         return 'default'  # 其他模型写入新库
 
     def allow_relation(self, obj1, obj2, **hints):
