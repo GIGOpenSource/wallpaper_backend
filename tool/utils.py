@@ -40,7 +40,6 @@ class CustomPagination(PageNumberPagination):
     page_query_param = 'currentPage'  # 匹配前端的currentPage参数
     page_size_query_param = 'pageSize'  # 匹配前端的pageSize参数
     max_page_size = 999  # 最大每页条数限制
-
     def paginate_queryset(self, queryset, request, view=None):
         """
         重写分页查询方法：
@@ -80,7 +79,6 @@ class CustomPagination(PageNumberPagination):
 
         # 返回当前页的数据列表（空页则返回空列表）
         return list(self.page.object_list)
-
     def get_paginated_response(self, data):
         """
         统一分页响应格式：
@@ -98,7 +96,6 @@ class CustomPagination(PageNumberPagination):
                 },
                 'results': []
             })
-
         # 正常分页场景（原有逻辑）
         return ApiResponse({
             'pagination': {
@@ -109,41 +106,7 @@ class CustomPagination(PageNumberPagination):
             },
             'results': data
         })
-# class CustomPagination(PageNumberPagination):
-#     page_size = 20  # 默认每页条数
-#     page_query_param = 'currentPage'  # 关键：匹配前端的 "currentPage" 参数（指定页码）
-#     page_size_query_param = 'pageSize'  # 匹配前端的 "pageSize" 参数（指定每页条数）
-#     max_page_size = 999  # 最大每页条数限制
-#     def get_paginated_response(self, data):
-#         # 现在这个方法会在分页生效时被自动调用
-#         return ApiResponse({
-#             'pagination': {
-#                 'page': self.page.number,  # 当前页码
-#                 'page_size': self.page.paginator.per_page,  # 使用实际的page_size参数
-#                 'total': self.page.paginator.count,  # 总记录数
-#                 'total_pages': self.page.paginator.num_pages  # 总页数
-#             },
-#             'results': data
-#         })
-#     def paginate_queryset(self, queryset, request, view=None):
-#         """
-#         处理超出范围的页码请求
-#         """
-#         try:
-#             return super().paginate_queryset(queryset, request, view=view)
-#         except Exception as e:
-#             # 捕获所有分页相关的异常
-#             if "Invalid page" in str(e) or isinstance(e, EmptyPage):
-#                 # 当请求的页码无效时，返回空结果而不是抛出异常
-#                 self.request = request
-#                 # 创建一个空的分页结果
-#                 page_size = self.get_page_size(request) or self.page_size
-#                 from django.core.paginator import Paginator
-#                 empty_paginator = Paginator([], page_size)
-#                 self.page = empty_paginator.page(1)
-#                 return []
-#             # 如果是其他异常，重新抛出
-#             raise e
+
 from django.utils.translation import gettext as _
 def custom_exception_handler(exc, context):
     """

@@ -23,4 +23,5 @@ urlpatterns = [
     path('notifications/', include(notifications)),
     path('site/', include(site)),
     path('dashboard/', include(dashboard)),
+
 ]

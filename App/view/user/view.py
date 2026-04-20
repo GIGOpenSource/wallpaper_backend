@@ -41,7 +41,7 @@ class LoginSerializer(serializers.Serializer):
     username = serializers.CharField()
     password = serializers.CharField(write_only=True)
 
-@extend_schema(tags=["系统用户管理"])
+@extend_schema(tags=["(Admin)系统用户管理"])
 @extend_schema_view(
     list=extend_schema(summary='获取管理员列表（需有效 Token）'),
     retrieve=extend_schema(summary='获取用户详情（需有效 Token）'),

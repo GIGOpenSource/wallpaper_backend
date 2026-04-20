@@ -84,30 +84,28 @@ class TokenAuthentication(BasicAuthentication):
     基于Token的认证：从请求头获取token并验证
     - 要求前端在请求头中携带 `token: <token值>`
     """
-
     def authenticate(self, request):
         # 1. 从请求头获取token
         token = request.headers.get("token")
         if not token:
-            # 未提供token，返回None（表示放弃认证，交给后续认证类处理，若没有后续则认证失败）
             return None
-
-        # 2. 验证token有效性
         try:
-            # verify_token 返回 (is_valid, user_id) 元组
             is_valid, user_id = CustomTokenTool.verify_token(token)
-
             if not is_valid or not user_id:
                 raise AuthenticationFailed(_('无效的token'))
-
-            # 3. 根据user_id查询用户
-            user = CustomerUser.objects.get(id=user_id)
-            # if not user.is_active:  # 可选：检查用户是否激活
-            #     raise AuthenticationFailed(_('用户已被禁用'))
-
-            # 4. 认证通过，返回(user, token)
+            token_prefix = token.split(":")[1][0:5] if ":" in token else ""
+            if token_prefix == "Token":
+                try:
+                    user = User.objects.get(id=user_id)
+                    # return True
+                except User.DoesNotExist:
+                    raise AuthenticationFailed(_('管理员用户不存在'))
+            elif "CToke" in token:
+                try:
+                    user = CustomerUser.objects.get(id=user_id)
+                except CustomerUser.DoesNotExist:
+                    raise AuthenticationFailed(_('客户用户不存在'))
             return (user, token)
-
         except CustomerUser.DoesNotExist:
             raise AuthenticationFailed(_('token对应的用户不存在'))
         except Exception as e:

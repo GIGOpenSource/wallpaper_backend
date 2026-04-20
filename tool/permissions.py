@@ -1,3 +1,4 @@
+from packaging.utils import _
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.permissions import BasePermission
 
@@ -30,8 +31,40 @@ class IsOwner(BasePermission):
 
     def has_permission(self, request, view):
         # 需登录；对象级再判断归属或管理员
-        return bool(request.user and request.user.role == 'admin')
+        if bool(request.user and request.user.role == 'admin'):
+            return True
+        raise AuthenticationFailed({"code": 401, "message": "请使用管理员账号登录"})
 
+
+class IsAdmin(BasePermission):
+    """Allow access if user is superuser or owns the object.
+
+    Ownership resolution rules (any matches counts as owner):
+    - obj.owner == request.user
+    - getattr(obj, 'owner_id') == request.user.id
+    - obj.created_by == request.user
+    - getattr(obj, 'scheduled_task', None) and obj.scheduled_task.owner == request.user
+    """
+    def has_permission(self, request, view):
+
+        token = request.headers.get("token")
+        token_prefix = token.split(":")[1][0:5] if ":" in token else ""
+        if not token:
+            return None
+        try:
+            is_valid, user_id = CustomTokenTool.verify_token(token)
+            if not is_valid or not user_id:
+                raise AuthenticationFailed(_('无效的管理员token'))
+            if token_prefix == "Token":
+                # 3. 根据user_id查询用户
+                user = User.objects.get(id=user_id)
+            else:
+                raise AuthenticationFailed({"code": 401, "message": "请使用管理员账号登录"})
+        except User.DoesNotExist:
+            raise AuthenticationFailed(_('token对应的管理员不存在'))
+        if bool(user.role == 'operator' or user.role == 'admin'):
+            return True
+        raise AuthenticationFailed({"code": 401, "message": "请使用管理员账号登录"})
 
 class IsTokenValid(BasePermission):
     """

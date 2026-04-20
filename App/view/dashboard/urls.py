@@ -10,10 +10,11 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
-from App.view.dashboard.view import DashboardStatsViewSet
+from App.view.dashboard.view import DashboardStatsViewSet, CustomerUserViewSet
 
 router = DefaultRouter()
 router.register(r"stats", DashboardStatsViewSet, basename="dashboard_stats")
+router.register(r"customer_user", CustomerUserViewSet, basename="customer_user_data")
 
 urlpatterns = [
     path("", include(router.urls)),

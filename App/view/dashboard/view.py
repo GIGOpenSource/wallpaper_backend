@@ -14,7 +14,8 @@ from rest_framework.decorators import action
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
 from tool.base_views import BaseViewSet
 from tool.middleware import logger
-from tool.utils import ApiResponse
+from tool.permissions import IsAdmin
+from tool.utils import ApiResponse, CustomPagination
 from rest_framework import serializers
 from models.models import (
     CustomerUser,
@@ -38,7 +39,7 @@ class DashboardStatsSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-@extend_schema(tags=["面板统计"])
+@extend_schema(tags=["(Admin)面板统计"])
 @extend_schema_view(
     list=extend_schema(
         summary="获取面板统计数据",
@@ -79,7 +80,8 @@ class DashboardStatsViewSet(BaseViewSet):
     """
     queryset = DashboardStats.objects.all()
     serializer_class = DashboardStatsSerializer
-    
+    # 面板统计为公开接口，无需认证
+    permission_classes = [IsAdmin]
     def get_queryset(self):
         """
         动态过滤查询
@@ -213,3 +215,100 @@ class DashboardStatsViewSet(BaseViewSet):
         )
         
         logger.info(f"统计数据已保存: {stat_date}, 创建: {created}")
+
+
+class CustomerUserSerializer(serializers.ModelSerializer):
+    """客户用户序列化器"""
+
+    class Meta:
+        model = CustomerUser
+        fields = '__all__'
+
+
+@extend_schema(tags=["(Admin)用户管理"])
+@extend_schema_view(
+    list=extend_schema(
+        summary="获取客户用户列表",
+        description="分页获取所有客户用户列表，支持按邮箱和昵称搜索",
+        parameters=[
+            OpenApiParameter(name="currentPage", type=int, required=False, description="当前页码，默认1"),
+            OpenApiParameter(name="pageSize", type=int, required=False, description="每页数量，默认20"),
+            OpenApiParameter(name="email", type=str, required=False, description="按邮箱搜索"),
+            OpenApiParameter(name="nickname", type=str, required=False, description="按昵称搜索"),
+        ],
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "integer", "example": 200},
+                    "data": {
+                        "type": "object",
+                        "properties": {
+                            "pagination": {
+                                "type": "object",
+                                "properties": {
+                                    "page": {"type": "integer", "example": 1},
+                                    "page_size": {"type": "integer", "example": 20},
+                                    "total": {"type": "integer", "example": 100},
+                                    "total_pages": {"type": "integer", "example": 5}
+                                }
+                            },
+                            "results": {"type": "array", "items": {"$ref": "#/components/schemas/CustomerUser"}}
+                        }
+                    },
+                    "message": {"type": "string", "example": "用户列表获取成功"}
+                }
+            }
+        }
+    ),
+    retrieve=extend_schema(
+        summary="获取客户用户详情",
+        description="根据用户ID获取详细信息",
+        parameters=[
+            OpenApiParameter(name="id", type=int, required=True, description="用户ID"),
+        ],
+        responses={
+            200: CustomerUserSerializer,
+            404: "用户不存在"
+        }
+    ),
+)
+class CustomerUserViewSet(BaseViewSet):
+    """
+    客户用户管理 ViewSet
+    提供用户列表和详情查询功能（仅管理员可访问）
+    """
+    queryset = CustomerUser.objects.all()
+    serializer_class = CustomerUserSerializer
+    pagination_class = CustomPagination
+    # 仅管理员可访问
+    permission_classes = [IsAdmin]
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        email = self.request.query_params.get('email', '').strip()
+        if email:
+            queryset = queryset.filter(email__icontains=email)
+        nickname = self.request.query_params.get('nickname', '').strip()
+        if nickname:
+            queryset = queryset.filter(nickname__icontains=nickname)
+        return queryset.order_by('-created_at')
+
+    def list(self, request, *args, **kwargs):
+        """
+        获取客户用户列表（分页）
+        """
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = self.get_serializer(queryset, many=True)
+        return ApiResponse(data=serializer.data, message="用户列表获取成功")
+    def retrieve(self, request, *args, **kwargs):
+        """
+        获取客户用户详情
+        """
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        return ApiResponse(data=serializer.data, message="用户详情获取成功")
