@@ -7,7 +7,7 @@
 @Date    ：2026/4/16
 @description : 网站配置接口（帮助与支持、关于、隐私政策等）
 """
-from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import serializers
 from rest_framework.decorators import action
 
