@@ -19,7 +19,7 @@ from PIL import Image
 from App.view.wallpapers.search_models.search_models import TAG_MAPPING
 from tool.base_views import BaseViewSet
 from tool.middleware import logger
-from tool.permissions import IsCustomerTokenValid
+from tool.permissions import IsCustomerTokenValid, IsOwnerOrAdmin
 from tool.token_tools import CustomTokenTool
 from tool.uploader_data import bytes_from_uploaded_image, upload_image_to_cos
 from tool.utils import CustomPagination, ApiResponse
@@ -270,7 +270,7 @@ class CollectionItemSerializer(serializers.ModelSerializer):
 @extend_schema(tags=["壁纸管理"])
 @extend_schema_view(
     list=extend_schema(
-        summary="获取壁纸列表",
+        summary="获取壁纸列表(Admin也可用)",
         parameters=[
             OpenApiParameter(name="currentPage", type=int, required=False, description="当前页码"),
             OpenApiParameter(name="pageSize", type=int, required=False, description="每页数量"),
@@ -287,6 +287,8 @@ class CollectionItemSerializer(serializers.ModelSerializer):
                              description="宽高比多选，逗号分隔，如 16:9,21:9,9:16"),
             OpenApiParameter(name="order", type=str, required=False,
                              description="排序规则（只能传一个）：latest=最新, views=最多浏览, downloads=最多下载, hot=热度"),
+            OpenApiParameter(name="audit_status", type=str, required=False,
+                             description="审核状态筛选（仅管理员）：pending/approved/rejected"),
 
         ],
         responses={
@@ -308,9 +310,9 @@ class CollectionItemSerializer(serializers.ModelSerializer):
     ),
     retrieve=extend_schema(summary="获取壁纸详情", responses={200: WallpapersSerializer, 404: "壁纸不存在"}),
     create=extend_schema(summary="创建壁纸", request=WallpapersSerializer),
-    update=extend_schema(summary="更新壁纸", request=WallpapersSerializer),
+    update=extend_schema(summary="更新壁纸(Admin或自己上传可删)", request=WallpapersSerializer),
     partial_update=extend_schema(summary="部分更新壁纸", request=WallpapersSerializer),
-    destroy=extend_schema(summary="删除壁纸", description="删除指定壁纸记录",
+    destroy=extend_schema(summary="删除壁纸(Admin或自己上传可删)", description="删除指定壁纸记录",
                           responses={204: "删除成功", 404: "壁纸不存在"})
 )
 class WallpapersViewSet(BaseViewSet):
@@ -322,6 +324,13 @@ class WallpapersViewSet(BaseViewSet):
     serializer_class = WallpapersSerializer
     pagination_class = CustomPagination
 
+    def get_permissions(self):
+        """根据不同操作返回不同的权限类"""
+        if self.action in ['update', 'partial_update', 'destroy']:
+            # 写操作：需要是管理员或者是上传者本人
+            return [IsOwnerOrAdmin()]
+        # 读操作无需权限
+        return []
     def get_serializer_class(self):
         """根据动作返回不同的序列化器"""
         if self.action == 'list':
@@ -337,73 +346,32 @@ class WallpapersViewSet(BaseViewSet):
             if ok:
                 ctx["customer_id"] = cid
         return ctx
-
-    def list(self, request, *args, **kwargs):
-        queryset = self.filter_queryset(self.get_queryset())
-        queryset = queryset.prefetch_related('tags').only(
-            'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
-            'has_watermark', 'is_live', 'is_hd', 'hot_score', 'like_count',
-            'collect_count', 'download_count', 'view_count', 'created_at'
-        )
-        order = request.query_params.get("order", "").lower()
-        order_mapping = {
-            "latest": "-created_at",
-            "views": "-view_count",
-            "downloads": "-download_count",
-            "hot": "-hot_score",
-        }
-        if order in order_mapping:
-            queryset = queryset.order_by(order_mapping[order])
-        customer_id = self.get_serializer_context().get("customer_id")
-        if customer_id:
-            liked_ids = set(
-                WallpaperLike.objects.filter(customer_id=customer_id)
-                .values_list('wallpaper_id', flat=True)
-            )
-            collected_ids = set(
-                WallpaperCollection.objects.filter(user_id=customer_id)
-                .values_list('wallpaper_id', flat=True)
-            )
-        else:
-            liked_ids = set()
-            collected_ids = set()
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            context = self.get_serializer_context()
-            context['liked_wallpaper_ids'] = liked_ids
-            context['collected_wallpaper_ids'] = collected_ids
-            serializer = self.get_serializer(page, many=True, context=context)
-            return self.get_paginated_response(serializer.data)
-        context = self.get_serializer_context()
-        context['liked_wallpaper_ids'] = liked_ids
-        context['collected_wallpaper_ids'] = collected_ids
-        serializer = self.get_serializer(queryset, many=True, context=context)
-        return ApiResponse(serializer.data)
-
-    def retrieve(self, request, *args, **kwargs):
-        """
-        获取壁纸详情，并自动增加浏览量
-        """
-        instance = self.get_object()
-        Wallpapers.objects.filter(pk=instance.pk).update(
-            view_count=F("view_count") + 1,
-            hot_score=F("hot_score") + 10
-        )
-        instance.refresh_from_db(fields=["view_count", "hot_score"])
-        ctx = self.get_serializer_context()
-        ctx['include_detail_info'] = True
-        serializer = self.get_serializer(instance, context=ctx)
-        return ApiResponse(serializer.data)
-
     def get_queryset(self):
         """
         动态过滤查询
         """
+        from models.models import User
         queryset = super().get_queryset()
+        # 默认过滤：排除审核不通过的壁纸（除非是管理员查看）
+        is_admin = False
+        if hasattr(self.request, 'user') and isinstance(self.request.user, User):
+            if self.request.user.role in ['admin', 'operator']:
+                is_admin = True
+
+        if not is_admin:
+            # 非管理员：只显示审核通过或未审核的壁纸
+            queryset = queryset.exclude(audit_status='rejected')
+        else:
+            # 管理员可以按审核状态筛选
+            audit_status = self.request.query_params.get("audit_status", "").strip()
+            if audit_status and audit_status in ['pending', 'approved', 'rejected']:
+                queryset = queryset.filter(audit_status=audit_status)
+
+
         if self.action == 'retrieve':
             queryset = queryset.select_related('customer_upload__customer')
 
-        # 筛选参数：name
+        # 筛选参数：na
         platform = self.request.query_params.get("platform", "")
         if platform.upper() == 'PC':
             queryset = queryset.filter(category__id=1).distinct()
@@ -489,6 +457,65 @@ class WallpapersViewSet(BaseViewSet):
                     sql_or = " OR ".join(where_clauses)
                     queryset = queryset.extra(where=[f"({sql_or})"], params=params)
         return queryset
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        queryset = queryset.prefetch_related('tags').only(
+            'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
+            'has_watermark', 'is_live', 'is_hd', 'hot_score', 'like_count',
+            'collect_count', 'download_count', 'view_count', 'created_at','audit_status'
+        )
+        order = request.query_params.get("order", "").lower()
+        order_mapping = {
+            "latest": "-created_at",
+            "views": "-view_count",
+            "downloads": "-download_count",
+            "hot": "-hot_score",
+        }
+        if order in order_mapping:
+            queryset = queryset.order_by(order_mapping[order])
+        customer_id = self.get_serializer_context().get("customer_id")
+        if customer_id:
+            liked_ids = set(
+                WallpaperLike.objects.filter(customer_id=customer_id)
+                .values_list('wallpaper_id', flat=True)
+            )
+            collected_ids = set(
+                WallpaperCollection.objects.filter(user_id=customer_id)
+                .values_list('wallpaper_id', flat=True)
+            )
+        else:
+            liked_ids = set()
+            collected_ids = set()
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            context = self.get_serializer_context()
+            context['liked_wallpaper_ids'] = liked_ids
+            context['collected_wallpaper_ids'] = collected_ids
+            serializer = self.get_serializer(page, many=True, context=context)
+            return self.get_paginated_response(serializer.data)
+        context = self.get_serializer_context()
+        context['liked_wallpaper_ids'] = liked_ids
+        context['collected_wallpaper_ids'] = collected_ids
+        serializer = self.get_serializer(queryset, many=True, context=context)
+        return ApiResponse(serializer.data)
+
+    def retrieve(self, request, *args, **kwargs):
+        """
+        获取壁纸详情，并自动增加浏览量
+        """
+        instance = self.get_object()
+        Wallpapers.objects.filter(pk=instance.pk).update(
+            view_count=F("view_count") + 1,
+            hot_score=F("hot_score") + 10
+        )
+        instance.refresh_from_db(fields=["view_count", "hot_score"])
+        ctx = self.get_serializer_context()
+        ctx['include_detail_info'] = True
+        serializer = self.get_serializer(instance, context=ctx)
+        return ApiResponse(serializer.data)
+
+
 
     @extend_schema(
         summary="猜你喜欢",

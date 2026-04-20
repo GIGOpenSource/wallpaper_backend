@@ -126,8 +126,12 @@ class Wallpapers(models.Model):
     source_url = models.URLField(max_length=500, blank=True, null=True, verbose_name="图片来源链接")  # 新增：来源链接
     has_watermark = models.BooleanField(default=False, verbose_name="是否有水印",null= True,blank=True)  # 新增：水印标识
     description = models.TextField(blank=True, null=True, verbose_name="描述")
-
-    # 原有字段
+    AUDIT_STATUS_CHOICES = [(None, '未审核'),('pending', '待审核'),('approved', '审核通过'),('rejected', '审核不通过')]
+    audit_status = models.CharField(max_length=20,choices=AUDIT_STATUS_CHOICES,default=None,null=True,blank=True,
+                                    verbose_name="审核状态",db_index=True  # 添加索引优化查询
+    )
+    audit_remark = models.TextField(blank=True, null=True, verbose_name="审核备注")
+    audited_at = models.DateTimeField(blank=True, null=True, verbose_name="审核时间")
     category = models.ManyToManyField(WallpaperCategory, blank=True, verbose_name="所属分类")
     tags = models.ManyToManyField(WallpaperTag, blank=True, verbose_name="标签", related_name='wallpapers')
     is_live = models.BooleanField(default=False, verbose_name="是否Live壁纸",null= True,blank=True)
