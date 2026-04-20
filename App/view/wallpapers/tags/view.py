@@ -8,6 +8,7 @@ from django.core.cache import cache
 
 from models.models import WallpaperTag, Wallpapers, NavigationTag
 from tool.base_views import BaseViewSet
+from tool.permissions import IsAdmin
 from tool.utils import ApiResponse, CustomPagination
 from django.utils.translation import gettext as _
 
@@ -21,7 +22,16 @@ class WallpaperTagSerializer(serializers.ModelSerializer):
 
 
 
-@extend_schema(tags=["标签管理"])
+@extend_schema(tags=["(Admin)标签管理"])
+@extend_schema_view(
+    list=extend_schema(summary="获取所有标签列表（含壁纸总数）"),
+    retrieve=extend_schema(summary="获取标签详情", responses={200: WallpaperTagSerializer, 404: "标签不存在"}),
+    create=extend_schema(summary="创建标签", request=WallpaperTagSerializer),
+    update=extend_schema(summary="更新标签(Admin)", request=WallpaperTagSerializer),
+    partial_update=extend_schema(summary="部分更新标签(Admin)", request=WallpaperTagSerializer),
+    destroy=extend_schema(summary="删除标签(Admin)", description="删除指定标签记录",
+                          responses={204: "删除成功", 404: "标签不存在"})
+)
 class WallpaperTagViewSet(BaseViewSet):
     """
     标签管理 ViewSet
@@ -29,6 +39,15 @@ class WallpaperTagViewSet(BaseViewSet):
     """
     queryset = WallpaperTag.objects.all()
     serializer_class = WallpaperTagSerializer
+
+    def get_permissions(self):
+        """根据不同操作返回不同的权限类"""
+        if self.action in ['update', 'partial_update', 'destroy']:
+            # 写操作：需要管理员权限
+            return [IsAdmin()]
+        # 读操作无需权限
+        return []
+
     @extend_schema(
         summary="获取所有标签列表（含壁纸总数）",
         description="每日早8点第一次调用会查询实际总数并缓存，之后24小时内直接返回缓存值",
@@ -187,6 +206,14 @@ class NavigationTagViewSet(BaseViewSet):
     queryset = NavigationTag.objects.all()
     serializer_class = NavigationTagSerializer
     pagination_class = CustomPagination
+
+    def get_permissions(self):
+        """根据不同操作返回不同的权限类"""
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            # 写操作：需要管理员权限
+            return [IsAdmin()]
+        # 读操作无需权限
+        return []
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())

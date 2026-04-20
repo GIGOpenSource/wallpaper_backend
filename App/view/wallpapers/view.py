@@ -520,7 +520,7 @@ class WallpapersViewSet(BaseViewSet):
         return ApiResponse(serializer.data)
 
     @extend_schema(
-        summary="审核通过单张壁纸",
+        summary="审核通过单张壁纸(Admin)",
         request=None,
         responses={200: {"type": "object", "properties": {"code": {"type": "integer"}, "message": {"type": "string"}}}}
     )
@@ -543,7 +543,7 @@ class WallpapersViewSet(BaseViewSet):
         return ApiResponse(message="审核通过")
 
     @extend_schema(
-        summary="审核拒绝单张",
+        summary="审核拒绝单张(Admin)",
         request=None,
         responses={200: {"type": "object", "properties": {"code": {"type": "integer"}, "message": {"type": "string"}}}}
     )
@@ -569,7 +569,7 @@ class WallpapersViewSet(BaseViewSet):
         return ApiResponse(message="审核拒绝")
 
     @extend_schema(
-        summary="批量审核通过",
+        summary="批量审核通过(Admin)",
         request=OpenApiRequest(
             request={"wallpaper_ids": [1, 2, 3]},
             examples=[
@@ -602,7 +602,7 @@ class WallpapersViewSet(BaseViewSet):
         return ApiResponse(data={'count': count}, message=f"已审核通过 {count} 张壁纸")
 
     @extend_schema(
-        summary="批量审核拒绝",
+        summary="批量审核拒绝(Admin)",
         request=OpenApiRequest(
             request={"wallpaper_ids": [1, 2, 3], "remark": "拒绝原因"},
             examples=[
