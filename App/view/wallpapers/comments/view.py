@@ -94,14 +94,10 @@ class WallpaperCommentAdminSerializer(serializers.ModelSerializer):
     def get_wallpaper_object(self, obj):
         """获取壁纸信息"""
         return {
-            'id': obj.wallpaper.id,
-            'title': obj.wallpaper.title,
+            'wallpaper_id': obj.wallpaper.id,
+            'name': obj.wallpaper.name,
             'url': obj.wallpaper.url,
-            'thumbnail_url': obj.wallpaper.thumbnail_url,
-            'category': obj.wallpaper.category,
-            'resolution': obj.wallpaper.resolution,
-            'size': obj.wallpaper.size,
-            'created_at': obj.wallpaper.created_at,
+            'thumb_url': obj.wallpaper.thumb_url,
         }
     def get_customer_info(self, obj):
         """获取评论用户信息"""
