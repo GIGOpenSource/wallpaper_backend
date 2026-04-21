@@ -256,23 +256,19 @@ class WallpaperCommentViewSet(BaseViewSet):
     @action(detail=False, methods=['get'], url_path='list')
     def list_comments(self, request):
         """获取壁纸评论列表（只显示一级评论，按时间倒序，每页20条）"""
-
         wallpaper_id = request.query_params.get('wallpaper_id')
         if not wallpaper_id:
             return ApiResponse(code=400, message="请提供 wallpaper_id")
-        
         try:
             wallpaper_id = int(wallpaper_id)
         except (TypeError, ValueError):
             return ApiResponse(code=400, message="wallpaper_id 无效")
-        
         # 只查询一级评论（parent 为 null），按创建时间倒序
         queryset = WallpaperComment.objects.filter(
             wallpaper_id=wallpaper_id,
             parent__isnull=True,
             is_hidden=False
         ).select_related('customer').order_by('-created_at')
-        
         # 获取当前用户点赞的评论 ID 集合（仅针对当前壁纸下的评论）
         customer_id = self.get_serializer_context().get('customer_id')
         liked_comment_ids = set()
@@ -432,12 +428,14 @@ class WallpaperCommentViewSet(BaseViewSet):
     def destroy(self, request, *args, **kwargs):
         """删除评论"""
         instance = self.get_object()
-        
         # 验证是否是自己的评论
         customer_id = self.get_serializer_context().get('customer_id')
-        if instance.customer_id != customer_id:
-            return ApiResponse(code=403, message="只能删除自己的评论")
-        
+        is_owner = customer_id and instance.customer_id == int(customer_id)
+        # 2) 管理员删除（后台权限最高）
+        is_admin = IsAdmin().has_permission(request, self)
+        if not (is_owner or is_admin):
+            return ApiResponse(code=403, message="只能删除自己的评论或由管理员删除")
+
         instance.delete()
         return ApiResponse(message="删除成功")
     
