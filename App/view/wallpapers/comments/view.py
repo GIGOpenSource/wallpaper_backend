@@ -78,7 +78,7 @@ class WallpaperCommentSerializer(serializers.ModelSerializer):
         summary="获取所有壁纸评论列表",
         description="获取指定壁纸的一级评论列表（支持分页）",
         parameters=[
-            OpenApiParameter(name="wallpaper_id", type=int, required=True, description="壁纸ID"),
+            OpenApiParameter(name="wallpaper_id", type=int, required=False, description="壁纸ID"),
             OpenApiParameter(name="currentPage", type=int, required=False, description="当前页码"),
             OpenApiParameter(name="pageSize", type=int, required=False, description="每页数量"),
         ],
@@ -162,7 +162,7 @@ class WallpaperCommentViewSet(BaseViewSet):
         summary="获取壁纸的评论列表",
         description="获取指定壁纸的一级评论列表（支持分页，无需登录）",
         parameters=[
-            OpenApiParameter(name="wallpaper_id", type=int, required=True, location=OpenApiParameter.QUERY, description="壁纸ID"),
+            OpenApiParameter(name="wallpaper_id", type=int, required=False, location=OpenApiParameter.QUERY, description="壁纸ID"),
             OpenApiParameter(name="currentPage", type=int, required=False, location=OpenApiParameter.QUERY, description="当前页码"),
             OpenApiParameter(name="pageSize", type=int, required=False, location=OpenApiParameter.QUERY, description="每页数量"),
         ],
@@ -170,6 +170,7 @@ class WallpaperCommentViewSet(BaseViewSet):
     @action(detail=False, methods=['get'], url_path='list')
     def list_comments(self, request):
         """获取壁纸评论列表（只显示一级评论，按时间倒序，每页20条）"""
+
         wallpaper_id = request.query_params.get('wallpaper_id')
         if not wallpaper_id:
             return ApiResponse(code=400, message="请提供 wallpaper_id")

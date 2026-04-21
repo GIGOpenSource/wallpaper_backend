@@ -125,7 +125,7 @@ class WallpapersListSerializer(serializers.ModelSerializer):
             'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
             'has_watermark', 'is_live', 'is_hd', 'hot_score', 'like_count',
             'collect_count', 'download_count', 'view_count', 'created_at',
-            'aspect_ratio'
+            'aspect_ratio','audit_status'
         ]
         read_only_fields = fields
 

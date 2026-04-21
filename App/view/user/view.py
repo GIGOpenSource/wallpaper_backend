@@ -126,7 +126,7 @@ class UserViewSet(viewsets.ViewSet):
         from django.utils.translation import get_language
         current_language = get_language()
         print(f"当前识别的语言：{current_language}")  # 应输出 'ja'
-        token = request.session.get('auth_token')
+        token = request.auth
         if not token:
             return ApiResponse(message=_("未提供有效 Token"),code=400)
         if token:
