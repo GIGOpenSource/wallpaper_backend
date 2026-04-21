@@ -223,7 +223,7 @@ class NotificationViewSet(BaseViewSet):
 
     @extend_schema(
         summary="管理员发送系统公告",
-        description="管理员向用户发送系统公告，支持发送给全部用户或指定用户",
+        description="send_to：all/special；notification_type：system/feature/Activity管理员向用户发送系统公告，支持发送给全部用户或指定用户",
         request=AnnouncementSerializer,
         responses={
             200: {
@@ -259,7 +259,7 @@ class NotificationViewSet(BaseViewSet):
         content = serializer.validated_data['content']
         send_to = serializer.validated_data['send_to']
         user_ids = serializer.validated_data.get('user_ids', [])
-
+        notification_type = serializer.validated_data['notification_type',""]
         # 确定接收者列表
         if send_to == 'all':
             recipients = CustomerUser.objects.all()
@@ -285,13 +285,11 @@ class NotificationViewSet(BaseViewSet):
                         'title': title,
                         'content': content,
                         'sent_by_admin': request.user.username if hasattr(request, 'user') else 'system',
+                        'notification_type': notification_type
                     }
                 )
             )
-
-        # 批量插入数据库
         Notification.objects.bulk_create(notifications, batch_size=100)
-
         return ApiResponse(
             data={
                 'success_count': total_count,
@@ -307,7 +305,7 @@ class NotificationViewSet(BaseViewSet):
             "application/json": {
                 "type": "object",
                 "properties": {
-                    "id": {"oneOf": [{"type": "integer"}, {"type": "string", "enum": ["all"]}], "description": "通知ID 或 'all'"}
+                    "id": {"oneOf": [{"type": "integer"}, {"type": "string", "enum": ["all"]}], "description": "special 或 'all'"}
                 },
                 "required": ["id"]
             }

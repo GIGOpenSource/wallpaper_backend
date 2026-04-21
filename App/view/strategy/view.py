@@ -67,7 +67,59 @@ class RecommendStrategySerializer(serializers.ModelSerializer):
         ],
     ),
     retrieve=extend_schema(summary="策略详情"),
-    create=extend_schema(summary="创建策略"),
+    create=extend_schema(
+        summary="创建策略",
+        request={
+        "application/json": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "策略名称"
+                },
+                "priority": {
+                    "type": "integer",
+                    "description": "优先级 越大越前"
+                },
+                "content_limit": {
+                    "type": "integer",
+                    "description": "内容限制数量"
+                },
+                "strategy_type": {
+                    "type": "string",
+                    "enum": ["home", "hot"],
+                    "description": "策略类型 主页、热门"
+                },
+                "apply_area": {
+                    "type": "string",
+                    "enum": ["global"],
+                    "description": "应用区域 "
+                },
+                "wallpaper_ids": {
+                    "type": "string",
+                    "description": "数组壁纸数组列表",
+                    "default": ""
+                }
+            },
+            "required": ["customer_id", "report_type", "target_id", "target_type", "reason"],
+            "example": {
+                "name": "测试策略",
+                "priority": 99,
+                "content_limit": 10,
+                "strategy_type": "home",
+                "apply_area": "global",
+                "start_time": "2026-04-21T08:00:47.817Z",
+                "end_time": "2026-04-21T08:00:47.817Z",
+                "status": "active",
+                "stats_data": "string",
+                "wallpaper_ids": [235928, 235934, 235945, 235954, 235964, 235971, 235985, 235995, 236009, 236026,
+                                  236036, 236047, 236060],
+                "remark": "string"
+            }
+            }
+        },
+        responses={201: RecommendStrategySerializer, 400: "参数错误", 404: "举报用户不存在"}
+    ),
     update=extend_schema(summary="更新策略"),
     partial_update=extend_schema(summary="部分更新策略"),
     destroy=extend_schema(summary="删除策略"),

@@ -15,6 +15,7 @@ from App.view.wallpapers import urls as wallpapers
 from App.view.notifications import urls as notifications
 from App.view.site import urls as site
 from App.view.dashboard import urls as dashboard
+from App.view.strategy import urls as strategy
 
 urlpatterns = [
     path('', include(user)),
@@ -23,5 +24,6 @@ urlpatterns = [
     path('notifications/', include(notifications)),
     path('site/', include(site)),
     path('dashboard/', include(dashboard)),
+    path('strategy/', include(strategy)),
 
 ]
