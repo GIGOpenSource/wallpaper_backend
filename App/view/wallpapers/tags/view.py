@@ -29,7 +29,7 @@ class WallpaperTagSerializer(serializers.ModelSerializer):
         description="默认返回全部标签；仅当传入 pageSize 时启用分页。支持按关键词搜索。",
         parameters=[
             OpenApiParameter(
-                name="q",
+                name="name",
                 type=str,
                 required=False,
                 description="标签名称关键词（模糊搜索）",
@@ -63,6 +63,15 @@ class WallpaperTagViewSet(BaseViewSet):
     queryset = WallpaperTag.objects.all()
     serializer_class = WallpaperTagSerializer
     pagination_class = CustomPagination
+
+    def get_queryset(self):
+        """支持按标签名称模糊查询（q 参数）"""
+        queryset = super().get_queryset()
+        name = self.request.query_params.get("name", "").strip()
+        if name:
+            queryset = queryset.filter(name__icontains=name)
+        return queryset.order_by("-created_at")
+
     def list(self, request, *args, **kwargs):
         try:
             queryset = self.filter_queryset(self.get_queryset())
