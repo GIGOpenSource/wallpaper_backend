@@ -234,7 +234,7 @@ class CustomerProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomerUser
         fields = ("id", "email", "nickname", "gender", "avatar_url", "badge", "points",
-                  "level", "status", "followers_count", "following_count")
+                  "level", "status", "followers_count", "following_count","updated_at")
         read_only_fields = ("id", "email", "points", "level", "followers_count", "following_count")
 
     def get_followers_count(self, obj):
@@ -251,7 +251,7 @@ class CustomerUserListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CustomerUser
-        fields = ("id", "email", "nickname", "gender", "avatar_url", "badge", "points",
+        fields = ("id", "email", "nickname", "gender", "avatar_url", "badge", "points","updated_at",
                   "level", "status", "upload_count", "collection_count","last_login", "created_at", "followers_count", "following_count")
         read_only_fields = ("id", "email", "points", "level", "followers_count", "following_count", "created_at")
 
