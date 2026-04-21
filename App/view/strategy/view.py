@@ -27,6 +27,7 @@ class RecommendStrategySerializer(serializers.ModelSerializer):
             "status",
             "stats_data",
             "wallpaper_ids",
+            "platform",
             "remark",
             "created_at",
             "updated_at",
@@ -64,6 +65,7 @@ class RecommendStrategySerializer(serializers.ModelSerializer):
             OpenApiParameter(name="strategy_type", type=str, required=False, description="策略类型：home/hot"),
             OpenApiParameter(name="status", type=str, required=False, description="状态：draft/active/inactive"),
             OpenApiParameter(name="apply_area", type=str, required=False, description="应用区域"),
+            OpenApiParameter(name="platform", type=str, required=False, description="平台：web/app")
         ],
     ),
     retrieve=extend_schema(summary="策略详情"),

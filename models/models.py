@@ -548,12 +548,17 @@ class RecommendStrategy(models.Model):
         ("active", "生效中"),
         ("inactive", "停用"),
     ]
-
+    PLATFORM_CHOICES = [
+        ("all", "所有"),
+        ("pc", "PC"),
+        ("phone", "手机"),
+    ]
     name = models.CharField(max_length=100, verbose_name="策略名称")
     priority = models.IntegerField(default=0, verbose_name="优先级（越大越优先）")
     content_limit = models.PositiveIntegerField(default=0, verbose_name="内容数量（0=不限制）")
     strategy_type = models.CharField(max_length=20, choices=STRATEGY_TYPE_CHOICES, verbose_name="策略类型")
     apply_area = models.CharField(max_length=50, default="global", verbose_name="应用区域")
+    platform = models.CharField(max_length=20, choices=PLATFORM_CHOICES, default="all", verbose_name="适用平台")
     start_time = models.DateTimeField(blank=True, null=True, verbose_name="生效开始时间")
     end_time = models.DateTimeField(blank=True, null=True, verbose_name="生效结束时间")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="draft", verbose_name="状态")
