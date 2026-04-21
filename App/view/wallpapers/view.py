@@ -167,7 +167,7 @@ class WallpapersAdminListSerializer(serializers.ModelSerializer):
             'source_url', 'description', 'has_watermark', 'category', 'tags',
             'is_live', 'is_hd', 'hot_score', 'like_count', 'collect_count',
             'download_count', 'view_count', 'created_at', 'aspect_ratio',
-            'audit_status', 'uploader', 'audit_remark', 'audited_at'
+            'audit_status', 'uploader', 'audit_remark', 'audited_at','description'
         ]
         read_only_fields = fields
 
