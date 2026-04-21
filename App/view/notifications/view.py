@@ -113,12 +113,13 @@ class NotificationSerializer(serializers.ModelSerializer):
         else:
             return "收到一条新消息"
 
-
 @extend_schema(tags=["消息通知"])
 @extend_schema_view(
     list=extend_schema(
         summary="获取我的通知列表",
-        description="分页获取当前用户的通知，支持按类型筛选（显示所有历史消息，不受设置影响）",
+        description="分页获取当前用户的通知，支持按类型筛选。\n\n"
+                    "**普通用户**：只返回自己的通知\n\n"
+                    "**后台管理员**：返回所有用户的通知",
         parameters=[
             OpenApiParameter(name="type", type=str, required=False, description="通知类型筛选 (like/comment/follow/reward/announcement)"),
             OpenApiParameter(name="currentPage", type=int, required=False, description="当前页码"),
@@ -138,7 +139,8 @@ class NotificationViewSet(BaseViewSet):
     queryset = Notification.objects.all()
     serializer_class = NotificationSerializer
     pagination_class = CustomPagination
-    permission_classes = [IsCustomerTokenValid]
+    permission_classes = []
+    # permission_classes = [IsCustomerTokenValid]
 
     def get_queryset(self):
         """只返回当前用户的通知"""
@@ -151,31 +153,55 @@ class NotificationViewSet(BaseViewSet):
         ctx = super().get_serializer_context()
         tok = self.request.headers.get("token")
         if tok:
+            # 先尝试验证 CustomerUser Token（C端用户）
             ok, cid = CustomTokenTool.verify_customer_token(tok)
             if ok:
                 ctx["current_user_id"] = cid
+                ctx["user_type"] = "customer"
+                ctx["is_admin"] = False
+            else:
+                # 如果不是 CustomerUser Token，尝试验证后台管理员 User
+                from models.models import User
+                ok_admin, admin_id = CustomTokenTool.verify_token(tok)
+                if ok_admin:
+                    try:
+                        admin_user = User.objects.get(id=admin_id)
+                        ctx["current_user_id"] = admin_id
+                        ctx["user_type"] = "admin"
+                        ctx["is_admin"] = admin_user.role in ['admin', 'operator', 'super_admin']
+                    except User.DoesNotExist:
+                        pass
         return ctx
 
     def list(self, request, *args, **kwargs):
         """获取通知列表"""
         current_user_id = self.get_serializer_context().get('current_user_id')
+        user_type = self.get_serializer_context().get('user_type')
+        is_admin = self.get_serializer_context().get('is_admin', False)
+
         if not current_user_id:
             return ApiResponse(code=401, message="请先登录")
-        
-        queryset = Notification.objects.filter(recipient_id=current_user_id).select_related('sender')
-        
+
+        # 判断是否为管理员
+        if is_admin:
+            # 管理员：返回所有通知
+            queryset = Notification.objects.all().select_related('sender', 'recipient')
+        else:
+            # 普通用户：只返回自己的通知
+            queryset = Notification.objects.filter(recipient_id=current_user_id).select_related('sender')
+
         # 类型筛选
         n_type = request.query_params.get('type')
         if n_type:
             queryset = queryset.filter(notification_type=n_type)
-            
+
         queryset = queryset.order_by('-created_at')
-        
+
         page = self.paginate_queryset(queryset)
         if page is not None:
             serializer = self.get_serializer(page, many=True)
             return self.get_paginated_response(serializer.data)
-        
+
         serializer = self.get_serializer(queryset, many=True)
         return ApiResponse(data=serializer.data, message="通知列表获取成功")
 

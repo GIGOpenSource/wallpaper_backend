@@ -19,7 +19,7 @@ class ReportSerializer(serializers.ModelSerializer):
     class Meta:
         model = Report
         fields = [
-            'id', 'reporter_info', 'report_type', 'target_info', 'target_id',
+            'id', 'reporter_info', 'target_info', 'target_id',
             'target_type', 'reason', 'detail', 'status', 'created_at'
         ]
         read_only_fields = ['id', 'reporter_info', 'target_info', 'created_at']
@@ -65,7 +65,7 @@ class ReportAdminSerializer(serializers.ModelSerializer):
     class Meta:
         model = Report
         fields = [
-            'id', 'reporter_info', 'report_type', 'target_info', 'target_id',
+            'id', 'reporter_info', 'target_info', 'target_id',
             'target_type', 'reason', 'detail', 'status', 'handler_info',
             'handle_result', 'created_at', 'handled_at'
         ]
@@ -120,8 +120,6 @@ class ReportAdminSerializer(serializers.ModelSerializer):
         parameters=[
             OpenApiParameter(name="currentPage", type=int, required=False, description="当前页码"),
             OpenApiParameter(name="pageSize", type=int, required=False, description="每页数量"),
-            OpenApiParameter(name="report_type", type=str, required=False,
-                             description="举报类型：wallpaper/comment/user"),
             OpenApiParameter(name="status", type=str, required=False,
                              description="处理状态：pending/processing/resolved/rejected"),
         ],
@@ -235,14 +233,11 @@ class ReportViewSet(BaseViewSet):
         customer_id = request.user.id
         if not customer_id:
             return ApiResponse(code=400, message="需要登录或当前token不正确")
-        report_type = request.data.get('report_type')
         target_id = request.data.get('target_id')
         target_type = request.data.get('target_type')
         reason = request.data.get('reason')
         detail = request.data.get('detail', '')
         # 校验必填字段
-        if not report_type or report_type not in ['wallpaper', 'comment', 'user']:
-            return ApiResponse(code=400, message="举报类型无效")
         if not target_id:
             return ApiResponse(code=400, message="举报对象ID不能为空")
         if not target_type or target_type not in ['wallpaper', 'comment', 'user']:
@@ -258,7 +253,6 @@ class ReportViewSet(BaseViewSet):
         # 创建举报记录
         report = Report.objects.create(
             reporter=reporter,
-            report_type=report_type,
             target_id=target_id,
             target_type=target_type,
             reason=reason,
@@ -273,12 +267,6 @@ class ReportViewSet(BaseViewSet):
         管理员获取举报列表
         """
         queryset = self.filter_queryset(self.get_queryset())
-
-        # 支持按举报类型筛选
-        report_type = request.query_params.get('report_type')
-        if report_type and report_type in ['wallpaper', 'comment', 'user']:
-            queryset = queryset.filter(report_type=report_type)
-
         # 支持按处理状态筛选
         status = request.query_params.get('status')
         if status and status in ['pending', 'processing', 'resolved', 'rejected']:
