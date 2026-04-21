@@ -865,7 +865,7 @@ class WallpapersViewSet(BaseViewSet):
             wid = int(wid)
         except (TypeError, ValueError):
             return ApiResponse(code=400, message="wallpaper_id 无效")
-        cid = request.customer_id
+        cid = request.user.id
         try:
             with transaction.atomic():
                 wp = Wallpapers.objects.select_for_update().get(pk=wid)
