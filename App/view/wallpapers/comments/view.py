@@ -27,7 +27,8 @@ class WallpaperCommentSerializer(serializers.ModelSerializer):
     parent_comment = serializers.SerializerMethodField()
     replies_count = serializers.SerializerMethodField()
     is_liked = serializers.SerializerMethodField()
-    
+
+
     class Meta:
         model = WallpaperComment
         fields = [
@@ -36,7 +37,9 @@ class WallpaperCommentSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'customer_info', 'like_count', 'created_at', 'updated_at', 'replies_count', 'is_liked']
-    
+
+
+
     def get_customer_info(self, obj):
         """获取评论用户信息"""
         return {
@@ -77,16 +80,29 @@ class WallpaperCommentAdminSerializer(serializers.ModelSerializer):
     customer_info = serializers.SerializerMethodField()
     parent_comment = serializers.SerializerMethodField()
     replies_count = serializers.SerializerMethodField()
+    wallpaper_object = serializers.SerializerMethodField()
 
     class Meta:
         model = WallpaperComment
         fields = [
             'id', 'customer_info', 'wallpaper', 'parent', 'parent_comment',
             'content', 'like_count', 'is_hidden', 'replies_count',
-            'created_at', 'updated_at'
+            'created_at', 'updated_at','wallpaper_object'
         ]
         read_only_fields = ['id', 'customer_info', 'like_count', 'created_at', 'updated_at', 'replies_count']
 
+    def get_wallpaper_object(self, obj):
+        """获取壁纸信息"""
+        return {
+            'id': obj.wallpaper.id,
+            'title': obj.wallpaper.title,
+            'url': obj.wallpaper.url,
+            'thumbnail_url': obj.wallpaper.thumbnail_url,
+            'category': obj.wallpaper.category,
+            'resolution': obj.wallpaper.resolution,
+            'size': obj.wallpaper.size,
+            'created_at': obj.wallpaper.created_at,
+        }
     def get_customer_info(self, obj):
         """获取评论用户信息"""
         return {
