@@ -37,7 +37,7 @@ from models.models import (
     WallpaperLike,
     WallpaperCollection,
     CustomerWallpaperUpload,
-    CustomerUser,
+    CustomerUser, RecommendStrategy,
 )
 
 
@@ -537,7 +537,6 @@ class WallpapersViewSet(BaseViewSet):
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
-
         # 判断是否为管理员
         from models.models import User
         is_admin = False
@@ -1116,7 +1115,29 @@ class WallpapersViewSet(BaseViewSet):
             limit = int(request.query_params.get("limit", 6))
         except (TypeError, ValueError):
             limit = 6
-        limit = max(5, min(10, limit))
+        from django.utils import timezone
+        now = timezone.now()
+        strategies = RecommendStrategy.objects.filter(
+            platform=platform,
+            strategy_type="home",
+            status="active",
+        ).order_by("-priority", "-created_at")
+        matched_strategy = None
+        for item in strategies:
+            if item.start_time and now < item.start_time:
+                continue
+            if item.end_time and now > item.end_time:
+                continue
+            matched_strategy = item
+            break
+        if matched_strategy and matched_strategy.wallpaper_ids:
+            wallpaper_ids = matched_strategy.wallpaper_ids
+            if matched_strategy.content_limit and matched_strategy.content_limit > 0:
+                wallpaper_ids = wallpaper_ids[:matched_strategy.content_limit]
+            return ApiResponse(
+                data={"wallpaper_ids": wallpaper_ids},
+                message="精选壁纸获取成功（来自推荐策略）"
+            )
         if platform == 'PC':
             queryset = Wallpapers.objects.filter(
                 category__id=1,

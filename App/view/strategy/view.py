@@ -114,8 +114,7 @@ class RecommendStrategySerializer(serializers.ModelSerializer):
                 "end_time": "2026-04-21T08:00:47.817Z",
                 "status": "active",
                 "stats_data": "string",
-                "wallpaper_ids": [235928, 235934, 235945, 235954, 235964, 235971, 235985, 235995, 236009, 236026,
-                                  236036, 236047, 236060],
+                "wallpaper_ids": [235928, 235934, 235945, 235954, 235964, 235971],
                 "remark": "string"
             }
             }
