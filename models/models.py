@@ -535,7 +535,6 @@ class Report(models.Model):
     ]
     REPORT_STATUS_CHOICES = [('pending', '待处理'),('processing', '处理中'),('resolved', '已解决'),('rejected', '已驳回'),]
     reporter = models.ForeignKey(CustomerUser,on_delete=models.CASCADE,related_name="reports",verbose_name="举报人")
-    report_type = models.CharField(max_length=20,choices=REPORT_TYPE_CHOICES,verbose_name="举报类型")
     target_id = models.PositiveIntegerField(verbose_name="举报对象ID")
     target_type = models.CharField(max_length=20,choices=REPORT_TYPE_CHOICES,verbose_name="举报对象类型")
     reason = models.CharField(max_length=20,choices=REPORT_REASON_CHOICES,verbose_name="举报原因")
@@ -555,7 +554,7 @@ class Report(models.Model):
         verbose_name_plural = '举报记录'
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['report_type', 'status']),
+            models.Index(fields=['status']),
             models.Index(fields=['reporter', '-created_at']),
             models.Index(fields=['target_type', 'target_id']),
         ]

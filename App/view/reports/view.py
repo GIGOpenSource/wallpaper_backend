@@ -142,6 +142,57 @@ class ReportAdminSerializer(serializers.ModelSerializer):
             }
         }
     ),
+    create=extend_schema(
+    summary="提交举报",
+    description="用户提交举报记录",
+    request={
+        "application/json": {
+            "type": "object",
+            "properties": {
+                "customer_id": {
+                    "type": "integer",
+                    "description": "举报人用户ID（CustomerUser.id）"
+                },
+                "report_type": {
+                    "type": "string",
+                    "enum": ["wallpaper", "comment", "user"],
+                    "description": "举报类型"
+                },
+                "target_id": {
+                    "type": "integer",
+                    "description": "举报对象ID"
+                },
+                "target_type": {
+                    "type": "string",
+                    "enum": ["wallpaper", "comment", "user"],
+                    "description": "举报对象类型（建议与 report_type 保持一致）"
+                },
+                "reason": {
+                    "type": "string",
+                    "enum": [
+                        "inappropriate", "copyright", "spam", "harassment",
+                        "violence", "pornography", "political", "other"
+                    ],
+                    "description": "举报原因"
+                },
+                "detail": {
+                    "type": "string",
+                    "description": "补充说明（可选）",
+                    "default": ""
+                }
+            },
+            "required": ["customer_id", "report_type", "target_id", "target_type", "reason"],
+            "example": {
+                "report_type": "comment",
+                "target_id": 345,
+                "target_type": "comment",
+                "reason": "spam",
+                "detail": "重复发布广告内容"
+            }
+            }
+        },
+        responses={201: ReportSerializer, 400: "参数错误", 404: "举报用户不存在"}
+    ),
     retrieve=extend_schema(summary="获取举报详情", responses={200: ReportAdminSerializer, 404: "举报不存在"}),
     destroy=extend_schema(summary="删除举报记录", responses={204: "删除成功", 404: "举报不存在"})
 )
@@ -181,13 +232,14 @@ class ReportViewSet(BaseViewSet):
         """
         提交举报
         """
-        customer_id = request.data.get('customer_id')
+        customer_id = request.user.id
+        if not customer_id:
+            return ApiResponse(code=400, message="需要登录或当前token不正确")
         report_type = request.data.get('report_type')
         target_id = request.data.get('target_id')
         target_type = request.data.get('target_type')
         reason = request.data.get('reason')
         detail = request.data.get('detail', '')
-
         # 校验必填字段
         if not report_type or report_type not in ['wallpaper', 'comment', 'user']:
             return ApiResponse(code=400, message="举报类型无效")
@@ -198,11 +250,6 @@ class ReportViewSet(BaseViewSet):
         if not reason or reason not in ['inappropriate', 'copyright', 'spam', 'harassment', 'violence', 'pornography',
                                         'political', 'other']:
             return ApiResponse(code=400, message="举报原因无效")
-
-        # 获取举报人
-        if not customer_id:
-            return ApiResponse(code=400, message="请提供举报人ID")
-
         try:
             reporter = CustomerUser.objects.get(id=customer_id)
         except CustomerUser.DoesNotExist:

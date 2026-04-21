@@ -153,6 +153,80 @@ class WallpapersListSerializer(serializers.ModelSerializer):
         return obj.id in collected_ids if collected_ids else False
 
 
+class WallpapersAdminListSerializer(serializers.ModelSerializer):
+    """壁纸列表序列化器（管理员使用，包含详细信息）"""
+    tags = serializers.SerializerMethodField()
+    category = serializers.SerializerMethodField()
+    uploader = serializers.SerializerMethodField()
+    aspect_ratio = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Wallpapers
+        fields = [
+            'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
+            'source_url', 'description', 'has_watermark', 'category', 'tags',
+            'is_live', 'is_hd', 'hot_score', 'like_count', 'collect_count',
+            'download_count', 'view_count', 'created_at', 'aspect_ratio',
+            'audit_status', 'uploader', 'audit_remark', 'audited_at'
+        ]
+        read_only_fields = fields
+
+    def get_tags(self, obj):
+        return [
+            {
+                'id': tag.id,
+                'name': tag.name,
+            }
+            for tag in obj.tags.all()
+        ]
+
+    def get_category(self, obj):
+        return [
+            {
+                'id': cat.id,
+                'name': cat.name,
+            }
+            for cat in obj.category.all()
+        ]
+
+    def get_uploader(self, obj):
+        """获取上传者信息"""
+        try:
+            upload_record = getattr(obj, 'customer_upload', None)
+            if not upload_record:
+                return None
+            customer = getattr(upload_record, 'customer', None)
+            if not customer:
+                return None
+            return {
+                "id": customer.id,
+                "email": customer.email,
+                "nickname": customer.nickname,
+                "gender": customer.gender,
+                "avatar_url": customer.avatar_url,
+                "badge": customer.badge,
+                "points": customer.points,
+                "level": customer.level,
+                "upload_count": customer.upload_count,
+                "collection_count": customer.collection_count,
+                "last_login": customer.last_login.isoformat() if customer.last_login else None,
+                "created_at": customer.created_at.isoformat() if customer.created_at else None,
+            }
+        except ObjectDoesNotExist:
+            return None
+    def get_aspect_ratio(self, obj):
+        """计算宽高比，格式如 16:9"""
+        if not obj.width or not obj.height:
+            return None
+        def gcd(a, b):
+            while b:
+                a, b = b, a % b
+            return a
+        common_divisor = gcd(obj.width, obj.height)
+        width_ratio = obj.width // common_divisor
+        height_ratio = obj.height // common_divisor
+        return f"{width_ratio}:{height_ratio}"
+
 class WallpapersSerializer(serializers.ModelSerializer):
     """壁纸详情序列化器（包含完整信息）"""
     category = serializers.SerializerMethodField()
@@ -464,11 +538,24 @@ class WallpapersViewSet(BaseViewSet):
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
-        queryset = queryset.prefetch_related('tags').only(
-            'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
-            'has_watermark', 'is_live', 'is_hd', 'hot_score', 'like_count',
-            'collect_count', 'download_count', 'view_count', 'created_at','audit_status'
-        )
+
+        # 判断是否为管理员
+        from models.models import User
+        is_admin = False
+        if hasattr(request, 'user') and isinstance(request.user, User):
+            if request.user.role in ['admin', 'operator']:
+                is_admin = True
+        # 根据用户角色选择不同的查询优化策略
+        if is_admin:
+            # 管理员：使用详细序列化器，预加载关联数据
+            queryset = queryset.prefetch_related('tags', 'category').select_related('customer_upload__customer')
+        else:
+            # 普通用户：使用轻量级序列化器
+            queryset = queryset.prefetch_related('tags').only(
+                'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
+                'has_watermark', 'is_live', 'is_hd', 'hot_score', 'like_count',
+                'collect_count', 'download_count', 'view_count', 'created_at', 'audit_status'
+            )
         order = request.query_params.get("order", "").lower()
         order_mapping = {
             "latest": "-created_at",
@@ -496,12 +583,21 @@ class WallpapersViewSet(BaseViewSet):
             context = self.get_serializer_context()
             context['liked_wallpaper_ids'] = liked_ids
             context['collected_wallpaper_ids'] = collected_ids
-            serializer = self.get_serializer(page, many=True, context=context)
+            # 根据管理员身份选择序列化器
+            if is_admin:
+                serializer = WallpapersAdminListSerializer(page, many=True, context=context)
+            else:
+                serializer = WallpapersListSerializer(page, many=True, context=context)
             return self.get_paginated_response(serializer.data)
         context = self.get_serializer_context()
         context['liked_wallpaper_ids'] = liked_ids
         context['collected_wallpaper_ids'] = collected_ids
-        serializer = self.get_serializer(queryset, many=True, context=context)
+        # 根据管理员身份选择序列化器
+        if is_admin:
+            serializer = WallpapersAdminListSerializer(queryset, many=True, context=context)
+        else:
+            serializer = WallpapersListSerializer(queryset, many=True, context=context)
+
         return ApiResponse(serializer.data)
 
     def retrieve(self, request, *args, **kwargs):
