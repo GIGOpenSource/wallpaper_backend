@@ -404,8 +404,7 @@ class WallpapersViewSet(BaseViewSet):
         if self.action in ['update', 'partial_update', 'destroy']:
             # 写操作：需要是管理员或者是上传者本人
             return [IsOwnerOrAdmin()]
-        elif self.action in ['audit_approve', 'audit_reject']:
-            # 审核操作仅管理员可用
+        elif self.action in ['audit_approve', 'audit_reject', 'batch_delete']:
             return [IsAdmin()]
         # 读操作无需权限
         return []
@@ -898,7 +897,58 @@ class WallpapersViewSet(BaseViewSet):
             data={"collected": collected, "collect_count": wp.collect_count},
             message="操作成功",
         )
+        # 2) 在 WallpapersViewSet 里新增批量删除接口
+    @extend_schema(
+        summary="批量删除壁纸(Admin)",
+        description="根据 wallpaper_ids 批量删除壁纸",
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "wallpaper_ids": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "壁纸ID列表，如 [1,2,3,4]"
+                    }
+                },
+                "required": ["wallpaper_ids"],
+                "example": {"wallpaper_ids": [1, 2, 3, 4]}
+            }
+        },
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "integer"},
+                    "data": {"type": "object"},
+                    "message": {"type": "string"}
+                }
+            }
+        }
+    )
+    @action(detail=False, methods=['post'], url_path='batch-delete')
+    def batch_delete(self, request):
+        wallpaper_ids = request.data.get('wallpaper_ids', [])
+        if not isinstance(wallpaper_ids, list) or not wallpaper_ids:
+            return ApiResponse(code=400, message="wallpaper_ids 必须是非空数组")
 
+        valid_ids = []
+        for item in wallpaper_ids:
+            try:
+                valid_ids.append(int(item))
+            except (TypeError, ValueError):
+                return ApiResponse(code=400, message="wallpaper_ids 只能包含整数ID")
+        # 去重，避免重复删除
+        valid_ids = list(set(valid_ids))
+        queryset = Wallpapers.objects.filter(id__in=valid_ids)
+        deleted_count = queryset.count()
+        if deleted_count == 0:
+            return ApiResponse(code=404, message="未找到可删除的壁纸")
+        queryset.delete()
+        return ApiResponse(
+            data={"deleted_count": deleted_count, "wallpaper_ids": valid_ids},
+            message=f"批量删除成功，共删除 {deleted_count} 条"
+        )
     @extend_schema(summary="记录一次下载并返回累计下载量（需客户 Token）")
     @action(
         detail=False,
@@ -928,9 +978,6 @@ class WallpapersViewSet(BaseViewSet):
             data={"download_count": wp.download_count},
             message="记录成功",
         )
-
-
-
     @extend_schema(
         summary="我的收藏列表（仅需客户 Token）",
         parameters=[

@@ -497,37 +497,6 @@ class DashboardStats(models.Model):
     def __str__(self):
         return f"{self.stat_date} 统计数据"
 
-
-class DashboardStats(models.Model):
-    """
-    面板统计表：存储每日统计数据快照
-    每天8:00后第一次请求时更新当日数据，避免频繁查询数据库
-    """
-    stat_date = models.DateField(unique=True, verbose_name="统计日期")
-    total_users = models.IntegerField(default=0, verbose_name="总用户数量")
-    total_wallpapers = models.IntegerField(default=0, verbose_name="总壁纸数量")
-    total_views = models.BigIntegerField(default=0, verbose_name="总浏览量")
-    total_downloads = models.BigIntegerField(default=0, verbose_name="总下载量")
-    total_likes = models.IntegerField(default=0, verbose_name="总点赞数")
-    total_collections = models.IntegerField(default=0, verbose_name="总收藏数")
-    daily_active_users = models.IntegerField(default=0, verbose_name="日活跃用户数")
-    weekly_active_users = models.IntegerField(default=0, verbose_name="周活跃用户数")
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
-    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
-
-    class Meta:
-        db_table = 't_dashboard_stats'
-        verbose_name = '面板统计数据'
-        verbose_name_plural = '面板统计数据'
-        ordering = ['-stat_date']
-        indexes = [
-            models.Index(fields=['-stat_date']),
-        ]
-
-    def __str__(self):
-        return f"{self.stat_date} 统计数据"
-
-
 class Report(models.Model):
     """
     举报表：记录用户对壁纸或评论的举报
@@ -564,3 +533,46 @@ class Report(models.Model):
 
     def __str__(self):
         return f"{self.reporter.email} 举报 {self.get_report_type_display()} #{self.target_id}"
+
+
+class RecommendStrategy(models.Model):
+    """
+    推荐策略表：用于首页/热门推荐位策略配置
+    """
+    STRATEGY_TYPE_CHOICES = [
+        ("home", "首页"),
+        ("hot", "热门"),
+    ]
+    STATUS_CHOICES = [
+        ("draft", "草稿"),
+        ("active", "生效中"),
+        ("inactive", "停用"),
+    ]
+
+    name = models.CharField(max_length=100, verbose_name="策略名称")
+    priority = models.IntegerField(default=0, verbose_name="优先级（越大越优先）")
+    content_limit = models.PositiveIntegerField(default=0, verbose_name="内容数量（0=不限制）")
+    strategy_type = models.CharField(max_length=20, choices=STRATEGY_TYPE_CHOICES, verbose_name="策略类型")
+    apply_area = models.CharField(max_length=50, default="global", verbose_name="应用区域")
+    start_time = models.DateTimeField(blank=True, null=True, verbose_name="生效开始时间")
+    end_time = models.DateTimeField(blank=True, null=True, verbose_name="生效结束时间")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="draft", verbose_name="状态")
+    stats_data = models.JSONField(default=dict, blank=True, verbose_name="统计数据")
+    wallpaper_ids = models.JSONField(default=list, blank=True, verbose_name="策略内容（壁纸ID列表）")
+    remark = models.CharField(max_length=255, blank=True, null=True, verbose_name="备注")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+
+    class Meta:
+        db_table = "t_recommend_strategy"
+        verbose_name = "推荐策略"
+        verbose_name_plural = "推荐策略"
+        ordering = ["-priority", "-created_at"]
+        indexes = [
+            models.Index(fields=["strategy_type", "status"]),
+            models.Index(fields=["apply_area", "status"]),
+            models.Index(fields=["-priority"]),
+        ]
+
+    def __str__(self):
+        return f"{self.name} [{self.strategy_type}]"
