@@ -1106,36 +1106,76 @@ class WallpapersViewSet(BaseViewSet):
     @action(detail=False, methods=['get'], url_path='featured')
     def featured(self, request):
         """
-        精选壁纸：根据平台返回高质量壁纸
+        精选壁纸：根据平台返回高质量壁纸，优先应用推荐策略
+        策略匹配顺序：platform -> all -> 默认平台分类
         """
         platform = request.query_params.get("platform", "").upper()
-        if platform not in ['PC', 'PHONE']:
-            return ApiResponse(code=400, message="平台参数错误，请输入 PC 或 PHONE")
+        if platform not in ['PC', 'PHONE', 'ALL']:
+            return ApiResponse(code=400, message="平台参数错误，请输入 PC、PHONE 或 ALL")
         try:
             limit = int(request.query_params.get("limit", 6))
         except (TypeError, ValueError):
             limit = 6
+
         from django.utils import timezone
         now = timezone.now()
-        strategies = RecommendStrategy.objects.filter(
-            platform=platform,
-            strategy_type="home",
-            status="active",
-        ).order_by("-priority", "-created_at")
+
         matched_strategy = None
-        for item in strategies:
-            if item.start_time and now < item.start_time:
-                continue
-            if item.end_time and now > item.end_time:
-                continue
-            matched_strategy = item
-            break
+
+        if platform in ['PC', 'PHONE']:
+            platform_strategies = RecommendStrategy.objects.filter(
+                platform=platform.lower(),
+                strategy_type="home",
+                status="active",
+            ).order_by("-priority", "-created_at")
+
+            for item in platform_strategies:
+                if item.start_time and now < item.start_time:
+                    continue
+                if item.end_time and now > item.end_time:
+                    continue
+                matched_strategy = item
+                break
+
+            if not matched_strategy:
+                all_strategies = RecommendStrategy.objects.filter(
+                    platform="all",
+                    strategy_type="home",
+                    status="active",
+                ).order_by("-priority", "-created_at")
+
+                for item in all_strategies:
+                    if item.start_time and now < item.start_time:
+                        continue
+                    if item.end_time and now > item.end_time:
+                        continue
+                    matched_strategy = item
+                    break
+        else:
+            all_strategies = RecommendStrategy.objects.filter(
+                platform="all",
+                strategy_type="home",
+                status="active",
+            ).order_by("-priority", "-created_at")
+
+            for item in all_strategies:
+                if item.start_time and now < item.start_time:
+                    continue
+                if item.end_time and now > item.end_time:
+                    continue
+                matched_strategy = item
+                break
         if matched_strategy and matched_strategy.wallpaper_ids:
             wallpaper_ids = matched_strategy.wallpaper_ids
             if matched_strategy.content_limit and matched_strategy.content_limit > 0:
                 wallpaper_ids = wallpaper_ids[:matched_strategy.content_limit]
+
+            wallpaper_map = Wallpapers.objects.filter(id__in=wallpaper_ids).in_bulk()
+            ordered_wallpapers = [wallpaper_map[w_id] for w_id in wallpaper_ids if w_id in wallpaper_map]
+
+            serializer = self.get_serializer(ordered_wallpapers, many=True)
             return ApiResponse(
-                data={"wallpaper_ids": wallpaper_ids},
+                data=serializer.data,
                 message="精选壁纸获取成功（来自推荐策略）"
             )
         if platform == 'PC':
@@ -1143,11 +1183,16 @@ class WallpapersViewSet(BaseViewSet):
                 category__id=1,
                 is_hd=True
             ).distinct().order_by('-hot_score', '-like_count', '-created_at')[:limit]
-        else:
+        elif platform == 'PHONE':
             queryset = Wallpapers.objects.filter(
                 category__id=2,
                 is_hd=True
             ).distinct().order_by('-hot_score', '-like_count', '-created_at')[:limit]
+        else:
+            queryset = Wallpapers.objects.filter(
+                is_hd=True
+            ).distinct().order_by('-hot_score', '-like_count', '-created_at')[:limit]
+
         serializer = self.get_serializer(queryset, many=True)
         return ApiResponse(data=serializer.data, message="精选壁纸获取成功")
 
@@ -1194,7 +1239,7 @@ class WallpapersViewSet(BaseViewSet):
             return ApiResponse(code=400, message="请提供 title")
 
         platform = (request.data.get("platform") or "").upper()
-        if platform not in ['PC', 'PHONE']:
+        if platform not in ['PC', 'PHONE', 'ALL']:
             return ApiResponse(code=400, message="平台参数错误，请输入 PC 或 PHONE")
 
         description = (request.data.get("description") or "").strip() or None
