@@ -12,10 +12,11 @@
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
 from rest_framework import serializers
 from rest_framework.decorators import action
+from django.utils import timezone
 
-from models.models import Notification, UserNotificationSettings
+from models.models import Notification, UserNotificationSettings, CustomerUser
 from tool.base_views import BaseViewSet
-from tool.permissions import IsCustomerTokenValid
+from tool.permissions import IsCustomerTokenValid, IsAdmin
 from tool.token_tools import CustomTokenTool
 from tool.utils import ApiResponse, CustomPagination
 
@@ -24,12 +25,12 @@ class NotificationSerializer(serializers.ModelSerializer):
     """通知序列化器"""
     sender_info = serializers.SerializerMethodField()
     content_display = serializers.SerializerMethodField()
-    target_content = serializers.SerializerMethodField()  # 新增：目标对象（壁纸/评论）的内容摘要
-    
+    target_content = serializers.SerializerMethodField()
+
     class Meta:
         model = Notification
         fields = [
-            'id', 'sender_info', 'notification_type', 'content_display', 
+            'id', 'sender_info', 'notification_type', 'content_display',
             'target_id', 'target_type', 'target_content', 'extra_data', 'is_read', 'created_at'
         ]
         read_only_fields = fields
@@ -48,7 +49,6 @@ class NotificationSerializer(serializers.ModelSerializer):
         from models.models import Wallpapers, WallpaperComment
         try:
             if obj.target_type == 'wallpaper':
-                # 场景：别人评论/点赞了我的壁纸
                 wallpaper = Wallpapers.objects.only('name', 'thumb_url', 'description').get(id=obj.target_id)
                 return {
                     'type': 'wallpaper',
@@ -61,7 +61,6 @@ class NotificationSerializer(serializers.ModelSerializer):
                     }
                 }
             elif obj.target_type == 'comment':
-                # 场景：别人回复了我的评论，或点赞了某条评论
                 comment = WallpaperComment.objects.select_related('parent__customer', 'wallpaper').get(id=obj.target_id)
                 result = {
                     'type': 'comment',
@@ -69,9 +68,7 @@ class NotificationSerializer(serializers.ModelSerializer):
                     'wallpaper_name': comment.wallpaper.name,
                     'wallpaper_id': comment.wallpaper.id
                 }
-                # 确定 source_data：如果是回复，显示被回复的评论；如果是首评，显示壁纸信息
                 if comment.parent:
-                    # 情况1：回复了别人的评论 -> source_data 是被回复的那条
                     source_obj = comment.parent
                     result['source_data'] = {
                         'id': source_obj.id,
@@ -80,7 +77,6 @@ class NotificationSerializer(serializers.ModelSerializer):
                         'obj_type': 'comment'
                     }
                 else:
-                    # 情况2：首次评论壁纸 -> source_data 是该壁纸
                     wallpaper = comment.wallpaper
                     result['source_data'] = {
                         'id': wallpaper.id,
@@ -94,7 +90,6 @@ class NotificationSerializer(serializers.ModelSerializer):
         return None
 
     def get_content_display(self, obj):
-        # 根据类型动态组合显示内容
         nickname = obj.sender.nickname if obj.sender else "系统"
         if obj.notification_type == 'like':
             return f"{nickname} 赞了你的帖子"
@@ -112,6 +107,28 @@ class NotificationSerializer(serializers.ModelSerializer):
             return obj.extra_data.get('title', '系统公告')
         else:
             return "收到一条新消息"
+
+
+class AnnouncementSerializer(serializers.Serializer):
+    """管理员发送公告的请求序列化器"""
+    title = serializers.CharField(max_length=200, required=True, help_text="公告标题")
+    content = serializers.CharField(required=True, help_text="公告内容")
+    send_to = serializers.ChoiceField(
+        choices=['all', 'specific'],
+        required=True,
+        help_text="发送对象：all=全部用户，specific=指定用户"
+    )
+    user_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,
+        help_text="指定用户ID列表（当 send_to=specific 时必填）"
+    )
+
+    def validate(self, attrs):
+        if attrs['send_to'] == 'specific' and not attrs.get('user_ids'):
+            raise serializers.ValidationError("指定用户时必须提供 user_ids 列表")
+        return attrs
+
 
 @extend_schema(tags=["消息通知"])
 @extend_schema_view(
@@ -140,7 +157,12 @@ class NotificationViewSet(BaseViewSet):
     serializer_class = NotificationSerializer
     pagination_class = CustomPagination
     permission_classes = []
-    # permission_classes = [IsCustomerTokenValid]
+
+    def get_permissions(self):
+        """根据不同操作返回不同的权限类"""
+        if self.action in ['send_announcement']:
+            return [IsAdmin()]
+        return []
 
     def get_queryset(self):
         """只返回当前用户的通知"""
@@ -153,14 +175,12 @@ class NotificationViewSet(BaseViewSet):
         ctx = super().get_serializer_context()
         tok = self.request.headers.get("token")
         if tok:
-            # 先尝试验证 CustomerUser Token（C端用户）
             ok, cid = CustomTokenTool.verify_customer_token(tok)
             if ok:
                 ctx["current_user_id"] = cid
                 ctx["user_type"] = "customer"
                 ctx["is_admin"] = False
             else:
-                # 如果不是 CustomerUser Token，尝试验证后台管理员 User
                 from models.models import User
                 ok_admin, admin_id = CustomTokenTool.verify_token(tok)
                 if ok_admin:
@@ -182,15 +202,11 @@ class NotificationViewSet(BaseViewSet):
         if not current_user_id:
             return ApiResponse(code=401, message="请先登录")
 
-        # 判断是否为管理员
         if is_admin:
-            # 管理员：返回所有通知
             queryset = Notification.objects.all().select_related('sender', 'recipient')
         else:
-            # 普通用户：只返回自己的通知
             queryset = Notification.objects.filter(recipient_id=current_user_id).select_related('sender')
 
-        # 类型筛选
         n_type = request.query_params.get('type')
         if n_type:
             queryset = queryset.filter(notification_type=n_type)
@@ -204,6 +220,85 @@ class NotificationViewSet(BaseViewSet):
 
         serializer = self.get_serializer(queryset, many=True)
         return ApiResponse(data=serializer.data, message="通知列表获取成功")
+
+    @extend_schema(
+        summary="管理员发送系统公告",
+        description="管理员向用户发送系统公告，支持发送给全部用户或指定用户",
+        request=AnnouncementSerializer,
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "integer", "example": 200},
+                    "data": {
+                        "type": "object",
+                        "properties": {
+                            "success_count": {"type": "integer", "description": "成功发送数量"},
+                            "total_count": {"type": "integer", "description": "总发送数量"}
+                        }
+                    },
+                    "message": {"type": "string", "example": "公告发送成功"}
+                }
+            },
+            400: "参数错误",
+            403: "无权限"
+        }
+    )
+    @action(detail=False, methods=['post'], url_path='send-announcement', permission_classes=[IsAdmin])
+    def send_announcement(self, request):
+        """
+        管理员发送系统公告
+        - 支持发送给全部用户或指定用户
+        - 自动记录发送人（管理员）
+        """
+        # 验证请求数据
+        serializer = AnnouncementSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        title = serializer.validated_data['title']
+        content = serializer.validated_data['content']
+        send_to = serializer.validated_data['send_to']
+        user_ids = serializer.validated_data.get('user_ids', [])
+
+        # 确定接收者列表
+        if send_to == 'all':
+            recipients = CustomerUser.objects.all()
+        else:
+            recipients = CustomerUser.objects.filter(id__in=user_ids)
+            # 检查是否有不存在的用户
+            if recipients.count() != len(user_ids):
+                return ApiResponse(code=400, message="部分用户ID不存在")
+
+        total_count = recipients.count()
+        if total_count == 0:
+            return ApiResponse(code=400, message="没有符合条件的接收者")
+
+        # 批量创建通知
+        notifications = []
+        for recipient in recipients:
+            notifications.append(
+                Notification(
+                    recipient=recipient,
+                    sender=None,  # 系统公告不需要发送者
+                    notification_type='announcement',
+                    extra_data={
+                        'title': title,
+                        'content': content,
+                        'sent_by_admin': request.user.username if hasattr(request, 'user') else 'system',
+                    }
+                )
+            )
+
+        # 批量插入数据库
+        Notification.objects.bulk_create(notifications, batch_size=100)
+
+        return ApiResponse(
+            data={
+                'success_count': total_count,
+                'total_count': total_count
+            },
+            message=f"公告已成功发送给 {total_count} 个用户"
+        )
 
     @extend_schema(
         summary="标记通知为已读",
@@ -232,11 +327,11 @@ class NotificationViewSet(BaseViewSet):
         """标记通知为已读（传 id 或 all）"""
         current_user_id = self.get_serializer_context().get('current_user_id')
         notification_id = request.data.get('id')
-        
+
         if notification_id == 'all':
             Notification.objects.filter(recipient_id=current_user_id, is_read=False).update(is_read=True)
             return ApiResponse(message="全部标记为已读")
-        
+
         try:
             notification = Notification.objects.get(id=notification_id, recipient_id=current_user_id)
             notification.is_read = True
@@ -265,16 +360,13 @@ class NotificationViewSet(BaseViewSet):
         current_user_id = self.get_serializer_context().get('current_user_id')
         if not current_user_id:
             return ApiResponse(code=401, message="请先登录")
-        
-        # 获取用户的通知设置
+
         try:
             settings = UserNotificationSettings.objects.get(user_id=current_user_id)
         except UserNotificationSettings.DoesNotExist:
-            # 如果没有设置，默认全部开启，返回所有未读数
             count = Notification.objects.filter(recipient_id=current_user_id, is_read=False).count()
             return ApiResponse(data={'count': count})
-        
-        # 构建需要排除的通知类型列表
+
         excluded_types = []
         if not settings.enable_like_notification:
             excluded_types.append('like')
@@ -284,12 +376,11 @@ class NotificationViewSet(BaseViewSet):
             excluded_types.append('reply')
         if not settings.enable_follow_notification:
             excluded_types.append('follow')
-        
-        # 查询未读通知
+
         queryset = Notification.objects.filter(recipient_id=current_user_id, is_read=False)
         if excluded_types:
             queryset = queryset.exclude(notification_type__in=excluded_types)
-        
+
         count = queryset.count()
         return ApiResponse(data={'count': count})
 
@@ -321,8 +412,7 @@ class NotificationViewSet(BaseViewSet):
         current_user_id = self.get_serializer_context().get('current_user_id')
         if not current_user_id:
             return ApiResponse(code=401, message="请先登录")
-        
-        # 使用 get_or_create 确保有默认值
+
         settings, created = UserNotificationSettings.objects.get_or_create(
             user_id=current_user_id,
             defaults={
@@ -332,7 +422,7 @@ class NotificationViewSet(BaseViewSet):
                 'enable_follow_notification': True,
             }
         )
-        
+
         return ApiResponse(
             data={
                 'enable_like_notification': settings.enable_like_notification,
@@ -373,8 +463,7 @@ class NotificationViewSet(BaseViewSet):
         current_user_id = self.get_serializer_context().get('current_user_id')
         if not current_user_id:
             return ApiResponse(code=401, message="请先登录")
-        
-        # 获取或创建设置
+
         settings, created = UserNotificationSettings.objects.get_or_create(
             user_id=current_user_id,
             defaults={
@@ -384,8 +473,7 @@ class NotificationViewSet(BaseViewSet):
                 'enable_follow_notification': True,
             }
         )
-        
-        # 更新字段（只更新传入的字段）
+
         if 'enable_like_notification' in request.data:
             settings.enable_like_notification = request.data['enable_like_notification']
         if 'enable_comment_notification' in request.data:

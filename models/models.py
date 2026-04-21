@@ -362,24 +362,24 @@ class WallpaperCommentLike(models.Model):
     def __str__(self):
         return f"{self.customer.email} → Comment #{self.comment_id}"
 
-
 class Notification(models.Model):
     """
-    通知表（点赞提示、评论提示、粉丝提示统一存储）
+    通知表（点赞提示、评论提示、粉丝提示、系统公告统一存储）
     使用 JSONField 存储不同类型通知的扩展数据，减少表数量
     """
     NOTIFICATION_TYPES = [
         ('like', '点赞'),('comment', '评论'),('follow', '关注'),('reply', '回复'),
+        ('announcement', '系统公告'),
     ]
 
     recipient = models.ForeignKey(CustomerUser,on_delete=models.CASCADE,related_name="notifications",verbose_name="接收者"
     )
-    sender = models.ForeignKey(CustomerUser,on_delete=models.CASCADE,related_name="sent_notifications",verbose_name="发送者"
+    sender = models.ForeignKey(CustomerUser,on_delete=models.SET_NULL,null=True,blank=True,related_name="sent_notifications",verbose_name="发送者"
     )
     notification_type = models.CharField(max_length=20,choices=NOTIFICATION_TYPES,verbose_name="通知类型"
     )
-    target_id = models.PositiveIntegerField(verbose_name="目标对象ID（壁纸ID或评论ID）")
-    target_type = models.CharField(max_length=50, verbose_name="目标类型（wallpaper/comment/user）")
+    target_id = models.PositiveIntegerField(verbose_name="目标对象ID（壁纸ID或评论ID）", null=True, blank=True)
+    target_type = models.CharField(max_length=50, verbose_name="目标类型（wallpaper/comment/user）", null=True, blank=True)
     extra_data = models.JSONField(blank=True, null=True, default=dict, verbose_name="扩展数据")
     is_read = models.BooleanField(default=False, verbose_name="是否已读")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
@@ -396,7 +396,10 @@ class Notification(models.Model):
         ]
 
     def __str__(self):
+        if self.notification_type == 'announcement':
+            return f"系统公告 → {self.recipient.email}"
         return f"{self.sender.email} → {self.recipient.email} [{self.notification_type}]"
+
 
 
 class UserFollow(models.Model):
