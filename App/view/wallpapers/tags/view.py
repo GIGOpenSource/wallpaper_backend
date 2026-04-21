@@ -24,7 +24,30 @@ class WallpaperTagSerializer(serializers.ModelSerializer):
 
 @extend_schema(tags=["(Admin)标签管理"])
 @extend_schema_view(
-    list=extend_schema(summary="获取所有标签列表（含壁纸总数）"),
+     list=extend_schema(
+        summary="获取标签列表",
+        description="默认返回全部标签；仅当传入 pageSize 时启用分页。支持按关键词搜索。",
+        parameters=[
+            OpenApiParameter(
+                name="q",
+                type=str,
+                required=False,
+                description="标签名称关键词（模糊搜索）",
+            ),
+            OpenApiParameter(
+                name="currentPage",
+                type=int,
+                required=False,
+                description="当前页码（仅在传入 pageSize 时生效）",
+            ),
+            OpenApiParameter(
+                name="pageSize",
+                type=int,
+                required=False,
+                description="每页数量；不传则不分页，返回全部数据",
+            ),
+        ],
+    ),
     retrieve=extend_schema(summary="获取标签详情", responses={200: WallpaperTagSerializer, 404: "标签不存在"}),
     create=extend_schema(summary="创建标签", request=WallpaperTagSerializer),
     update=extend_schema(summary="更新标签(Admin)", request=WallpaperTagSerializer),
@@ -39,6 +62,18 @@ class WallpaperTagViewSet(BaseViewSet):
     """
     queryset = WallpaperTag.objects.all()
     serializer_class = WallpaperTagSerializer
+    pagination_class = CustomPagination
+    def list(self, request, *args, **kwargs):
+        try:
+            queryset = self.filter_queryset(self.get_queryset())
+            page = self.paginate_queryset(queryset)
+            if page is not None:
+                serializer = self.get_serializer(page, many=True)
+                return self.get_paginated_response(serializer.data)  # 关键点
+            serializer = self.get_serializer(queryset, many=True)
+            return ApiResponse(code=200, data=serializer.data, message="列表获取成功")
+        except Exception as e:
+            return ApiResponse(code=500, message=f"列表获取失败: {str(e)}")
 
     def get_permissions(self):
         """根据不同操作返回不同的权限类"""

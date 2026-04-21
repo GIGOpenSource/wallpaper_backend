@@ -14,7 +14,7 @@ from django.db.models import F
 
 from models.models import WallpaperComment, Wallpapers, Notification, WallpaperCommentLike
 from tool.base_views import BaseViewSet
-from tool.permissions import IsCustomerTokenValid
+from tool.permissions import IsCustomerTokenValid, IsAdmin
 from tool.token_tools import CustomTokenTool
 from tool.utils import ApiResponse, CustomPagination
 from tool.middleware import logger
@@ -72,6 +72,47 @@ class WallpaperCommentSerializer(serializers.ModelSerializer):
         return WallpaperCommentLike.objects.filter(customer_id=customer_id, comment_id=obj.id).exists()
 
 
+class WallpaperCommentAdminSerializer(serializers.ModelSerializer):
+    """壁纸评论序列化器（管理员使用，不包含 is_liked）"""
+    customer_info = serializers.SerializerMethodField()
+    parent_comment = serializers.SerializerMethodField()
+    replies_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = WallpaperComment
+        fields = [
+            'id', 'customer_info', 'wallpaper', 'parent', 'parent_comment',
+            'content', 'like_count', 'is_hidden', 'replies_count',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'customer_info', 'like_count', 'created_at', 'updated_at', 'replies_count']
+
+    def get_customer_info(self, obj):
+        """获取评论用户信息"""
+        return {
+            'id': obj.customer.id,
+            'email': obj.customer.email,
+            'nickname': obj.customer.nickname,
+            'avatar_url': obj.customer.avatar_url,
+        }
+
+    def get_parent_comment(self, obj):
+        """获取父评论信息"""
+        if obj.parent:
+            return {
+                'id': obj.parent.id,
+                'customer_name': obj.parent.customer.nickname or obj.parent.customer.email,
+                'content': obj.parent.content[:50] + '...' if len(obj.parent.content) > 50 else obj.parent.content,
+                'customer_avatar_url': obj.parent.customer.avatar_url,
+            }
+        return None
+
+    def get_replies_count(self, obj):
+        """获取回复数量"""
+        if hasattr(obj, '_replies_count'):
+            return obj._replies_count
+        return obj.replies.count()
+
 @extend_schema(tags=["壁纸评论"])
 @extend_schema_view(
     list=extend_schema(
@@ -81,6 +122,7 @@ class WallpaperCommentSerializer(serializers.ModelSerializer):
             OpenApiParameter(name="wallpaper_id", type=int, required=False, description="壁纸ID"),
             OpenApiParameter(name="currentPage", type=int, required=False, description="当前页码"),
             OpenApiParameter(name="pageSize", type=int, required=False, description="每页数量"),
+            OpenApiParameter(name="is_hidden", type=bool, required=False, description="按隐藏状态筛选"),
         ],
         responses={
             200: {
@@ -149,6 +191,20 @@ class WallpaperCommentViewSet(BaseViewSet):
     pagination_class = CustomPagination
     permission_classes = []
 
+    def get_permissions(self):
+        """根据不同操作返回不同的权限类"""
+        if self.action == 'list':
+            # list 方法需要管理员权限
+            return [IsAdmin()]
+        # 其他操作保持原有权限（公开）
+        return []
+
+    def get_serializer_class(self):
+        """根据动作返回不同的序列化器"""
+        if self.action == 'list':
+            return WallpaperCommentAdminSerializer
+        return WallpaperCommentSerializer
+
     def get_serializer_context(self):
         ctx = super().get_serializer_context()
         tok = self.request.headers.get("token")
@@ -157,7 +213,37 @@ class WallpaperCommentViewSet(BaseViewSet):
             if ok:
                 ctx["customer_id"] = cid
         return ctx
-    
+
+    def list(self, request, *args, **kwargs):
+        """
+        管理员获取所有评论列表
+        """
+        queryset = self.filter_queryset(self.get_queryset())
+        # 支持按壁纸ID筛选
+        wallpaper_id = request.query_params.get('wallpaper_id')
+        if wallpaper_id:
+            try:
+                queryset = queryset.filter(wallpaper_id=int(wallpaper_id))
+            except (ValueError, TypeError):
+                pass
+        # 支持按隐藏状态筛选
+        is_hidden = request.query_params.get('is_hidden')
+        if is_hidden is not None:
+            if is_hidden.lower() == 'true':
+                queryset = queryset.filter(is_hidden=True)
+            elif is_hidden.lower() == 'false':
+                queryset = queryset.filter(is_hidden=False)
+        # 按时间倒序
+        queryset = queryset.order_by('-created_at')
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return ApiResponse(data=serializer.data, message="评论列表获取成功")
+
+
     @extend_schema(
         summary="获取壁纸的评论列表",
         description="获取指定壁纸的一级评论列表（支持分页，无需登录）",

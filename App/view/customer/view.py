@@ -1,15 +1,17 @@
 # -*- coding: UTF-8 -*-
 from django.db import IntegrityError
+from django.db.models import Count
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
 from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
 
 from models.models import CustomerUser
+from tool.base_views import BaseViewSet
 from tool.password_hasher import verify_password
-from tool.permissions import IsCustomerTokenValid
+from tool.permissions import IsCustomerTokenValid, IsAdmin
 from tool.token_tools import CustomTokenTool, generate_is_user_token
-from tool.utils import ApiResponse
+from tool.utils import ApiResponse, CustomPagination
 from django.utils.translation import gettext as _
 
 
@@ -49,27 +51,135 @@ class CustomerLoginSerializer(serializers.Serializer):
     )
 
 class CustomerProfileSerializer(serializers.ModelSerializer):
+    followers_count = serializers.SerializerMethodField()
+    following_count = serializers.SerializerMethodField()
     """用户信息序列化器"""
     class Meta:
         model = CustomerUser
-        fields = ("id", "email", "nickname", "gender", "avatar_url", "badge", "points", "level")
-        read_only_fields = ("id", "email", "points", "level")
+        fields = ("id", "email", "nickname", "gender", "avatar_url", "badge", "points",
+                  "level", "status", "followers_count","following_count")
+        read_only_fields = ("id", "email", "points", "level","followers_count","following_count")
+    
+    def get_followers_count(self, obj):
+        return obj.followers.count()
+    def get_following_count(self, obj):
+        return obj.following.count()
 
-
+class CustomerUserListSerializer(serializers.ModelSerializer):
+    followers_count = serializers.SerializerMethodField()
+    following_count = serializers.SerializerMethodField()
+    """用户列表序列化器（管理员使用）"""
+    class Meta:
+        model = CustomerUser
+        fields = ("id", "email", "nickname", "gender", "avatar_url", "badge", "points",
+                  "level", "status", "upload_count", "collection_count",
+                  "last_login", "created_at","followers_count","following_count")
+        read_only_fields = ("id", "email", "points", "level","followers_count","following_count", "created_at")
+    def get_followers_count(self, obj):
+        return obj.followers.count()
+    def get_following_count(self, obj):
+        return obj.following.count()
 
 @extend_schema(tags=["客户账户"])
-@extend_schema_view()
-class CustomerUserViewSet(viewsets.ViewSet):
+@extend_schema_view(
+    list=extend_schema(
+        summary="获取用户列表（管理员）",
+        description="支持按邮箱、昵称、状态筛选，并支持按创建时间、粉丝数、关注数、等级排序。",
+        parameters=[
+            OpenApiParameter(name="currentPage", type=int, required=False, description="当前页码"),
+            OpenApiParameter(name="pageSize", type=int, required=False, description="每页数量"),
+            OpenApiParameter(name="email", type=str, required=False, description="按邮箱模糊搜索"),
+            OpenApiParameter(name="nickname", type=str, required=False, description="按昵称模糊搜索"),
+            OpenApiParameter(name="status", type=int, required=False, description="用户状态：1=正常，2=禁用"),
+            OpenApiParameter(
+                name="order",
+                type=str,
+                required=False,
+                description="排序方式：latest=最新创建，fans=粉丝数降序，following=关注数降序，level=等级降序",
+            ),
+        ],
+        responses={200: CustomerUserListSerializer(many=True)},
+    ),
+    retrieve=extend_schema(
+        summary="获取用户详情",
+        responses={200: CustomerUserListSerializer, 404: "用户不存在"},
+    ),
+    create=extend_schema(
+        summary="创建用户",
+        request=CustomerUserListSerializer,
+        responses={200: CustomerUserListSerializer},
+    ),
+    update=extend_schema(
+        summary="更新用户",
+        request=CustomerUserListSerializer,
+        responses={200: CustomerUserListSerializer, 404: "用户不存在"},
+    ),
+    partial_update=extend_schema(
+        summary="部分更新用户",
+        request=CustomerUserListSerializer,
+        responses={200: CustomerUserListSerializer, 404: "用户不存在"},
+    ),
+    destroy=extend_schema(
+        summary="删除用户（管理员）",
+        description="删除指定用户记录",
+        responses={204: "删除成功", 404: "用户不存在"},
+    ),
+)
+class CustomerUserViewSet(BaseViewSet):
     permission_classes_by_action = {
         "register": [],
         "login": [],
         "logout": [IsCustomerTokenValid],
         "profile": [],
         "update_profile": [IsCustomerTokenValid],
+        "list": [IsAdmin],
     }
-
     def get_permissions(self):
         return [p() for p in self.permission_classes_by_action.get(self.action, [])]
+
+    def list(self, request, *args, **kwargs):
+        """
+        管理员获取用户列表（支持分页、筛选、排序）
+        - followers_count: 粉丝数（多少人关注我）
+        - following_count: 关注数（我关注多少人）
+        """
+        queryset = CustomerUser.objects.annotate(
+            followers_count=Count("followers", distinct=True),  # UserFollow.following -> related_name="followers"
+            following_count=Count("following", distinct=True),  # UserFollow.follower  -> related_name="following"
+        )
+        # 按邮箱搜索
+        email = request.query_params.get("email", "").strip()
+        if email:
+            queryset = queryset.filter(email__icontains=email)
+        # 按昵称搜索
+        nickname = request.query_params.get("nickname", "").strip()
+        if nickname:
+            queryset = queryset.filter(nickname__icontains=nickname)
+        # 按状态筛选：1=正常，2=禁用
+        status = request.query_params.get("status")
+        if status:
+            try:
+                status = int(status)
+                if status in [1, 2]:
+                    queryset = queryset.filter(status=status)
+            except (ValueError, TypeError):
+                pass
+        # 排序
+        order = request.query_params.get("order", "latest").lower()
+        order_mapping = {
+            "latest": "-created_at",
+            "fans": "-followers_count",
+            "following": "-following_count",
+            "level": "-level",
+        }
+        queryset = queryset.order_by(order_mapping.get(order, "-created_at"))
+        paginator = CustomPagination()
+        page = paginator.paginate_queryset(queryset, request)
+        if page is not None:
+            serializer = CustomerUserListSerializer(page, many=True)
+            return paginator.get_paginated_response(serializer.data)
+        serializer = CustomerUserListSerializer(queryset, many=True)
+        return ApiResponse(data=serializer.data, message="用户列表获取成功")
 
     @extend_schema(
         request=CustomerRegisterSerializer,

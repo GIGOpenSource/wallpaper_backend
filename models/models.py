@@ -28,7 +28,8 @@ class CustomerUser(models.Model):
     collection_count = models.IntegerField(default=0, verbose_name="收藏数")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
-
+    # 用户状态
+    status = models.SmallIntegerField(default=1, choices=[(1, "正常"), (2, "禁用")], verbose_name="用户状态")
 
     class Meta:
         db_table = 't_customer_user'
@@ -492,3 +493,72 @@ class DashboardStats(models.Model):
     
     def __str__(self):
         return f"{self.stat_date} 统计数据"
+
+
+class DashboardStats(models.Model):
+    """
+    面板统计表：存储每日统计数据快照
+    每天8:00后第一次请求时更新当日数据，避免频繁查询数据库
+    """
+    stat_date = models.DateField(unique=True, verbose_name="统计日期")
+    total_users = models.IntegerField(default=0, verbose_name="总用户数量")
+    total_wallpapers = models.IntegerField(default=0, verbose_name="总壁纸数量")
+    total_views = models.BigIntegerField(default=0, verbose_name="总浏览量")
+    total_downloads = models.BigIntegerField(default=0, verbose_name="总下载量")
+    total_likes = models.IntegerField(default=0, verbose_name="总点赞数")
+    total_collections = models.IntegerField(default=0, verbose_name="总收藏数")
+    daily_active_users = models.IntegerField(default=0, verbose_name="日活跃用户数")
+    weekly_active_users = models.IntegerField(default=0, verbose_name="周活跃用户数")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+
+    class Meta:
+        db_table = 't_dashboard_stats'
+        verbose_name = '面板统计数据'
+        verbose_name_plural = '面板统计数据'
+        ordering = ['-stat_date']
+        indexes = [
+            models.Index(fields=['-stat_date']),
+        ]
+
+    def __str__(self):
+        return f"{self.stat_date} 统计数据"
+
+
+class Report(models.Model):
+    """
+    举报表：记录用户对壁纸或评论的举报
+    """
+    REPORT_TYPE_CHOICES = [('wallpaper', '壁纸'),('comment', '评论'),('user', '用户'),]
+    REPORT_REASON_CHOICES = [('inappropriate', '内容不当'),('copyright', '侵权'),('spam', '垃圾信息'),('harassment', '骚扰'),
+        ('violence', '暴力'),('pornography', '色情'),('political', '政治敏感'),('other', '其他'),
+    ]
+    REPORT_STATUS_CHOICES = [('pending', '待处理'),('processing', '处理中'),('resolved', '已解决'),('rejected', '已驳回'),]
+    reporter = models.ForeignKey(CustomerUser,on_delete=models.CASCADE,related_name="reports",verbose_name="举报人")
+    report_type = models.CharField(max_length=20,choices=REPORT_TYPE_CHOICES,verbose_name="举报类型")
+    target_id = models.PositiveIntegerField(verbose_name="举报对象ID")
+    target_type = models.CharField(max_length=20,choices=REPORT_TYPE_CHOICES,verbose_name="举报对象类型")
+    reason = models.CharField(max_length=20,choices=REPORT_REASON_CHOICES,verbose_name="举报原因")
+    detail = models.TextField(blank=True, null=True, verbose_name="详细说明")
+    status = models.CharField(max_length=20,choices=REPORT_STATUS_CHOICES,default='pending',verbose_name="处理状态")
+    handler = models.ForeignKey(User,on_delete=models.SET_NULL,null=True,blank=True,related_name="handled_reports",
+                                verbose_name="处理人",db_constraint=False  # 不创建数据库外键约束
+    )
+    handle_result = models.TextField(blank=True, null=True, verbose_name="处理结果")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="举报时间")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+    handled_at = models.DateTimeField(blank=True, null=True, verbose_name="处理时间")
+
+    class Meta:
+        db_table = 't_report'
+        verbose_name = '举报记录'
+        verbose_name_plural = '举报记录'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['report_type', 'status']),
+            models.Index(fields=['reporter', '-created_at']),
+            models.Index(fields=['target_type', 'target_id']),
+        ]
+
+    def __str__(self):
+        return f"{self.reporter.email} 举报 {self.get_report_type_display()} #{self.target_id}"

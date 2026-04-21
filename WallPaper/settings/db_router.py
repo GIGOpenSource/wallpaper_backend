@@ -20,7 +20,8 @@ class AppDBRouter:
         """写入规则：禁止写入老库模型，所有写入都到新库"""
         model_path = f"{model._meta.app_label}.{model.__name__.lower()}"
         if model_path in self.OLD_DB_READ_ONLY_MODELS:
-            return 'old_db'  # 返回 None 禁止写入老库（抛出错误，防止误写）
+            # return 'old_db'  # 返回 None 禁止写入老库（抛出错误，防止误写）
+            return None  # 迁移时使用
         return 'default'  # 其他模型写入新库
 
     def allow_relation(self, obj1, obj2, **hints):
@@ -57,6 +58,5 @@ class AppDBRouter:
             # result = full_model_name in self.NEW_DB_MODELS
             print(f"新库迁移允许：{full_model_name}")
             return True
-
         # 其他数据库禁止迁移
         return False
