@@ -223,7 +223,7 @@ class NotificationViewSet(BaseViewSet):
 
     @extend_schema(
         summary="管理员发送系统公告",
-        description="send_to：all/special；notification_type：system/feature/Activity管理员向用户发送系统公告，支持发送给全部用户或指定用户",
+        description="send_to：all/specific；notification_type：system/feature/Activity管理员向用户发送系统公告，支持发送给全部用户或指定用户",
         request=AnnouncementSerializer,
         responses={
             200: {
@@ -285,7 +285,8 @@ class NotificationViewSet(BaseViewSet):
                         'title': title,
                         'content': content,
                         'sent_by_admin': request.user.username if hasattr(request, 'user') else 'system',
-                        'notification_type': notification_type
+                        'notification_type': notification_type,
+                        'send_to':send_to
                     }
                 )
             )
