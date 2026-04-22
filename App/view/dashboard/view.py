@@ -216,15 +216,22 @@ class DashboardStatsViewSet(BaseViewSet):
         
         logger.info(f"统计数据已保存: {stat_date}, 创建: {created}")
 
-
 class CustomerUserSerializer(serializers.ModelSerializer):
-    """客户用户序列化器"""
+    """客户用户序列化器（管理员使用）"""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # 在更新操作时，将 email 和 password 设为可选
+        if self.instance:  # 更新操作
+            self.fields['email'].required = False
+            self.fields['password'].required = False
 
     class Meta:
         model = CustomerUser
         fields = '__all__'
-
-
+        extra_kwargs = {
+            'password': {'write_only': True},  # 密码只写不读
+        }
 
 class CustomerProfileSerializer(serializers.ModelSerializer):
     followers_count = serializers.SerializerMethodField()
