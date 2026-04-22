@@ -385,7 +385,7 @@ class CollectionItemSerializer(serializers.ModelSerializer):
     ),
     retrieve=extend_schema(summary="获取壁纸详情", responses={200: WallpapersSerializer, 404: "壁纸不存在"}),
     create=extend_schema(summary="创建壁纸", request=WallpapersSerializer),
-    update=extend_schema(summary="更新壁纸(Admin或自己上传可删)", request=WallpapersSerializer),
+    # update=extend_schema(summary="更新壁纸(Admin或自己上传可删)", request=WallpapersSerializer),
     partial_update=extend_schema(summary="部分更新壁纸", request=WallpapersSerializer),
     destroy=extend_schema(summary="删除壁纸(Admin或自己上传可删)", description="删除指定壁纸记录",
                           responses={204: "删除成功", 404: "壁纸不存在"})
@@ -612,6 +612,111 @@ class WallpapersViewSet(BaseViewSet):
         ctx['include_detail_info'] = True
         serializer = self.get_serializer(instance, context=ctx)
         return ApiResponse(serializer.data)
+
+    @extend_schema(
+        summary="更新壁纸信息",
+        description="管理员或上传者可以更新壁纸信息，支持修改名称、描述、分类、标签等字段",
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "壁纸名称"},
+                    "description": {"type": "string", "description": "壁纸描述"},
+                    "source_url": {"type": "string", "description": "来源链接"},
+                    "has_watermark": {"type": "boolean", "description": "是否有水印"},
+                    "is_hd": {"type": "boolean", "description": "是否高清"},
+                    "is_live": {"type": "boolean", "description": "是否动态壁纸"},
+                    "category_ids": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "分类ID列表，如 [1, 3] 表示电脑+静态"
+                    },
+                    "tag_ids": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "标签ID列表，如 [3677, 3680]"
+                    },
+                    "audit_status": {
+                        "type": "string",
+                        "enum": ["pending", "approved", "rejected"],
+                        "description": "审核状态（仅管理员可修改）"
+                    },
+                    "audit_remark": {"type": "string", "description": "审核备注（仅管理员）"}
+                }
+            }
+        },
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "integer", "example": 200},
+                    "data": {"$ref": "#/components/schemas/Wallpapers"},
+                    "message": {"type": "string", "example": "更新成功"}
+                }
+            },
+            400: "参数错误",
+            403: "无权限",
+            404: "壁纸不存在"
+        }
+    )
+    def update(self, request, *args, **kwargs):
+        """
+        更新壁纸信息
+        - 支持修改：名称、描述、来源、水印、高清、动态、分类、标签
+        - 管理员可修改审核状态
+        - 分类和标签通过 category_ids 和 tag_ids 数组传递
+        """
+        from django.db import transaction
+        instance = self.get_object()
+        # 提取分类和标签ID（如果提供）
+        category_ids = request.data.pop('category_ids', None)
+        tag_ids = request.data.pop('tag_ids', None)
+        # 如果是非管理员，不允许修改审核相关字段
+        is_admin = False
+        if hasattr(request, 'user') and request.user:
+            from models.models import User
+            if isinstance(request.user, User) and request.user.role in ['admin', 'operator', 'super_admin']:
+                is_admin = True
+        if not is_admin:
+            # 移除审核相关字段
+            request.data.pop('audit_status', None)
+            request.data.pop('audit_remark', None)
+            request.data.pop('audited_at', None)
+        try:
+            with transaction.atomic():
+                # 更新基本字段
+                serializer = self.get_serializer(instance, data=request.data, partial=True)
+                serializer.is_valid(raise_exception=True)
+                self.perform_update(serializer)
+                # 更新分类（如果提供）
+                if category_ids is not None:
+                    if isinstance(category_ids, list):
+                        instance.category.set(category_ids)
+                    elif isinstance(category_ids, str):
+                        # 支持逗号分隔的字符串
+                        cat_id_list = [int(cid.strip()) for cid in category_ids.split(',') if cid.strip().isdigit()]
+                        instance.category.set(cat_id_list)
+                # 更新标签（如果提供）
+                if tag_ids is not None:
+                    if isinstance(tag_ids, list):
+                        instance.tags.set(tag_ids)
+                    elif isinstance(tag_ids, str):
+                        # 支持逗号分隔的字符串
+                        tag_id_list = [int(tid.strip()) for tid in tag_ids.split(',') if tid.strip().isdigit()]
+                        instance.tags.set(tag_id_list)
+                # 刷新实例以获取最新数据
+                instance.refresh_from_db()
+                # 返回更新后的完整数据
+                ctx = self.get_serializer_context()
+                ctx['include_detail_info'] = True
+                response_serializer = WallpapersSerializer(instance, context=ctx)
+                return ApiResponse(
+                    data=response_serializer.data,
+                    message="壁纸更新成功"
+                )
+        except Exception as e:
+            logger.error(f"更新壁纸失败: {e}", exc_info=True)
+            return ApiResponse(code=500, message=f"更新失败：{str(e)}")
 
     @extend_schema(
         summary="审核通过单张壁纸(Admin)",
