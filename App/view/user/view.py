@@ -3,14 +3,14 @@
 from django.db import IntegrityError
 from rest_framework import viewsets, serializers
 from rest_framework.decorators import action
-from drf_spectacular.utils import extend_schema, extend_schema_view
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
 
 from models.models import User, Role
 from tool.base_views import BaseViewSet
 from tool.password_hasher import verify_password
-from tool.permissions import IsTokenValid, IsOwnerOrAdmin
+from tool.permissions import IsTokenValid, IsOwnerOrAdmin, IsAdmin
 from tool.token_tools import CustomTokenTool, generate_is_user_token
-from tool.utils import ApiResponse
+from tool.utils import ApiResponse, CustomPagination
 from django.utils.translation import gettext as _
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -153,6 +153,47 @@ class RoleSerializer(serializers.ModelSerializer):
         model = Role
         fields = '__all__'
 
-# #用户角色crud 继承baseview
-# class RoleViewSet(BaseViewSet):
-#
+@extend_schema(tags=["角色管理"])
+@extend_schema_view(
+    list=extend_schema(
+        summary="获取所有角色管理列表",
+        description="获取角色管理列表",
+        parameters=[
+            OpenApiParameter(name="user_type", type=int, required=False, description="角色"),
+        ],
+    ),
+    create=extend_schema(summary="创建角色"),
+    retrieve=extend_schema(summary="获取评论详情"),
+    update=extend_schema(
+        summary="更新角色",
+        description="修改角色内容",
+    ),
+    partial_update=extend_schema(
+        summary="部分更新角色",
+        description="部分修改自己的角色",
+    ),
+    destroy=extend_schema(
+        summary="删除角色论",
+        description="删除自己的角色",
+        responses={204: "删除成功", 404: "角色不存在"}
+    )
+)
+class RoleViewSet(BaseViewSet):
+    queryset = Role.objects.all()
+    serializer_class = RoleSerializer
+    pagination_class = CustomPagination
+    permission_classes = [IsAdmin]
+
+    def list(self, request, *args, **kwargs):
+        """
+        管理员获取所有评论列表
+        """
+        queryset = self.filter_queryset(self.get_queryset())
+        queryset = queryset.order_by('-created_at')
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return ApiResponse(data=serializer.data, message="角色列表获取成功")
