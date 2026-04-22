@@ -183,11 +183,14 @@ class RecommendStrategyViewSet(BaseViewSet):
             queryset = queryset.filter(id__in=active_list)
 
         return queryset
+
     @extend_schema(
         summary="获取推荐内容（首页/热门）",
         parameters=[
             OpenApiParameter(name="strategy_type", type=str, required=True, description="策略类型：home/hot"),
             OpenApiParameter(name="apply_area", type=str, required=False, description="应用区域，默认 global"),
+            OpenApiParameter(name="currentPage", type=int, required=False, description="当前页码，默认1"),
+            OpenApiParameter(name="pageSize", type=int, required=False, description="每页数量，默认20"),
         ],
     )
     @action(detail=False, methods=["get"], url_path="recommend")
@@ -228,31 +231,80 @@ class RecommendStrategyViewSet(BaseViewSet):
 
         wallpaper_map = Wallpapers.objects.filter(id__in=wallpaper_ids).in_bulk()
         ordered_wallpapers = [wallpaper_map[w_id] for w_id in wallpaper_ids if w_id in wallpaper_map]
+
+        total_count = len(ordered_wallpapers)
+
         if matched_strategy.content_limit and matched_strategy.content_limit > 0:
             ordered_wallpapers = ordered_wallpapers[: matched_strategy.content_limit]
+            total_count = min(total_count, matched_strategy.content_limit)
 
-        results = [
-            {
-                "id": wp.id,
-                "name": wp.name,
-                "thumb_url": wp.thumb_url,
-                "url": wp.url,
-                "width": wp.width,
-                "height": wp.height,
-                "download_count": wp.download_count,
-                "view_count": wp.view_count,
-                "hot_score": wp.hot_score,
-            }
-            for wp in ordered_wallpapers
-        ]
+        paginator = self.pagination_class()
+        page_size = paginator.get_page_size(request)
+        page_number = request.query_params.get(paginator.page_query_param, 1)
 
-        return ApiResponse(
-            data={
-                "strategy": RecommendStrategySerializer(matched_strategy).data,
-                "results": results,
-            },
-            message="推荐内容获取成功",
-        )
+        try:
+            from django.core.paginator import Paginator as DjangoPaginator, PageNotAnInteger, EmptyPage
+
+            django_paginator = DjangoPaginator(ordered_wallpapers, page_size)
+
+            try:
+                page_obj = django_paginator.page(page_number)
+            except PageNotAnInteger:
+                page_obj = django_paginator.page(1)
+            except EmptyPage:
+                page_obj = type('EmptyPage', (), {
+                    'number': int(page_number) if str(page_number).isdigit() else 1,
+                    'paginator': django_paginator,
+                    'object_list': []
+                })()
+
+            paginated_wallpapers = list(page_obj.object_list)
+
+            results = [
+                {
+                    "id": wp.id,
+                    "name": wp.name,
+                    "thumb_url": wp.thumb_url,
+                    "url": wp.url,
+                    "width": wp.width,
+                    "height": wp.height,
+                    "download_count": wp.download_count,
+                    "view_count": wp.view_count,
+                    "hot_score": wp.hot_score,
+                }
+                for wp in paginated_wallpapers
+            ]
+
+            if not results and hasattr(page_obj, 'object_list') and not page_obj.object_list:
+                return ApiResponse({
+                    'pagination': {
+                        'page': page_obj.number,
+                        'page_size': page_size,
+                        'total': total_count,
+                        'total_pages': django_paginator.num_pages
+                    },
+                    'results': [],
+                    'strategy': RecommendStrategySerializer(matched_strategy).data
+                })
+
+            return ApiResponse({
+                'pagination': {
+                    'page': page_obj.number,
+                    'page_size': page_size,
+                    'total': total_count,
+                    'total_pages': django_paginator.num_pages
+                },
+                'results': results,
+                'strategy': RecommendStrategySerializer(matched_strategy).data
+            })
+
+        except Exception as e:
+            return ApiResponse(
+                code=500,
+                message=f"分页处理失败: {str(e)}"
+            )
+
+
     @extend_schema(
         summary="获取策略统计数据",
         description="根据策略类型统计策略总数、生效中、已过期、内容总数",
