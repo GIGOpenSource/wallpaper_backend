@@ -812,11 +812,9 @@ class WallpapersViewSet(BaseViewSet):
                     instance.audit_remark = str(audit_remark).strip() or None
 
                 instance.save()
-
                 # 提取分类和标签ID
                 category_ids = request.data.get("category_ids")
                 tag_ids = request.data.get("tag_ids")
-
                 # 更新分类（如果提供）
                 if category_ids is not None:
                     instance.category.clear()
@@ -827,7 +825,15 @@ class WallpapersViewSet(BaseViewSet):
                             except (ValueError, TypeError):
                                 pass
                     elif isinstance(category_ids, str):
-                        cat_id_list = [int(cid.strip()) for cid in category_ids.split(',') if cid.strip().isdigit()]
+                        cat_id_list = []
+                        clean_str = category_ids.strip().strip('[]')
+                        for cid in clean_str.split(','):
+                            cid_clean = cid.strip()
+                            if cid_clean:
+                                try:
+                                    cat_id_list.append(int(cid_clean))
+                                except ValueError:
+                                    pass
                         for cid in cat_id_list:
                             instance.category.add(cid)
                 # 更新标签（如果提供）
@@ -840,10 +846,17 @@ class WallpapersViewSet(BaseViewSet):
                             except (ValueError, TypeError):
                                 pass
                     elif isinstance(tag_ids, str):
-                        tag_id_list = [int(tid.strip()) for tid in tag_ids.split(',') if tid.strip().isdigit()]
+                        tag_id_list = []
+                        clean_str = tag_ids.strip().strip('[]')
+                        for tid in clean_str.split(','):
+                            tid_clean = tid.strip()
+                            if tid_clean:
+                                try:
+                                    tag_id_list.append(int(tid_clean))
+                                except ValueError:
+                                    pass
                         for tid in tag_id_list:
                             instance.tags.add(tid)
-
                 # 刷新实例以获取最新数据
                 instance.refresh_from_db()
 
