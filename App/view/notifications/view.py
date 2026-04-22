@@ -172,6 +172,10 @@ class NotificationViewSet(BaseViewSet):
     def get_queryset(self):
         """只返回当前用户的通知"""
         current_user_id = self.get_serializer_context().get('current_user_id')
+
+        is_admin = self.get_serializer_context().get('is_admin', False)
+        if is_admin:
+            return Notification.objects.all()
         if current_user_id:
             return Notification.objects.filter(recipient_id=current_user_id)
         return Notification.objects.none()
