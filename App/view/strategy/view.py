@@ -1,10 +1,9 @@
-# -*- coding: UTF-8 -*-
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
 from rest_framework import serializers
 from rest_framework.decorators import action
 
-from models.models import RecommendStrategy, Wallpapers
+from models.models import RecommendStrategy, Wallpapers, StrategyWallpaperRelation
 from tool.base_views import BaseViewSet
 from tool.permissions import IsAdmin
 from tool.utils import ApiResponse, CustomPagination
@@ -26,7 +25,6 @@ class RecommendStrategySerializer(serializers.ModelSerializer):
             "end_time",
             "status",
             "stats_data",
-            "wallpaper_ids",
             "platform",
             "remark",
             "created_at",
@@ -34,18 +32,6 @@ class RecommendStrategySerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
 
-    def validate_wallpaper_ids(self, value):
-        if value is None:
-            return []
-        if not isinstance(value, list):
-            raise serializers.ValidationError("wallpaper_ids 必须是数组")
-        clean_ids = []
-        for item in value:
-            try:
-                clean_ids.append(int(item))
-            except (TypeError, ValueError):
-                raise serializers.ValidationError("wallpaper_ids 中必须是整数ID")
-        return clean_ids
 
     def validate(self, attrs):
         start_time = attrs.get("start_time", getattr(self.instance, "start_time", None))
@@ -53,6 +39,7 @@ class RecommendStrategySerializer(serializers.ModelSerializer):
         if start_time and end_time and start_time > end_time:
             raise serializers.ValidationError("start_time 不能晚于 end_time")
         return attrs
+
 @extend_schema(tags=["推荐策略"])
 @extend_schema_view(
     list=extend_schema(
@@ -211,4 +198,203 @@ class RecommendStrategyViewSet(BaseViewSet):
                 "total_content_count": total_content_count,
             },
             message="获取成功"
+        )
+
+
+
+
+class StrategyWallpaperSerializer(serializers.ModelSerializer):
+    """策略壁纸关联序列化器"""
+    wallpaper_info = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StrategyWallpaperRelation
+        fields = [
+            'id', 'strategy', 'wallpaper', 'wallpaper_info',
+            'sort_order', 'created_at'
+        ]
+        read_only_fields = ['id', 'created_at']
+
+    def get_wallpaper_info(self, obj):
+        """获取壁纸详细信息"""
+        return {
+            'id': obj.wallpaper.id,
+            'name': obj.wallpaper.name,
+            'url': obj.wallpaper.url,
+            'thumb_url': obj.wallpaper.thumb_url,
+            'width': obj.wallpaper.width,
+            'height': obj.wallpaper.height,
+            'image_format': obj.wallpaper.image_format,
+            'download_count': obj.wallpaper.download_count,
+            'view_count': obj.wallpaper.view_count,
+            'hot_score': obj.wallpaper.hot_score,
+        }
+
+
+@extend_schema(tags=["策略内容管理"])
+@extend_schema_view(
+    list=extend_schema(
+        summary="获取策略的壁纸列表",
+        description="根据策略ID获取该策略关联的所有壁纸列表（支持分页和排序）",
+        parameters=[
+            OpenApiParameter(name="strategy_id", type=int, required=True, description="策略ID"),
+            OpenApiParameter(name="currentPage", type=int, required=False, description="当前页码"),
+            OpenApiParameter(name="pageSize", type=int, required=False, description="每页数量"),
+        ],
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "integer", "example": 200},
+                    "data": {
+                        "type": "object",
+                        "properties": {
+                            "results": {"type": "array", "items": {"$ref": "#/components/schemas/StrategyWallpaper"}},
+                            "pagination": {
+                                "type": "object",
+                                "properties": {
+                                    "page": {"type": "integer"},
+                                    "page_size": {"type": "integer"},
+                                    "total": {"type": "integer"},
+                                    "total_pages": {"type": "integer"}
+                                }
+                            }
+                        }
+                    },
+                    "message": {"type": "string", "example": "获取成功"}
+                }
+            },
+            404: {"description": "策略不存在"}
+        }
+    ),
+    create=extend_schema(
+        summary="批量添加壁纸到策略",
+        description="向指定策略批量添加壁纸关联",
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "strategy_id": {"type": "integer", "description": "策略ID"},
+                    "wallpaper_ids": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "壁纸ID列表"
+                    }
+                },
+                "required": ["strategy_id", "wallpaper_ids"]
+            }
+        },
+        responses={
+            201: {"description": "添加成功"},
+            400: {"description": "参数错误"},
+            404: {"description": "策略或壁纸不存在"}
+        }
+    ),
+    destroy=extend_schema(
+        summary="删除策略与壁纸的关联",
+        description="移除策略与指定壁纸的关联关系",
+        responses={
+            204: {"description": "删除成功"},
+            404: {"description": "关联不存在"}
+        }
+    )
+)
+class StrategyContentViewSet(BaseViewSet):
+    """
+    策略内容管理 ViewSet
+    管理推荐策略与壁纸的关联关系
+    """
+    queryset = StrategyWallpaperRelation.objects.all()
+    serializer_class = StrategyWallpaperSerializer
+    pagination_class = CustomPagination
+    permission_classes = [IsAdmin]
+
+    def list(self, request, *args, **kwargs):
+        """获取策略的壁纸列表"""
+        strategy_id = request.query_params.get('strategy_id')
+        if not strategy_id:
+            return ApiResponse(code=400, message="请提供 strategy_id")
+
+        try:
+            strategy_id = int(strategy_id)
+        except (TypeError, ValueError):
+            return ApiResponse(code=400, message="strategy_id 无效")
+
+        # 验证策略是否存在
+        try:
+            strategy = RecommendStrategy.objects.get(id=strategy_id)
+        except RecommendStrategy.DoesNotExist:
+            return ApiResponse(code=404, message="策略不存在")
+
+        # 查询该策略关联的所有壁纸，按排序权重排序
+        queryset = StrategyWallpaperRelation.objects.filter(
+            strategy_id=strategy_id
+        ).select_related('wallpaper').order_by('sort_order', '-created_at')
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return ApiResponse(data=serializer.data, message="获取成功")
+
+    def create(self, request, *args, **kwargs):
+        """批量添加壁纸到策略"""
+        strategy_id = request.data.get('strategy_id')
+        wallpaper_ids = request.data.get('wallpaper_ids', [])
+
+        if not strategy_id:
+            return ApiResponse(code=400, message="请提供 strategy_id")
+
+        if not wallpaper_ids or not isinstance(wallpaper_ids, list):
+            return ApiResponse(code=400, message="wallpaper_ids 必须是非空数组")
+
+        try:
+            strategy_id = int(strategy_id)
+        except (TypeError, ValueError):
+            return ApiResponse(code=400, message="strategy_id 无效")
+
+        try:
+            strategy = RecommendStrategy.objects.get(id=strategy_id)
+        except RecommendStrategy.DoesNotExist:
+            return ApiResponse(code=404, message="策略不存在")
+
+        valid_wallpaper_ids = []
+        for wid in wallpaper_ids:
+            try:
+                wid = int(wid)
+                if not Wallpapers.objects.filter(id=wid).exists():
+                    continue
+                if not StrategyWallpaperRelation.objects.filter(
+                    strategy_id=strategy_id,
+                    wallpaper_id=wid
+                ).exists():
+                    valid_wallpaper_ids.append(wid)
+            except (TypeError, ValueError):
+                continue
+
+        if not valid_wallpaper_ids:
+            return ApiResponse(code=400, message="没有有效的壁纸ID可添加")
+
+        last_relation = StrategyWallpaperRelation.objects.filter(
+            strategy_id=strategy_id
+        ).order_by('-sort_order').first()
+
+        max_sort_order = last_relation.sort_order if last_relation else 0
+
+        relations = []
+        for idx, wid in enumerate(valid_wallpaper_ids):
+            relations.append(
+                StrategyWallpaperRelation(
+                    strategy_id=strategy_id,
+                    wallpaper_id=wid,
+                    sort_order=max_sort_order + idx + 1
+                )
+            )
+        StrategyWallpaperRelation.objects.bulk_create(relations)
+        return ApiResponse(
+            data={'added_count': len(relations)},
+            message=f"成功添加 {len(relations)} 个壁纸",
+            code=201
         )

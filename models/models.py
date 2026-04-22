@@ -567,7 +567,7 @@ class RecommendStrategy(models.Model):
     end_time = models.DateTimeField(blank=True, null=True, verbose_name="生效结束时间")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="draft", verbose_name="状态")
     stats_data = models.JSONField(default=dict, blank=True, verbose_name="统计数据")
-    wallpaper_ids = models.JSONField(default=list, blank=True, verbose_name="策略内容（壁纸ID列表）")
+    # wallpaper_ids = models.JSONField(default=list, blank=True, verbose_name="策略内容（壁纸ID列表）")
     remark = models.CharField(max_length=255, blank=True, null=True, verbose_name="备注")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
@@ -585,3 +585,37 @@ class RecommendStrategy(models.Model):
 
     def __str__(self):
         return f"{self.name} [{self.strategy_type}]"
+
+
+
+class StrategyWallpaperRelation(models.Model):
+    """
+    策略壁纸关联表：用于管理推荐策略与壁纸的多对多关系
+    删除此表不会影响策略表和壁纸表的数据完整性
+    """
+    strategy = models.ForeignKey(
+        RecommendStrategy,
+        on_delete=models.CASCADE,
+        related_name="strategy_wallpaper_relations",
+        verbose_name="推荐策略"
+    )
+    wallpaper = models.ForeignKey(
+        Wallpapers,
+        on_delete=models.CASCADE,
+        related_name="strategy_wallpaper_relations",
+        verbose_name="壁纸"
+    )
+    sort_order = models.PositiveIntegerField(default=0, verbose_name="排序权重（数值越小越靠前）")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    class Meta:
+        db_table = "t_strategy_wallpaper_relation"
+        verbose_name = "策略壁纸关联"
+        verbose_name_plural = "策略壁纸关联"
+        unique_together = ('strategy', 'wallpaper')  # 确保同一策略不会重复关联同个壁纸
+        ordering = ['strategy', 'sort_order', '-created_at']
+        indexes = [
+            models.Index(fields=['strategy', 'sort_order']),
+            models.Index(fields=['wallpaper', '-created_at']),
+        ]
+    def __str__(self):
+        return f"{self.strategy.name} → {self.wallpaper.name}"
