@@ -439,33 +439,36 @@ class SiteConfig(models.Model):
     """
     网站配置表：存储帮助与支持、关于、隐私政策等富文本内容
     """
-    CONFIG_TYPE_CHOICES = [
-        ('help', '帮助与支持'),
-        ('about', '关于'),
-        ('privacy', '隐私政策'),
-        ('terms', '服务条款'),
+    CONFIG_TYPE_CHOICES = [('help', '帮助与支持'),('about', '关于'),('privacy', '隐私政策'),
+        ('terms', '服务条款'),('basic_settings', '网站基础设置')]
+    LANGUAGE_CHOICES = [('es', '西班牙语'),('en', '英语'),('pt', '葡萄牙语'),
+        ('ja', '日语'),('ko', '韩语'),('zh-hans', '简体中文'),('zh-hant', '繁体中文'),
+        ('de', '德语'),('fr', '法语'),
     ]
-    
-    config_type = models.CharField(
-        max_length=20,
-        choices=CONFIG_TYPE_CHOICES,
-        unique=True,
-        verbose_name="配置类型"
-    )
+    config_type = models.CharField(max_length=20,choices=CONFIG_TYPE_CHOICES,unique=True,verbose_name="配置类型")
+    config_value = models.JSONField(default=dict,verbose_name="配置值")
     title = models.CharField(max_length=200, verbose_name="标题")
     content = models.TextField(verbose_name="富文本内容")  # 存储 HTML 富文本
     is_active = models.BooleanField(default=True, verbose_name="是否启用")
+    language = models.CharField(max_length=10,choices=LANGUAGE_CHOICES,default='zh-hans',verbose_name="语言"
+    )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
-    
+
     class Meta:
         db_table = 't_site_config'
         verbose_name = '网站配置'
         verbose_name_plural = '网站配置'
-        ordering = ['-updated_at']
-    
+        ordering = ['config_type', '-updated_at']
+        indexes = [
+            models.Index(fields=['config_type']),
+            models.Index(fields=['config_type', 'language']),
+        ]
+
     def __str__(self):
-        return f"{self.get_config_type_display()} - {self.title}"
+        if self.language:
+            return f"{self.get_config_type_display()} - {self.get_language_display()}"
+        return f"{self.get_config_type_display()}"
 
 
 class DashboardStats(models.Model):
