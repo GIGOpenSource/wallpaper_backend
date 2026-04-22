@@ -130,8 +130,6 @@ class RecommendStrategyViewSet(BaseViewSet):
         serializer = self.get_serializer(queryset, many=True)
         return ApiResponse(data=serializer.data, message="策略列表获取成功")
 
-
-
     @extend_schema(
         summary="获取策略统计数据",
         description="根据策略类型统计策略总数、生效中、已过期、内容总数",
@@ -149,7 +147,8 @@ class RecommendStrategyViewSet(BaseViewSet):
                             "total_count": {"type": "integer", "description": "策略总数"},
                             "active_count": {"type": "integer", "description": "生效中数量"},
                             "expired_count": {"type": "integer", "description": "已过期数量"},
-                            "total_content_count": {"type": "integer", "description": "内容总数（所有策略的壁纸数量之和）"}
+                            "total_content_count": {"type": "integer",
+                                                    "description": "内容总数（所有策略的壁纸数量之和）"}
                         }
                     },
                     "message": {"type": "string", "example": "获取成功"}
@@ -166,10 +165,8 @@ class RecommendStrategyViewSet(BaseViewSet):
 
         now = timezone.now()
 
-        # 策略总数
         total_count = RecommendStrategy.objects.filter(strategy_type=strategy_type).count()
 
-        # 生效中数量（status=active 且在有效期内）
         active_strategies = RecommendStrategy.objects.filter(
             strategy_type=strategy_type,
             status="active"
@@ -178,18 +175,22 @@ class RecommendStrategyViewSet(BaseViewSet):
         for s in active_strategies:
             if (s.start_time is None or s.start_time <= now) and (s.end_time is None or s.end_time >= now):
                 active_count += 1
-        # 已过期数量（status=active 但已过结束时间）
+
         expired_count = RecommendStrategy.objects.filter(
             strategy_type=strategy_type,
             status="active",
             end_time__isnull=False,
             end_time__lt=now
         ).count()
-        # 内容总数（所有策略的壁纸数量之和）
-        strategies = RecommendStrategy.objects.filter(strategy_type=strategy_type)
-        total_content_count = sum(
-            len(s.wallpaper_ids or []) for s in strategies
-        )
+
+        strategy_ids = RecommendStrategy.objects.filter(
+            strategy_type=strategy_type
+        ).values_list('id', flat=True)
+
+        total_content_count = StrategyWallpaperRelation.objects.filter(
+            strategy_id__in=strategy_ids
+        ).count()
+
         return ApiResponse(
             data={
                 "total_count": total_count,
