@@ -38,7 +38,7 @@ from models.models import (
     WallpaperLike,
     WallpaperCollection,
     CustomerWallpaperUpload,
-    CustomerUser, RecommendStrategy,
+    CustomerUser, RecommendStrategy, StrategyWallpaperRelation,
 )
 from tool.operation_log import log_operation
 
@@ -1687,19 +1687,25 @@ class WallpapersViewSet(BaseViewSet):
                     continue
                 matched_strategy = item
                 break
-        if matched_strategy and matched_strategy.wallpaper_ids:
-            wallpaper_ids = matched_strategy.wallpaper_ids
+        if matched_strategy:
+            # 通过关联表查询壁纸，按排序权重排序
+            relations = StrategyWallpaperRelation.objects.filter(
+                strategy=matched_strategy
+            ).select_related('wallpaper').order_by('sort_order', '-created_at')
+
+            # 如果有限制数量
             if matched_strategy.content_limit and matched_strategy.content_limit > 0:
-                wallpaper_ids = wallpaper_ids[:matched_strategy.content_limit]
+                relations = relations[:matched_strategy.content_limit]
 
-            wallpaper_map = Wallpapers.objects.filter(id__in=wallpaper_ids).in_bulk()
-            ordered_wallpapers = [wallpaper_map[w_id] for w_id in wallpaper_ids if w_id in wallpaper_map]
+            # 提取壁纸对象
+            ordered_wallpapers = [rel.wallpaper for rel in relations if rel.wallpaper]
 
-            serializer = self.get_serializer(ordered_wallpapers, many=True)
-            return ApiResponse(
-                data=serializer.data,
-                message="精选壁纸获取成功（来自推荐策略）"
-            )
+            if ordered_wallpapers:
+                serializer = self.get_serializer(ordered_wallpapers, many=True)
+                return ApiResponse(
+                    data=serializer.data,
+                    message="精选壁纸获取成功（来自推荐策略）"
+                )
         if platform == 'PC':
             queryset = Wallpapers.objects.filter(
                 category__id=1,
