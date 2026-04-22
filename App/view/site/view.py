@@ -7,6 +7,7 @@
 @Date    ：2026/4/16
 @description : 网站配置接口（帮助与支持、关于、隐私政策等）
 """
+from django.db import transaction
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
 from rest_framework import serializers
 from rest_framework.decorators import action
@@ -49,14 +50,6 @@ class BasicSettingsUpdateSerializer(serializers.Serializer):
     retrieve=extend_schema(
         summary="获取网站配置内容",
         description="根据配置类型获取富文本内容（帮助与支持、关于、隐私政策等）",
-        parameters=[
-            OpenApiParameter(
-                name="type",
-                type=str,
-                required=True,
-                description="配置类型",
-            ),
-        ],
         responses={
             200: {
                 "type": "object",
@@ -106,6 +99,17 @@ class BasicSettingsUpdateSerializer(serializers.Serializer):
                 }
             }
         }
+    ),
+    update=extend_schema(
+            summary="更新网站配置（管理员）",
+            description="根据ID更新指定配置",
+            request=SiteConfigSerializer,
+            responses={
+                200: SiteConfigSerializer,
+                400: "参数错误",
+                403: "无权限",
+                404: "配置不存在"
+            }
     )
 )
 class SiteConfigViewSet(BaseViewSet):
@@ -116,30 +120,62 @@ class SiteConfigViewSet(BaseViewSet):
     queryset = SiteConfig.objects.all()
     serializer_class = SiteConfigSerializer
     permission_classes = []
-    lookup_field = 'type'
+    lookup_field = "type"
+
+    def get_permissions(self):
+        if self.action in ["update", "partial_update", "destroy"]:
+            return [IsAdmin()]
+        return []
 
     def get_queryset(self):
-        """只返回启用的配置"""
+        if self.action in ["update", "partial_update", "destroy"]:
+            return SiteConfig.objects.all()
         return SiteConfig.objects.filter(is_active=True)
+
+    def get_object(self):
+        # 备份，避免污染其他请求
+        original_lookup_field = self.lookup_field
+        original_lookup_url_kwarg = getattr(self, 'lookup_url_kwarg', None)
+        try:
+            if self.action in ['update', 'partial_update']:
+                self.lookup_field = 'id'
+                self.lookup_url_kwarg = 'type'
+            elif self.action == 'retrieve':
+                self.lookup_field = 'config_type'
+                self.lookup_url_kwarg = 'type'
+            return super().get_object()
+        finally:
+            # 还原，防止副作用
+            self.lookup_field = original_lookup_field
+            self.lookup_url_kwarg = original_lookup_url_kwarg
 
     def retrieve(self, request, *args, **kwargs):
         """获取单个配置内容"""
-        config_type = kwargs.get('type')
-        request.query_params.get('type')
-        # 验证配置类型是否有效
-        valid_types = dict(SiteConfig.CONFIG_TYPE_CHOICES).keys()
-        if config_type not in valid_types:
-            return ApiResponse(
-                code=400,
-                message=f"无效的配置类型，可选值：{', '.join(valid_types)}"
-            )
-        try:
-            config = SiteConfig.objects.get(config_type=config_type, is_active=True)
-        except SiteConfig.DoesNotExist:
-            return ApiResponse(code=404, message="配置不存在或已禁用")
-
-        serializer = self.get_serializer(config)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
         return ApiResponse(data=serializer.data, message="获取成功")
+
+    def update(self, request, *args, **kwargs):
+        try:
+            instance = self.get_object()
+            request_data = request.data
+            # 不允许更新的字段
+            protected_fields = {"id", "created_at", "updated_at"}
+            # 只更新模型真实字段（避免脏字段写入）
+            model_fields = {f.name for f in SiteConfig._meta.fields}
+            with transaction.atomic():
+                for key, value in request_data.items():
+                    if key in protected_fields:
+                        continue
+                    if key in model_fields:
+                        setattr(instance, key, value)
+                instance.save()
+            serializer = self.get_serializer(instance)
+            return ApiResponse(data=serializer.data, message="更新成功")
+        except Exception as e:
+            return ApiResponse(code=500, message=f"更新失败: {str(e)}")
+
+
 
     def list(self, request, *args, **kwargs):
         """获取所有启用的配置列表"""
@@ -252,9 +288,7 @@ class SiteConfigViewSet(BaseViewSet):
         # 合并现有配置和新配置
         current_value = config.config_value or {}
         updated_value = {**current_value, **serializer.validated_data}
-
         # 更新配置值
         config.config_value = updated_value
         config.save()
-
         return ApiResponse(data=updated_value, message="更新成功")
