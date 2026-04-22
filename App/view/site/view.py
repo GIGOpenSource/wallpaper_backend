@@ -116,7 +116,6 @@ class SiteConfigViewSet(BaseViewSet):
     queryset = SiteConfig.objects.all()
     serializer_class = SiteConfigSerializer
     permission_classes = []
-    authentication_classes = []
     lookup_field = 'type'
 
     def get_queryset(self):

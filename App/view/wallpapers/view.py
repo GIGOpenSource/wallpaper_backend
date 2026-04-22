@@ -15,6 +15,7 @@ from django.db import transaction
 from django.db.models import F
 from django.db.models.functions import Greatest
 from PIL import Image
+from django.utils import timezone
 
 from App.view.wallpapers.search_models.search_models import TAG_MAPPING
 from tool.base_views import BaseViewSet
@@ -1131,6 +1132,218 @@ class WallpapersViewSet(BaseViewSet):
         ).data
         return ApiResponse(data=data, message="获取收藏列表成功")
 
+    @extend_schema(
+        summary="管理员上传壁纸",
+        description=(
+                "管理员上传壁纸到 COS，自动处理原图和缩略图。"
+                "支持设置分类、标签、审核状态等完整字段。"
+        ),
+        request={
+            "multipart/form-data": {
+                "type": "object",
+                "properties": {
+                    "file": {"type": "string", "format": "binary", "description": "壁纸文件（必填）"},
+                    "name": {"type": "string", "description": "壁纸名称（必填）"},
+                    "platform": {"type": "string", "enum": ["PC", "PHONE"],
+                                 "description": "平台：PC 或 PHONE（必填）"},
+                    "description": {"type": "string", "description": "壁纸描述（可选）"},
+                    "source_url": {"type": "string", "description": "来源链接（可选）"},
+                    "has_watermark": {"type": "boolean", "description": "是否有水印（可选，默认 false）"},
+                    "category_ids": {
+                        "type": "string",
+                        "description": "分类 ID 列表，逗号分隔，如 '1,3' 表示电脑+静态（可选）"
+                    },
+                    "tag_ids": {
+                        "type": "string",
+                        "description": "标签 ID 列表，逗号分隔，如 '3677,3680'（可选）"
+                    },
+                    "audit_status": {
+                        "type": "string",
+                        "enum": ["pending", "approved", "rejected"],
+                        "description": "审核状态（可选，默认 pending）"
+                    },
+                    "audit_remark": {"type": "string", "description": "审核备注（可选）"}
+                },
+                "required": ["file", "name", "platform"]
+            }
+        },
+        responses={
+            201: {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "integer", "example": 201},
+                    "data": {"$ref": "#/components/schemas/Wallpapers"},
+                    "message": {"type": "string", "example": "上传成功"}
+                }
+            },
+            400: "参数错误",
+            500: "服务器错误"
+        }
+    )
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="upload-admin",
+        permission_classes=[IsAdmin],
+        parser_classes=[MultiPartParser, FormParser],
+    )
+    def upload_admin(self, request):
+        """
+        管理员上传壁纸
+        - 自动处理原图和缩略图
+        - 支持设置分类、标签、审核状态
+        - 需要管理员权限
+        """
+        from django.db import transaction
+
+        # 验证文件
+        uploaded_file = request.FILES.get("file")
+        if not uploaded_file:
+            return ApiResponse(code=400, message="请上传文件 file")
+
+        # 验证必填字段
+        name = (request.data.get("name") or "").strip()
+        if not name:
+            return ApiResponse(code=400, message="请提供壁纸名称 name")
+
+        platform = (request.data.get("platform") or "").upper()
+        if platform not in ['PC', 'PHONE']:
+            return ApiResponse(code=400, message="平台参数错误，请输入 PC 或 PHONE")
+
+        # 解析可选字段
+        description = (request.data.get("description") or "").strip() or None
+        source_url = (request.data.get("source_url") or "").strip() or None
+        has_watermark = request.data.get("has_watermark", "false").lower() == "true"
+        audit_status = request.data.get("audit_status", "pending").strip()
+        audit_remark = (request.data.get("audit_remark") or "").strip() or None
+
+        # 验证审核状态
+        if audit_status and audit_status not in ['pending', 'approved', 'rejected']:
+            return ApiResponse(code=400, message="审核状态无效，可选值：pending/approved/rejected")
+
+        # 解析分类和标签
+        category_ids = _parse_tag_ids(request.data.get("category_ids"))
+        tag_ids = _parse_tag_ids(request.data.get("tag_ids"))
+
+        # 处理文件扩展名
+        orig_name = uploaded_file.name or "image.jpg"
+        _, orig_ext = os.path.splitext(orig_name)
+        ext = orig_ext.lower()
+        if ext not in (".jpg", ".jpeg", ".png", ".webp", ".gif", ".mp4"):
+            ext = ".jpg"
+
+        # 生成唯一的文件名
+        timestamp = timezone.now().strftime("%Y%m%d%H%M%S")
+        unique_id = uuid.uuid4().hex[:8]
+        unique_base = f"{timestamp}_{unique_id}"
+
+        # COS 路径
+        cos_key = f"wallpaper/{unique_base}{ext}"
+        thumb_cos_key = f"wallpaper/{unique_base}_thumb{ext}"
+        _ext_hint = ext.lstrip(".")
+
+        # 读取文件内容
+        try:
+            file_content = bytes_from_uploaded_image(uploaded_file, quality=100)
+        except Exception as e:
+            logger.error(f"读取上传文件失败: {e}", exc_info=True)
+            return ApiResponse(code=400, message=f"读取文件失败：{e}")
+
+        # 上传原图到 COS
+        cos_ret = upload_image_to_cos(file_content, cos_key)
+        if not cos_ret:
+            return ApiResponse(code=500, message="上传原图到云存储失败，请检查 COS 配置")
+
+        file_url = cos_ret["url"]
+
+        # 处理缩略图
+        if ext == ".mp4":
+            # 视频文件不生成缩略图
+            thumb_url = ""
+            w, h = 0, 0
+            pil_fmt = "mp4"
+        else:
+            # 图片文件生成缩略图
+            try:
+                uploaded_file.seek(0)
+                thumb_content = bytes_from_uploaded_image(uploaded_file, quality=10)
+                thumb_ret = upload_image_to_cos(thumb_content, thumb_cos_key)
+                if thumb_ret:
+                    thumb_url = thumb_ret["url"]
+                else:
+                    thumb_url = file_url.rsplit(".", 1)[0] + "_thumb." + _ext_hint
+
+                # 获取图片尺寸
+                w, h, pil_fmt = _image_meta_from_bytes(file_content)
+            except Exception as e:
+                logger.error(f"生成缩略图失败: {e}", exc_info=True)
+                thumb_url = file_url.rsplit(".", 1)[0] + "_thumb." + _ext_hint
+                w, h, pil_fmt = 0, 0, None
+
+        # 格式化图片格式
+        fmt = (pil_fmt or _ext_hint or "").lower()
+        if fmt == "jpeg":
+            fmt = "jpg"
+
+        # 自动判断是否高清
+        is_hd = w >= 1920 or h >= 1080 if (w and h) else False
+
+        # 判断是否动态壁纸
+        is_live = (ext == ".mp4")
+
+        # 确定分类
+        platform_cat_id = 1 if platform == 'PC' else 2
+        type_cat_id = 4 if is_live else 3
+
+        try:
+            with transaction.atomic():
+                # 创建壁纸记录
+                wp = Wallpapers.objects.create(
+                    name=name[:200],
+                    url=file_url[:500],
+                    thumb_url=thumb_url[:500] if thumb_url else None,
+                    width=w or 0,
+                    height=h or 0,
+                    image_format=(fmt[:20] if fmt else None),
+                    source_url=source_url[:500] if source_url else None,
+                    description=description,
+                    has_watermark=has_watermark,
+                    is_hd=is_hd,
+                    is_live=is_live,
+                    audit_status=audit_status if audit_status else 'pending',
+                    audit_remark=audit_remark,
+                    audited_at=timezone.now() if audit_status in ['approved', 'rejected'] else None
+                )
+
+                # 添加分类
+                if category_ids:
+                    wp.category.set(category_ids)
+                else:
+                    # 默认添加平台和类型分类
+                    wp.category.add(platform_cat_id, type_cat_id)
+
+                # 添加标签
+                if tag_ids:
+                    tag_objs = []
+                    for tid in tag_ids:
+                        t = WallpaperTag.objects.filter(pk=tid).first()
+                        if t:
+                            tag_objs.append(t)
+                    wp.tags.set(tag_objs)
+
+            # 返回完整的壁纸信息
+            ctx = self.get_serializer_context()
+            ctx['include_detail_info'] = True
+            serializer = WallpapersSerializer(wp, context=ctx)
+
+            return ApiResponse(
+                data=serializer.data,
+                message="上传成功",
+                code=201
+            )
+        except Exception as e:
+            logger.error(f"保存壁纸记录失败: {e}", exc_info=True)
+            return ApiResponse(code=500, message=f"保存壁纸失败：{e}")
     @extend_schema(
         summary="我的上传列表（仅需客户 Token）",
         description="查看当前用户上传的所有壁纸记录，支持分页和平台筛选",
