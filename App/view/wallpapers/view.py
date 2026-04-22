@@ -40,7 +40,7 @@ from models.models import (
     CustomerWallpaperUpload,
     CustomerUser, RecommendStrategy,
 )
-
+from tool.operation_log import log_operation
 
 def _parse_tag_ids(raw):
     if raw is None or raw == "":
@@ -864,6 +864,16 @@ class WallpapersViewSet(BaseViewSet):
                 ctx = self.get_serializer_context()
                 ctx['include_detail_info'] = True
                 response_serializer = WallpapersSerializer(instance, context=ctx)
+                action_desc = "更换图片并更新" if is_change else "更新信息"
+                log_operation(
+                    operator=request.user,
+                    module="壁纸管理",
+                    operation_type="update",
+                    target_id=instance.id,
+                    target_name=instance.name,
+                    description=f"{action_desc}壁纸：{instance.name}",
+                    request=request
+                )
                 return ApiResponse(
                     data=response_serializer.data,
                     message="更换图片并更新成功" if is_change else "更新成功"
@@ -893,6 +903,15 @@ class WallpapersViewSet(BaseViewSet):
         wallpaper.audit_remark = request.data.get('remark', '')
         wallpaper.save(update_fields=['audit_status', 'audited_at', 'audit_remark'])
         logger.info(f"壁纸 #{pk} 审核通过 by {request.user.username}")
+        log_operation(
+            operator=request.user,
+            module="壁纸管理",
+            operation_type="audit",
+            target_id=pk,
+            target_name=wallpaper.name,
+            description=f"审核通过壁纸：{wallpaper.name}",
+            request=request
+        )
         return ApiResponse(message="审核通过")
 
     @extend_schema(
@@ -919,6 +938,15 @@ class WallpapersViewSet(BaseViewSet):
         wallpaper.audit_remark = remark
         wallpaper.save(update_fields=['audit_status', 'audited_at', 'audit_remark'])
         logger.info(f"壁纸 #{pk} 审核拒绝 by {request.user.username}, 原因: {remark}")
+        log_operation(
+            operator=request.user,
+            module="壁纸管理",
+            operation_type="audit",
+            target_id=pk,
+            target_name=wallpaper.name,
+            description=f"审核拒绝壁纸：{wallpaper.name}，原因：{remark}",
+            request=request
+        )
         return ApiResponse(message="审核拒绝")
 
     @extend_schema(
@@ -952,6 +980,15 @@ class WallpapersViewSet(BaseViewSet):
 
         )
         logger.info(f"批量审核通过 {count} 张壁纸 by {request.user.username}")
+        log_operation(
+            operator=request.user,
+            module="壁纸管理",
+            operation_type="audit",
+            target_id=",".join(map(str, wallpaper_ids)),
+            description=f"批量审核通过 {count} 张壁纸",
+            request=request,
+            extra_data={"wallpaper_ids": wallpaper_ids}
+        )
         return ApiResponse(data={'count': count}, message=f"已审核通过 {count} 张壁纸")
 
     @extend_schema(
@@ -985,6 +1022,15 @@ class WallpapersViewSet(BaseViewSet):
             audit_remark=remark
         )
         logger.info(f"批量审核拒绝 {count} 张壁纸 by {request.user.username}, 原因: {remark}")
+        log_operation(
+            operator=request.user,
+            module="壁纸管理",
+            operation_type="audit",
+            target_id=",".join(map(str, wallpaper_ids)),
+            description=f"批量审核拒绝 {count} 张壁纸，原因：{remark}",
+            request=request,
+            extra_data={"wallpaper_ids": wallpaper_ids, "remark": remark}
+        )
         return ApiResponse(data={'count': count}, message=f"已审核拒绝 {count} 张壁纸")
 
 
@@ -1203,6 +1249,15 @@ class WallpapersViewSet(BaseViewSet):
         if deleted_count == 0:
             return ApiResponse(code=404, message="未找到可删除的壁纸")
         queryset.delete()
+        log_operation(
+            operator=request.user,
+            module="壁纸管理",
+            operation_type="delete",
+            target_id=",".join(map(str, valid_ids)),
+            description=f"批量删除 {deleted_count} 张壁纸",
+            request=request,
+            extra_data={"wallpaper_ids": valid_ids}
+        )
         return ApiResponse(
             data={"deleted_count": deleted_count, "wallpaper_ids": valid_ids},
             message=f"批量删除成功，共删除 {deleted_count} 条"
@@ -1475,7 +1530,15 @@ class WallpapersViewSet(BaseViewSet):
             ctx = self.get_serializer_context()
             ctx['include_detail_info'] = True
             serializer = WallpapersSerializer(wp, context=ctx)
-
+            log_operation(
+                operator=request.user,
+                module="壁纸管理",
+                operation_type="create",
+                target_id=wp.id,
+                target_name=wp.name,
+                description=f"管理员上传壁纸：{wp.name}",
+                request=request
+            )
             return ApiResponse(
                 data=serializer.data,
                 message="上传成功",

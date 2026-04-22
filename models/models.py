@@ -515,7 +515,7 @@ class Report(models.Model):
     reason = models.CharField(max_length=20,choices=REPORT_REASON_CHOICES,verbose_name="举报原因")
     detail = models.TextField(blank=True, null=True, verbose_name="详细说明")
     status = models.CharField(max_length=20,choices=REPORT_STATUS_CHOICES,default='pending',verbose_name="处理状态")
-    handler = models.ForeignKey(User,on_delete=models.SET_NULL,null=True,blank=True,related_name="handled_reports",
+    handler = models.ForeignKey(User,on_delete=models.DO_NOTHING,null=True,blank=True,related_name="handled_reports",
                                 verbose_name="处理人",db_constraint=False  # 不创建数据库外键约束
     )
     handle_result = models.TextField(blank=True, null=True, verbose_name="处理结果")
@@ -653,3 +653,91 @@ class Role(models.Model):
     def __str__(self):
         return f"{self.get_user_type_display()} - {self.name}"
 
+
+
+class CustomerUserRole(models.Model):
+    """
+    C端用户角色关联表：用于管理CustomerUser与角色的多对多关系
+    后台管理员(User)直接通过role字段关联Role.code，不需要此表
+    """
+    customer = models.ForeignKey(
+        CustomerUser,
+        on_delete=models.CASCADE,
+        related_name="role_relations",
+        verbose_name="C端用户"
+    )
+    role = models.ForeignKey(
+        Role,
+        on_delete=models.CASCADE,
+        related_name="customer_relations",
+        verbose_name="角色",
+        limit_choices_to={'user_type': 'customer'}
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="分配时间")
+    class Meta:
+        db_table = 't_customer_user_role'
+        verbose_name = 'C端用户角色关联'
+        verbose_name_plural = 'C端用户角色关联'
+        unique_together = ('customer', 'role')
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['customer', 'role']),
+        ]
+    def __str__(self):
+        return f"{self.customer.email} → {self.role.name}"
+
+
+class OperationLog(models.Model):
+    """
+    操作日志表：记录管理端的操作行为
+    """
+    OPERATION_TYPES = [
+        ('create', '创建'),
+        ('update', '更新'),
+        ('delete', '删除'),
+        ('query', '查询'),
+        ('export', '导出'),
+        ('import', '导入'),
+        ('login', '登录'),
+        ('logout', '登出'),
+        ('audit', '审核'),
+        ('other', '其他'),
+    ]
+    operator = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="operation_logs",
+        verbose_name="操作人",
+        db_constraint=False
+    )
+    operator_name = models.CharField(max_length=50, verbose_name="操作人姓名",
+                                     help_text="冗余字段，避免操作人删除后无法查看")
+    module = models.CharField(max_length=50, verbose_name="操作模块", help_text="如：用户管理、壁纸管理、角色管理")
+    operation_type = models.CharField(max_length=20, choices=OPERATION_TYPES, verbose_name="操作类型")
+    target_id = models.CharField(max_length=100, blank=True, null=True, verbose_name="操作对象ID")
+    target_name = models.CharField(max_length=200, blank=True, null=True, verbose_name="操作对象名称")
+    description = models.TextField(blank=True, null=True, verbose_name="操作描述", help_text="详细操作说明")
+    request_method = models.CharField(max_length=10, blank=True, null=True, verbose_name="请求方法",
+                                      help_text="GET/POST/PUT/DELETE")
+    request_url = models.CharField(max_length=500, blank=True, null=True, verbose_name="请求URL")
+    ip_address = models.GenericIPAddressField(blank=True, null=True, verbose_name="IP地址")
+    user_agent = models.TextField(blank=True, null=True, verbose_name="用户代理")
+    extra_data = models.JSONField(default=dict, blank=True, verbose_name="扩展数据", help_text="存储额外的操作详情")
+    status = models.SmallIntegerField(default=1, choices=[(1, '成功'), (0, '失败')], verbose_name="操作状态")
+    error_message = models.TextField(blank=True, null=True, verbose_name="错误信息")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="操作时间")
+    class Meta:
+        db_table = 't_operation_log'
+        verbose_name = '操作日志'
+        verbose_name_plural = '操作日志'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['-created_at']),
+            models.Index(fields=['operator', '-created_at']),
+            models.Index(fields=['module', '-created_at']),
+            models.Index(fields=['operation_type', '-created_at']),
+        ]
+    def __str__(self):
+        return f"{self.operator_name} - {self.module} - {self.get_operation_type_display()} - {self.created_at}"

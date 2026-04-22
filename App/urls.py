@@ -16,6 +16,7 @@ from App.view.notifications import urls as notifications
 from App.view.site import urls as site
 from App.view.dashboard import urls as dashboard
 from App.view.strategy import urls as strategy
+from App.view.operation_log import urls as operation_log
 
 urlpatterns = [
     path('', include(user)),
@@ -25,5 +26,5 @@ urlpatterns = [
     path('site/', include(site)),
     path('dashboard/', include(dashboard)),
     path('strategy/', include(strategy)),
-
+    path('operation_log/', include(operation_log)),
 ]

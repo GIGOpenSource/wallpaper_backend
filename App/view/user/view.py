@@ -4,6 +4,7 @@ from django.db import IntegrityError
 from rest_framework import viewsets, serializers
 from rest_framework.decorators import action
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
+from rest_framework.exceptions import ValidationError
 
 from models.models import User, Role
 from tool.base_views import BaseViewSet
@@ -197,3 +198,298 @@ class RoleViewSet(BaseViewSet):
 
         serializer = self.get_serializer(queryset, many=True)
         return ApiResponse(data=serializer.data, message="角色列表获取成功")
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user_type = self.request.query_params.get('user_type')
+        if user_type in ['admin', 'customer']:
+            queryset = queryset.filter(user_type=user_type)
+        return queryset.order_by('user_type', 'sort_order', '-created_at')
+
+    @extend_schema(
+        summary="更新角色用户数量统计",
+        description="手动触发角色用户数量统计更新",
+    )
+    @action(detail=True, methods=['post'], url_path='update-count')
+    def update_user_count(self, request, pk=None):
+        """更新角色用户数量"""
+        try:
+            role = self.get_object()
+            count = role.update_user_count()
+            return ApiResponse(
+                data={'user_count': count},
+                message=f"用户数量已更新为 {count}"
+            )
+        except Exception as e:
+            return ApiResponse(code=500, message=f"更新失败: {str(e)}")
+
+
+class AdminUserUpdateSerializer(serializers.Serializer):
+    """管理员更新序列化器"""
+    username = serializers.CharField(max_length=20, required=False, help_text="用户名")
+    email = serializers.EmailField(required=False, help_text="邮箱")
+    phone = serializers.CharField(max_length=20, required=False, allow_blank=True, help_text="手机号")
+    role_id = serializers.IntegerField(required=False, help_text="角色ID")
+    password = serializers.CharField(max_length=256, required=False, write_only=True, help_text="密码（可选，不传则不修改）")
+
+
+    def create(self, validated_data):
+        """创建管理员"""
+        from tool.password_hasher import hash_password
+        username = validated_data.get('username')
+        email = validated_data.get('email')
+        password = validated_data.get('password')
+        phone = validated_data.get('phone', '')
+        role_id = validated_data.get('role_id')
+        if not username or not email or not password:
+            raise serializers.ValidationError("用户名、邮箱和密码为必填项")
+        # 检查用户名是否已存在
+        if User.objects.filter(username=username).exists():
+            raise serializers.ValidationError("用户名已存在")
+        # 检查邮箱是否已存在
+        if User.objects.filter(email=email).exists():
+            raise serializers.ValidationError("邮箱已存在")
+        # 确定角色
+        role_code = 'operator'  # 默认角色
+        if role_id:
+            try:
+                role = Role.objects.get(id=role_id, user_type='admin', is_active=True)
+                role_code = role.code
+            except Role.DoesNotExist:
+                raise serializers.ValidationError(f"角色 ID '{role_id}' 不存在或已禁用")
+        # 创建用户
+        user = User.objects.create(
+            username=username,
+            email=email,
+            password=hash_password(password[:72]),
+            phone=phone,
+            role=role_code
+        )
+        try:
+            role = Role.objects.get(code=role_code, user_type='admin')
+            role.user_count += 1
+            role.save(update_fields=['user_count'])
+        except Role.DoesNotExist:
+            pass
+        return user
+    def update(self, instance, validated_data):
+        """更新管理员（此方法在 ViewSet.update 中手动处理，这里仅作占位）"""
+        return instance
+
+
+@extend_schema(tags=["(Admin)系统用户管理"])
+@extend_schema_view(
+    list=extend_schema(
+        summary="获取管理员列表",
+        parameters=[
+            OpenApiParameter(name="currentPage", type=int, required=False, description="当前页码"),
+            OpenApiParameter(name="pageSize", type=int, required=False, description="每页数量"),
+        ],
+    ),
+    retrieve=extend_schema(summary="获取管理员详情"),
+    create=extend_schema(
+        summary="创建管理员",
+        request=AdminUserUpdateSerializer,
+    ),
+    update=extend_schema(
+        summary="更新管理员信息",
+        description="支持更新用户名、邮箱、手机号、角色等字段，只需传递需要修改的字段",
+        request=AdminUserUpdateSerializer,
+    ),
+    partial_update=extend_schema(
+        summary="部分更新管理员",
+        description="部分更新管理员信息",
+        request=AdminUserUpdateSerializer,
+    ),
+    destroy=extend_schema(summary="删除管理员"),
+)
+class AdminUserViewSet(BaseViewSet):
+    """
+    后台管理员管理 ViewSet
+    支持管理员的增删改查及角色分配
+    """
+    queryset = User.objects.all()
+    serializer_class = AdminUserUpdateSerializer
+    pagination_class = CustomPagination
+    permission_classes = [IsAdmin]
+
+    def get_serializer_class(self):
+        if self.action in ['update', 'partial_update']:
+            return AdminUserUpdateSerializer
+        return AdminUserUpdateSerializer
+
+    def create(self, request, *args, **kwargs):
+        """创建管理员"""
+        try:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            user = serializer.save()
+
+            return ApiResponse(
+                data={
+                    'id': user.id,
+                    'username': user.username,
+                    'email': user.email,
+                    'phone': user.phone,
+                    'role': user.role,
+                    'role_display': user.get_role_display(),
+                },
+                message="创建成功",
+                code=201
+            )
+        except Exception as e:
+            return ApiResponse(code=500, message=f"创建失败: {str(e)}")
+
+    def update(self, request, *args, **kwargs):
+        """更新管理员信息（包括角色）"""
+        try:
+            instance = self.get_object()
+            serializer = self.get_serializer(instance, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+
+            validated_data = serializer.validated_data
+            old_role_code = instance.role
+
+            # 更新基本字段
+            if 'username' in validated_data:
+                instance.username = validated_data['username']
+            if 'email' in validated_data:
+                instance.email = validated_data['email']
+            if 'phone' in validated_data:
+                instance.phone = validated_data['phone']
+
+            # 更新角色（通过 role_id）
+            new_role_code = None
+            if 'role_id' in validated_data:
+                role_id = validated_data['role_id']
+                try:
+                    role = Role.objects.get(id=role_id, user_type='admin', is_active=True)
+                    new_role_code = role.code
+                    instance.role = new_role_code
+                except Role.DoesNotExist:
+                    return ApiResponse(code=400, message=f"角色 ID '{role_id}' 不存在或已禁用")
+
+            # 更新密码（如果提供）
+            if 'password' in validated_data and validated_data['password']:
+                from tool.password_hasher import hash_password
+                password = validated_data['password']
+                if not password.startswith('$2b$'):
+                    instance.password = hash_password(password[:72])
+
+            instance.save()
+
+            # 更新角色用户数量统计
+            if new_role_code and new_role_code != old_role_code:
+                # 旧角色用户数 -1
+                if old_role_code:
+                    try:
+                        old_role = Role.objects.get(code=old_role_code, user_type='admin')
+                        old_role.user_count = max(0, old_role.user_count - 1)
+                        old_role.save(update_fields=['user_count'])
+                    except Role.DoesNotExist:
+                        pass
+
+                # 新角色用户数 +1
+                try:
+                    new_role = Role.objects.get(code=new_role_code, user_type='admin')
+                    new_role.user_count += 1
+                    new_role.save(update_fields=['user_count'])
+                except Role.DoesNotExist:
+                    pass
+
+            return ApiResponse(
+                data={
+                    'id': instance.id,
+                    'username': instance.username,
+                    'email': instance.email,
+                    'phone': instance.phone,
+                    'role': instance.role,
+                    'role_display': instance.get_role_display(),
+                },
+                message="更新成功"
+            )
+        except Exception as e:
+            return ApiResponse(code=500, message=f"更新失败: {str(e)}")
+
+    def partial_update(self, request, *args, **kwargs):
+        """部分更新管理员信息"""
+        return self.update(request, *args, **kwargs)
+
+    def list(self, request, *args, **kwargs):
+        """获取管理员列表"""
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            data = []
+            for user in page:
+                data.append({
+                    'id': user.id,
+                    'username': user.username,
+                    'email': user.email,
+                    'phone': user.phone,
+                    'role': user.role,
+                    'role_display': user.get_role_display(),
+                    'last_login': user.last_login,
+                    'created_at': user.created_at,
+                })
+            return self.get_paginated_response(data)
+
+        data = []
+        for user in queryset:
+            data.append({
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'phone': user.phone,
+                'role': user.role,
+                'role_display': user.get_role_display(),
+                'last_login': user.last_login,
+                'created_at': user.created_at,
+            })
+        return ApiResponse(data=data, message="列表获取成功")
+
+    def retrieve(self, request, *args, **kwargs):
+        """获取管理员详情"""
+        try:
+            instance = self.get_object()
+            data = {
+                'id': instance.id,
+                'username': instance.username,
+                'email': instance.email,
+                'phone': instance.phone,
+                'role': instance.role,
+                'role_display': instance.get_role_display(),
+                'last_login': instance.last_login,
+                'created_at': instance.created_at,
+                'updated_at': instance.updated_at,
+            }
+            return ApiResponse(data=data, message="详情获取成功")
+        except Exception as e:
+            return ApiResponse(code=500, message=f"详情获取失败: {str(e)}")
+
+    def destroy(self, request, *args, **kwargs):
+        """删除管理员"""
+        try:
+            instance = self.get_object()
+            old_role_code = instance.role
+
+            # 删除前更新角色用户数 -1
+            if old_role_code:
+                try:
+                    old_role = Role.objects.get(code=old_role_code, user_type='admin')
+                    old_role.user_count = max(0, old_role.user_count - 1)
+                    old_role.save(update_fields=['user_count'])
+                except Role.DoesNotExist:
+                    pass
+            try:
+                instance.delete()
+            except Exception as db_err:
+                # 如果是因为关联表缺失报错，且你确定要删，可以强制从 User 表直接删
+                if "does not exist" in str(db_err):
+                    User.objects.filter(id=instance.id).delete()
+                else:
+                    raise db_err
+            return ApiResponse(message="删除成功")
+        except Exception as e:
+            return ApiResponse(code=500, message=f"删除失败: {str(e)}")
+
