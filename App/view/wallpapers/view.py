@@ -616,11 +616,17 @@ class WallpapersViewSet(BaseViewSet):
 
     @extend_schema(
         summary="更新壁纸信息",
-        description="管理员或上传者可以更新壁纸信息，支持修改名称、描述、分类、标签等字段",
+        description=(
+            "管理员或上传者可以更新壁纸信息。"
+            "如果 is_change=true 且提供 file，则更换图片并更新所有相关属性；"
+            "否则只更新元数据字段（名称、描述、分类、标签等）。"
+        ),
         request={
-            "application/json": {
+            "multipart/form-data": {
                 "type": "object",
                 "properties": {
+                    "is_change": {"type": "boolean", "description": "是否更换图片（true=更换图片，false或不传=仅更新元数据）"},
+                    "file": {"type": "string", "format": "binary", "description": "新图片文件（is_change=true 时必填）"},
                     "name": {"type": "string", "description": "壁纸名称"},
                     "description": {"type": "string", "description": "壁纸描述"},
                     "source_url": {"type": "string", "description": "来源链接"},
@@ -628,14 +634,12 @@ class WallpapersViewSet(BaseViewSet):
                     "is_hd": {"type": "boolean", "description": "是否高清"},
                     "is_live": {"type": "boolean", "description": "是否动态壁纸"},
                     "category_ids": {
-                        "type": "array",
-                        "items": {"type": "integer"},
-                        "description": "分类ID列表，如 [1, 3] 表示电脑+静态"
+                        "type": "string",
+                        "description": "分类ID列表，逗号分隔，如 '1,3'"
                     },
                     "tag_ids": {
-                        "type": "array",
-                        "items": {"type": "integer"},
-                        "description": "标签ID列表，如 [3677, 3680]"
+                        "type": "string",
+                        "description": "标签ID列表，逗号分隔，如 '3677,3680'"
                     },
                     "audit_status": {
                         "type": "string",
@@ -663,62 +667,186 @@ class WallpapersViewSet(BaseViewSet):
     def update(self, request, *args, **kwargs):
         """
         更新壁纸信息
-        - 支持修改：名称、描述、来源、水印、高清、动态、分类、标签
+        - 如果 is_change=true 且提供 file：更换图片并更新所有属性
+        - 否则：只更新元数据字段
         - 管理员可修改审核状态
-        - 分类和标签通过 category_ids 和 tag_ids 数组传递
         """
         from django.db import transaction
+
         instance = self.get_object()
-        # 提取分类和标签ID（如果提供）
-        category_ids = request.data.pop('category_ids', None)
-        tag_ids = request.data.pop('tag_ids', None)
+
+        # 判断是否更换图片
+        is_change_param = request.data.get("is_change", "false")
+        if isinstance(is_change_param, bool):
+            is_change = is_change_param
+        else:
+            is_change = str(is_change_param).lower() == "true"
+
         # 如果是非管理员，不允许修改审核相关字段
         is_admin = False
         if hasattr(request, 'user') and request.user:
             from models.models import User
             if isinstance(request.user, User) and request.user.role in ['admin', 'operator', 'super_admin']:
                 is_admin = True
+
         if not is_admin:
-            # 移除审核相关字段
             request.data.pop('audit_status', None)
             request.data.pop('audit_remark', None)
             request.data.pop('audited_at', None)
+
         try:
             with transaction.atomic():
-                # 更新基本字段
-                serializer = self.get_serializer(instance, data=request.data, partial=True)
-                serializer.is_valid(raise_exception=True)
-                self.perform_update(serializer)
+                if is_change:
+                    # === 更换图片模式 ===
+                    uploaded_file = request.FILES.get("file")
+                    if not uploaded_file:
+                        return ApiResponse(code=400, message="更换图片时必须上传文件 file")
+
+                    # 处理文件上传
+                    orig_name = uploaded_file.name or "image.jpg"
+                    _, orig_ext = os.path.splitext(orig_name)
+                    ext = orig_ext.lower()
+                    if ext not in (".jpg", ".jpeg", ".png", ".webp", ".gif", ".mp4"):
+                        ext = ".jpg"
+
+                    # 生成唯一的文件名
+                    timestamp = timezone.now().strftime("%Y%m%d%H%M%S")
+                    unique_id = uuid.uuid4().hex[:8]
+                    unique_base = f"{timestamp}_{unique_id}"
+
+                    # COS 路径
+                    cos_key = f"wallpaper/{unique_base}{ext}"
+                    thumb_cos_key = f"wallpaper/{unique_base}_thumb{ext}"
+                    _ext_hint = ext.lstrip(".")
+
+                    # 读取文件内容
+                    try:
+                        file_content = bytes_from_uploaded_image(uploaded_file, quality=100)
+                    except Exception as e:
+                        logger.error(f"读取上传文件失败: {e}", exc_info=True)
+                        return ApiResponse(code=400, message=f"读取文件失败：{e}")
+
+                    # 上传原图到 COS
+                    cos_ret = upload_image_to_cos(file_content, cos_key)
+                    if not cos_ret:
+                        return ApiResponse(code=500, message="上传原图到云存储失败")
+
+                    file_url = cos_ret["url"]
+
+                    # 处理缩略图
+                    if ext == ".mp4":
+                        thumb_url = ""
+                        w, h = 0, 0
+                        pil_fmt = "mp4"
+                    else:
+                        try:
+                            uploaded_file.seek(0)
+                            thumb_content = bytes_from_uploaded_image(uploaded_file, quality=10)
+                            thumb_ret = upload_image_to_cos(thumb_content, thumb_cos_key)
+                            if thumb_ret:
+                                thumb_url = thumb_ret["url"]
+                            else:
+                                thumb_url = file_url.rsplit(".", 1)[0] + "_thumb." + _ext_hint
+
+                            w, h, pil_fmt = _image_meta_from_bytes(file_content)
+                        except Exception as e:
+                            logger.error(f"生成缩略图失败: {e}", exc_info=True)
+                            thumb_url = file_url.rsplit(".", 1)[0] + "_thumb." + _ext_hint
+                            w, h, pil_fmt = 0, 0, None
+
+                    # 格式化图片格式
+                    fmt = (pil_fmt or _ext_hint or "").lower()
+                    if fmt == "jpeg":
+                        fmt = "jpg"
+
+                    # 自动判断是否高清
+                    is_hd_param = request.data.get("is_hd")
+                    if is_hd_param is not None:
+                        new_is_hd = str(is_hd_param).lower() == "true"
+                    else:
+                        new_is_hd = w >= 1920 or h >= 1080 if (w and h) else False
+
+                    # 自动判断是否动态壁纸
+                    is_live_param = request.data.get("is_live")
+                    if is_live_param is not None:
+                        new_is_live = str(is_live_param).lower() == "true"
+                    else:
+                        new_is_live = (ext == ".mp4")
+
+                    # 更新图片相关字段
+                    instance.url = file_url[:500]
+                    instance.thumb_url = thumb_url[:500] if thumb_url else None
+                    instance.width = w or 0
+                    instance.height = h or 0
+                    instance.image_format = fmt[:20] if fmt else None
+                    instance.is_hd = new_is_hd
+                    instance.is_live = new_is_live
+
+                # 更新其他字段（无论是否更换图片都可以更新）
+                name = request.data.get("name")
+                description = request.data.get("description")
+                source_url = request.data.get("source_url")
+                has_watermark = request.data.get("has_watermark")
+                audit_status = request.data.get("audit_status")
+                audit_remark = request.data.get("audit_remark")
+
+                if name is not None:
+                    instance.name = str(name)[:200]
+                if description is not None:
+                    instance.description = str(description).strip() or None
+                if source_url is not None:
+                    instance.source_url = str(source_url)[:500] or None
+                if has_watermark is not None and not is_change:
+                    # 如果没换图片，可以手动修改 has_watermark
+                    instance.has_watermark = str(has_watermark).lower() == "true"
+                elif has_watermark is not None and is_change:
+                    # 如果换了图片，也可以手动覆盖
+                    instance.has_watermark = str(has_watermark).lower() == "true"
+
+                if audit_status is not None:
+                    if audit_status not in ['pending', 'approved', 'rejected']:
+                        return ApiResponse(code=400, message="审核状态无效")
+                    instance.audit_status = audit_status
+                    instance.audited_at = timezone.now() if audit_status in ['approved', 'rejected'] else None
+                if audit_remark is not None:
+                    instance.audit_remark = str(audit_remark).strip() or None
+
+                instance.save()
+
+                # 提取分类和标签ID
+                category_ids = request.data.get("category_ids")
+                tag_ids = request.data.get("tag_ids")
+
                 # 更新分类（如果提供）
                 if category_ids is not None:
                     if isinstance(category_ids, list):
                         instance.category.set(category_ids)
                     elif isinstance(category_ids, str):
-                        # 支持逗号分隔的字符串
                         cat_id_list = [int(cid.strip()) for cid in category_ids.split(',') if cid.strip().isdigit()]
                         instance.category.set(cat_id_list)
+
                 # 更新标签（如果提供）
                 if tag_ids is not None:
                     if isinstance(tag_ids, list):
                         instance.tags.set(tag_ids)
                     elif isinstance(tag_ids, str):
-                        # 支持逗号分隔的字符串
                         tag_id_list = [int(tid.strip()) for tid in tag_ids.split(',') if tid.strip().isdigit()]
                         instance.tags.set(tag_id_list)
+
                 # 刷新实例以获取最新数据
                 instance.refresh_from_db()
+
                 # 返回更新后的完整数据
                 ctx = self.get_serializer_context()
                 ctx['include_detail_info'] = True
                 response_serializer = WallpapersSerializer(instance, context=ctx)
                 return ApiResponse(
                     data=response_serializer.data,
-                    message="壁纸更新成功"
+                    message="更换图片并更新成功" if is_change else "更新成功"
                 )
         except Exception as e:
             logger.error(f"更新壁纸失败: {e}", exc_info=True)
             return ApiResponse(code=500, message=f"更新失败：{str(e)}")
-
 
     @extend_schema(
         summary="审核通过单张壁纸(Admin)",
