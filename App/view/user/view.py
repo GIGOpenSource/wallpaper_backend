@@ -5,7 +5,8 @@ from rest_framework import viewsets, serializers
 from rest_framework.decorators import action
 from drf_spectacular.utils import extend_schema, extend_schema_view
 
-from models.models import User
+from models.models import User, Role
+from tool.base_views import BaseViewSet
 from tool.password_hasher import verify_password
 from tool.permissions import IsTokenValid, IsOwnerOrAdmin
 from tool.token_tools import CustomTokenTool, generate_is_user_token
@@ -144,3 +145,14 @@ def deactivate_user_and_delete_posters(open_id):
         "success": False,
         "message": "微信账户已下线，请使用邮箱注册登录（/client/users/register/）",
     }
+
+
+#用户角色序列化器
+class RoleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Role
+        fields = '__all__'
+
+# #用户角色crud 继承baseview
+# class RoleViewSet(BaseViewSet):
+#

@@ -619,3 +619,37 @@ class StrategyWallpaperRelation(models.Model):
         ]
     def __str__(self):
         return f"{self.strategy.name} → {self.wallpaper.name}"
+
+class Role(models.Model):
+    """
+    角色表：独立于用户表的通用角色管理
+    支持后台管理员(CustomerUser)和C端用户(User)两种用户类型
+    """
+    USER_TYPE_CHOICES = [
+        ('admin', '后台管理员'),
+        ('customer', 'C端用户'),
+    ]
+    name = models.CharField(max_length=50, unique=True, verbose_name="角色名称")
+    code = models.CharField(max_length=50, unique=True, verbose_name="角色编码",
+                            help_text="唯一标识，如：super_admin, admin, operator, user")
+    description = models.TextField(blank=True, null=True, verbose_name="角色描述")
+    user_type = models.CharField(max_length=20, choices=USER_TYPE_CHOICES, verbose_name="用户类型",
+                                 help_text="区分后台管理员或C端用户")
+    user_count = models.PositiveIntegerField(default=0, verbose_name="用户数量", help_text="拥有该角色的用户总数")
+    is_active = models.BooleanField(default=True, verbose_name="是否启用")
+    sort_order = models.IntegerField(default=0, verbose_name="排序权重（数值越小越靠前）")
+    permissions = models.JSONField(default=list, blank=True, verbose_name="权限列表", help_text="存储角色的权限配置")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+    class Meta:
+        db_table = 't_role'
+        verbose_name = '角色'
+        verbose_name_plural = '角色'
+        ordering = ['user_type', 'sort_order', '-created_at']
+        indexes = [
+            models.Index(fields=['user_type', 'code']),
+            models.Index(fields=['is_active']),
+        ]
+    def __str__(self):
+        return f"{self.get_user_type_display()} - {self.name}"
+

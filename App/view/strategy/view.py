@@ -208,6 +208,7 @@ class StrategyWallpaperSerializer(serializers.ModelSerializer):
     """策略壁纸关联序列化器"""
     wallpaper_info = serializers.SerializerMethodField()
 
+
     class Meta:
         model = StrategyWallpaperRelation
         fields = [
@@ -218,6 +219,8 @@ class StrategyWallpaperSerializer(serializers.ModelSerializer):
 
     def get_wallpaper_info(self, obj):
         """获取壁纸详细信息"""
+        tags = [{'id': tag.id, 'name': tag.name} for tag in obj.wallpaper.tags.all()]
+
         return {
             'id': obj.wallpaper.id,
             'name': obj.wallpaper.name,
@@ -229,6 +232,7 @@ class StrategyWallpaperSerializer(serializers.ModelSerializer):
             'download_count': obj.wallpaper.download_count,
             'view_count': obj.wallpaper.view_count,
             'hot_score': obj.wallpaper.hot_score,
+            'tags': tags,
         }
 
 
