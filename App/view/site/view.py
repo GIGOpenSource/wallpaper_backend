@@ -10,7 +10,7 @@
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
 from rest_framework import serializers
 from rest_framework.decorators import action
-
+from django.utils.translation import get_language
 from models.models import SiteConfig
 from tool.base_views import BaseViewSet
 from tool.permissions import IsAdmin
@@ -125,7 +125,7 @@ class SiteConfigViewSet(BaseViewSet):
     def retrieve(self, request, *args, **kwargs):
         """获取单个配置内容"""
         config_type = kwargs.get('type')
-
+        request.query_params.get('type')
         # 验证配置类型是否有效
         valid_types = dict(SiteConfig.CONFIG_TYPE_CHOICES).keys()
         if config_type not in valid_types:

@@ -819,19 +819,30 @@ class WallpapersViewSet(BaseViewSet):
 
                 # 更新分类（如果提供）
                 if category_ids is not None:
+                    instance.category.clear()
                     if isinstance(category_ids, list):
-                        instance.category.set(category_ids)
+                        for cid in category_ids:
+                            try:
+                                instance.category.add(int(cid))
+                            except (ValueError, TypeError):
+                                pass
                     elif isinstance(category_ids, str):
                         cat_id_list = [int(cid.strip()) for cid in category_ids.split(',') if cid.strip().isdigit()]
-                        instance.category.set(cat_id_list)
-
+                        for cid in cat_id_list:
+                            instance.category.add(cid)
                 # 更新标签（如果提供）
                 if tag_ids is not None:
+                    instance.tags.clear()
                     if isinstance(tag_ids, list):
-                        instance.tags.set(tag_ids)
+                        for tid in tag_ids:
+                            try:
+                                instance.tags.add(int(tid))
+                            except (ValueError, TypeError):
+                                pass
                     elif isinstance(tag_ids, str):
                         tag_id_list = [int(tid.strip()) for tid in tag_ids.split(',') if tid.strip().isdigit()]
-                        instance.tags.set(tag_id_list)
+                        for tid in tag_id_list:
+                            instance.tags.add(tid)
 
                 # 刷新实例以获取最新数据
                 instance.refresh_from_db()
