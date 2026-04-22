@@ -13,8 +13,8 @@ class IPLogMiddleware:
         self.ban_seconds = 3600  # 封禁1小时
 
         # 固定统计窗口为1分钟（60秒），仅阈值不同
-        self.normal_limit = {'count': 200, 'seconds': 60}   # 正常路径：60次/分钟
-        self.malicious_limit = {'count': 200, 'seconds': 60} # 恶意路径：5次/分钟
+        self.normal_limit = {'count': 999999999, 'seconds': 60}   # 正常路径：60次/分钟
+        self.malicious_limit = {'count': 999, 'seconds': 60} # 恶意路径：5次/分钟
 
         # 恶意路径列表
         self.malicious_paths = [
