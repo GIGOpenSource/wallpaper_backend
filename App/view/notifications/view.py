@@ -111,6 +111,11 @@ class NotificationSerializer(serializers.ModelSerializer):
 
 class AnnouncementSerializer(serializers.Serializer):
     """管理员发送公告的请求序列化器"""
+    notification_type = serializers.ChoiceField(
+        choices=['system', 'feature', 'Activity'],
+        required=True,
+        help_text="公告类型：system=系统公告，feature=更新公告，Activity=活动公告"
+    )
     title = serializers.CharField(max_length=200, required=True, help_text="公告标题")
     content = serializers.CharField(required=True, help_text="公告内容")
     send_to = serializers.ChoiceField(
@@ -209,7 +214,10 @@ class NotificationViewSet(BaseViewSet):
 
         n_type = request.query_params.get('type')
         if n_type:
-            queryset = queryset.filter(notification_type=n_type)
+            if n_type == 'announcement':
+                queryset = queryset.filter(notification_type__in=['system', 'feature', 'Activity'])
+            else:
+                queryset = queryset.filter(notification_type=n_type)
 
         queryset = queryset.order_by('-created_at')
 
@@ -259,7 +267,8 @@ class NotificationViewSet(BaseViewSet):
         content = serializer.validated_data['content']
         send_to = serializer.validated_data['send_to']
         user_ids = serializer.validated_data.get('user_ids', [])
-        notification_type = serializer.validated_data['notification_type',""]
+        notification_type = serializer.validated_data.get('notification_type', 'system')
+
         # 确定接收者列表
         if send_to == 'all':
             recipients = CustomerUser.objects.all()
@@ -280,7 +289,7 @@ class NotificationViewSet(BaseViewSet):
                 Notification(
                     recipient=recipient,
                     sender=None,  # 系统公告不需要发送者
-                    notification_type='announcement',
+                    notification_type=notification_type,
                     extra_data={
                         'title': title,
                         'content': content,

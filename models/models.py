@@ -369,7 +369,7 @@ class Notification(models.Model):
     """
     NOTIFICATION_TYPES = [
         ('like', '点赞'),('comment', '评论'),('follow', '关注'),('reply', '回复'),
-        ('announcement', '系统公告'),
+        ('system', '系统公告'),('feature', '更新公告'),('Activity', '活动公告'),
     ]
 
     recipient = models.ForeignKey(CustomerUser,on_delete=models.CASCADE,related_name="notifications",verbose_name="接收者"
