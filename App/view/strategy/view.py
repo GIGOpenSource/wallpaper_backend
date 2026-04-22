@@ -54,7 +54,6 @@ class RecommendStrategySerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("start_time 不能晚于 end_time")
         return attrs
 
-
 @extend_schema(tags=["推荐策略"])
 @extend_schema_view(
     list=extend_schema(
@@ -62,10 +61,12 @@ class RecommendStrategySerializer(serializers.ModelSerializer):
         parameters=[
             OpenApiParameter(name="currentPage", type=int, required=False, description="当前页码"),
             OpenApiParameter(name="pageSize", type=int, required=False, description="每页数量"),
-            OpenApiParameter(name="strategy_type", type=str, required=False, description="策略类型：home/hot"),
+            OpenApiParameter(name="strategy_type", type=str, required=False, description="策略类型：home/hot/banner"),
             OpenApiParameter(name="status", type=str, required=False, description="状态：draft/active/inactive"),
             OpenApiParameter(name="apply_area", type=str, required=False, description="应用区域"),
-            OpenApiParameter(name="platform", type=str, required=False, description="平台：web/app")
+            OpenApiParameter(name="platform", type=str, required=False, description="平台：pc/phone/all"),
+            OpenApiParameter(name="name", type=str, required=False, description="策略名称（模糊搜索）"),
+            OpenApiParameter(name="filter_status", type=str, required=False, description="筛选状态：expired(已过期)/paused(已暂停)/active_now(生效中)")
         ],
     ),
     retrieve=extend_schema(summary="策略详情"),
@@ -143,18 +144,45 @@ class RecommendStrategyViewSet(BaseViewSet):
         return [IsAdmin()]
 
     def get_queryset(self):
+        from django.utils import timezone
         queryset = super().get_queryset()
+
         strategy_type = (self.request.query_params.get("strategy_type") or "").strip()
         status = (self.request.query_params.get("status") or "").strip()
         apply_area = (self.request.query_params.get("apply_area") or "").strip()
+        name = (self.request.query_params.get("name") or "").strip()
+        filter_status = (self.request.query_params.get("filter_status") or "").strip()
+
         if strategy_type in ["home", "hot"]:
             queryset = queryset.filter(strategy_type=strategy_type)
         if status in ["draft", "active", "inactive"]:
             queryset = queryset.filter(status=status)
         if apply_area:
             queryset = queryset.filter(apply_area=apply_area)
-        return queryset
+        if name:
+            queryset = queryset.filter(name__icontains=name)
 
+        now = timezone.now()
+        if filter_status == "expired":
+            # 已过期：status=active 且 end_time < now
+            queryset = queryset.filter(
+                status="active",
+                end_time__isnull=False,
+                end_time__lt=now
+            )
+        elif filter_status == "paused":
+            # 已暂停：status=inactive
+            queryset = queryset.filter(status="inactive")
+        elif filter_status == "active_now":
+            # 生效中：status=active 且在有效期内
+            active_list = []
+            for item in queryset.filter(status="active"):
+                if (item.start_time is None or item.start_time <= now) and \
+                   (item.end_time is None or item.end_time >= now):
+                    active_list.append(item.id)
+            queryset = queryset.filter(id__in=active_list)
+
+        return queryset
     @extend_schema(
         summary="获取推荐内容（首页/热门）",
         parameters=[
@@ -224,4 +252,74 @@ class RecommendStrategyViewSet(BaseViewSet):
                 "results": results,
             },
             message="推荐内容获取成功",
+        )
+    @extend_schema(
+        summary="获取策略统计数据",
+        description="根据策略类型统计策略总数、生效中、已过期、内容总数",
+        parameters=[
+            OpenApiParameter(name="strategy_type", type=str, required=True, description="策略类型：home/hot"),
+        ],
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "integer", "example": 200},
+                    "data": {
+                        "type": "object",
+                        "properties": {
+                            "total_count": {"type": "integer", "description": "策略总数"},
+                            "active_count": {"type": "integer", "description": "生效中数量"},
+                            "expired_count": {"type": "integer", "description": "已过期数量"},
+                            "total_content_count": {"type": "integer", "description": "内容总数（所有策略的壁纸数量之和）"}
+                        }
+                    },
+                    "message": {"type": "string", "example": "获取成功"}
+                }
+            }
+        }
+    )
+    @action(detail=False, methods=["get"], url_path="statistics")
+    def statistics(self, request):
+        """获取策略统计数据"""
+        strategy_type = (request.query_params.get("strategy_type") or "").strip()
+        if strategy_type not in ["home", "hot"]:
+            return ApiResponse(code=400, message="strategy_type 必须是 home 或 hot")
+
+        now = timezone.now()
+
+        # 策略总数
+        total_count = RecommendStrategy.objects.filter(strategy_type=strategy_type).count()
+
+        # 生效中数量（status=active 且在有效期内）
+        active_strategies = RecommendStrategy.objects.filter(
+            strategy_type=strategy_type,
+            status="active"
+        )
+        active_count = 0
+        for s in active_strategies:
+            if (s.start_time is None or s.start_time <= now) and (s.end_time is None or s.end_time >= now):
+                active_count += 1
+
+        # 已过期数量（status=active 但已过结束时间）
+        expired_count = RecommendStrategy.objects.filter(
+            strategy_type=strategy_type,
+            status="active",
+            end_time__isnull=False,
+            end_time__lt=now
+        ).count()
+
+        # 内容总数（所有策略的壁纸数量之和）
+        strategies = RecommendStrategy.objects.filter(strategy_type=strategy_type)
+        total_content_count = sum(
+            len(s.wallpaper_ids or []) for s in strategies
+        )
+
+        return ApiResponse(
+            data={
+                "total_count": total_count,
+                "active_count": active_count,
+                "expired_count": expired_count,
+                "total_content_count": total_content_count,
+            },
+            message="获取成功"
         )

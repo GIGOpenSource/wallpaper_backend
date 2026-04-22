@@ -545,6 +545,7 @@ class RecommendStrategy(models.Model):
     STRATEGY_TYPE_CHOICES = [
         ("home", "首页"),
         ("hot", "热门"),
+        ("banner","轮播")
     ]
     STATUS_CHOICES = [
         ("draft", "草稿"),
