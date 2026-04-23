@@ -17,6 +17,7 @@ from App.view.site import urls as site
 from App.view.dashboard import urls as dashboard
 from App.view.strategy import urls as strategy
 from App.view.operation_log import urls as operation_log
+from App.view.seo import urls as seo
 
 urlpatterns = [
     path('', include(user)),
@@ -27,4 +28,6 @@ urlpatterns = [
     path('dashboard/', include(dashboard)),
     path('strategy/', include(strategy)),
     path('operation_log/', include(operation_log)),
+    path('seo/', include(seo)),
+
 ]
