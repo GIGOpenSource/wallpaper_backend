@@ -51,19 +51,21 @@ class GoogleSearchConsoleTool:
                 scopes=self.SCOPES
             )
 
-            proxy_host = os.getenv('PROXY_HOST', '127.0.0.1')
-            proxy_port = int(os.getenv('PROXY_PORT', '7897'))
-
-            print(f"🌐 代理配置: {proxy_host}:{proxy_port}")
-
-            http = httplib2.Http(
-                proxy_info=httplib2.ProxyInfo(
-                    httplib2.socks.PROXY_TYPE_HTTP,
-                    proxy_host,
-                    proxy_port
+            use_proxy = os.getenv('USE_PROXY', 'false').lower() == 'true'
+            if use_proxy:
+                proxy_host = os.getenv('PROXY_HOST', '127.0.0.1')
+                proxy_port = int(os.getenv('PROXY_PORT', '7897'))
+                print(f"🌐 代理配置: {proxy_host}:{proxy_port}")
+                http = httplib2.Http(
+                    proxy_info=httplib2.ProxyInfo(
+                        httplib2.socks.PROXY_TYPE_HTTP,
+                        proxy_host,
+                        proxy_port
+                    )
                 )
-            )
-
+            else:
+                print(f"🌐 不使用代理，直接连接")
+                http = httplib2.Http()
             authed_http = AuthorizedHttp(self.credentials, http=http)
             self.service = build('searchconsole', 'v1', http=authed_http)
             print(f"✅ Google Search Console 初始化成功")
@@ -678,10 +680,14 @@ class KeywordResearchTool:
         self.keyword_planner_client_id = os.getenv('GOOGLE_KEYWORD_PLANNER_CLIENT_ID')
         self.keyword_planner_client_secret = os.getenv('GOOGLE_KEYWORD_PLANNER_CLIENT_SECRET')
         self.keyword_planner_developer_token = os.getenv('GOOGLE_KEYWORD_PLANNER_DEVELOPER_TOKEN')
-        self.proxy_config = {
-            'http': os.getenv('HTTP_PROXY', 'http://127.0.0.1:7890'),
-            'https': os.getenv('HTTPS_PROXY', 'http://127.0.0.1:7890')
-        }
+        use_proxy = os.getenv('USE_PROXY', 'false').lower() == 'true'
+        if use_proxy:
+            self.proxy_config = {
+                'http': os.getenv('HTTP_PROXY', 'http://127.0.0.1:7890'),
+                'https': os.getenv('HTTPS_PROXY', 'http://127.0.0.1:7890')
+            }
+        else:
+            self.proxy_config = None
 
     def _make_request(self, url, params=None, headers=None, method='GET'):
         """统一的请求方法，支持代理"""
@@ -930,10 +936,14 @@ class BacklinkMonitorTool:
         self.ahrefs_api_key = os.getenv('AHREFS_API_KEY')
         self.majestic_api_key = os.getenv('MAJESTIC_API_KEY')
         self.semrush_api_key = os.getenv('SEMRUSH_API_KEY')
-        self.proxy_config = {
-            'http': os.getenv('HTTP_PROXY', 'http://127.0.0.1:7890'),
-            'https': os.getenv('HTTPS_PROXY', 'http://127.0.0.1:7890')
-        }
+        use_proxy = os.getenv('USE_PROXY', 'false').lower() == 'true'
+        if use_proxy:
+            self.proxy_config = {
+                'http': os.getenv('HTTP_PROXY', 'http://127.0.0.1:7890'),
+                'https': os.getenv('HTTPS_PROXY', 'http://127.0.0.1:7890')
+            }
+        else:
+            self.proxy_config = None
 
     def _make_request(self, url, params=None, headers=None, method='GET'):
         """统一的请求方法，支持代理"""
