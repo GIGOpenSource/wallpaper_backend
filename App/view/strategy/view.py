@@ -160,8 +160,8 @@ class RecommendStrategyViewSet(BaseViewSet):
     def statistics(self, request):
         """获取策略统计数据"""
         strategy_type = (request.query_params.get("strategy_type") or "").strip()
-        if strategy_type not in ["home", "hot"]:
-            return ApiResponse(code=400, message="strategy_type 必须是 home 或 hot")
+        if strategy_type not in ["home", "hot","banner"]:
+            return ApiResponse(code=400, message="strategy_type 必须是 home 或 hot 或 banner")
 
         now = timezone.now()
 
