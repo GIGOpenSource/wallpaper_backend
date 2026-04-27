@@ -38,7 +38,7 @@ from models.models import (
     WallpaperLike,
     WallpaperCollection,
     CustomerWallpaperUpload,
-    CustomerUser, RecommendStrategy, StrategyWallpaperRelation,
+    CustomerUser, RecommendStrategy, StrategyWallpaperRelation, SiteConfig,
 )
 from tool.operation_log import log_operation
 
