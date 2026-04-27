@@ -45,6 +45,16 @@ class BasicSettingsUpdateSerializer(serializers.Serializer):
     allow_user_register = serializers.BooleanField(required=False, help_text="允许用户注册")
 
 
+class RobotsTxtUpdateSerializer(serializers.Serializer):
+    """Robots.txt 更新序列化器"""
+    content = serializers.CharField(required=True, help_text="Robots.txt 内容")
+
+
+class SitemapUpdateSerializer(serializers.Serializer):
+    """Sitemap 更新序列化器"""
+    content = serializers.CharField(required=True, help_text="Sitemap.xml 内容")
+
+
 @extend_schema(tags=["网站配置"])
 @extend_schema_view(
     retrieve=extend_schema(
@@ -292,3 +302,200 @@ class SiteConfigViewSet(BaseViewSet):
         config.config_value = updated_value
         config.save()
         return ApiResponse(data=updated_value, message="更新成功")
+
+    @extend_schema(
+        summary="获取 Robots.txt 内容",
+        description="获取网站的 Robots.txt 配置内容（无需登录）",
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "integer", "example": 200},
+                    "data": {
+                        "type": "object",
+                        "properties": {
+                            "content": {"type": "string", "description": "Robots.txt 内容"}
+                        }
+                    },
+                    "message": {"type": "string", "example": "获取成功"}
+                }
+            }
+        }
+    )
+    @action(detail=False, methods=['get'], url_path='robots-txt')
+    def get_robots_txt(self, request):
+        """获取 Robots.txt 内容"""
+        try:
+            config = SiteConfig.objects.get(
+                config_type='robots_txt',
+                is_active=True
+            )
+            return ApiResponse(data={'content': config.content}, message="获取成功")
+        except SiteConfig.DoesNotExist:
+            # 返回默认值
+            default_robots = """User-agent: *
+Allow: /wallpaper/
+Allow: /category/
+Allow: /tag/
+Disallow: /admin/
+Disallow: /api/
+Disallow: /private/
+Disallow: /search?
+Crawl-delay: 1
+
+User-agent: Googlebot
+Allow: /
+Disallow: /admin/
+
+User-agent: Googlebot-Image
+Allow: /wallpaper/
+Allow: /category/
+Disallow: /admin/
+
+Sitemap: https://example.com/sitemap.xml"""
+            return ApiResponse(data={'content': default_robots}, message="获取成功（默认配置）")
+
+    @extend_schema(
+        summary="更新 Robots.txt 内容（管理员）",
+        description="更新网站的 Robots.txt 配置内容",
+        request=RobotsTxtUpdateSerializer,
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "integer", "example": 200},
+                    "data": {
+                        "type": "object",
+                        "properties": {
+                            "content": {"type": "string", "description": "Robots.txt 内容"}
+                        }
+                    },
+                    "message": {"type": "string", "example": "更新成功"}
+                }
+            },
+            400: "参数错误"
+        }
+    )
+    @action(detail=False, methods=['post'], url_path='update-robots-txt', permission_classes=[IsAdmin])
+    def update_robots_txt(self, request):
+        """更新 Robots.txt 内容"""
+        serializer = RobotsTxtUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        # 获取或创建 Robots.txt 记录
+        config, created = SiteConfig.objects.get_or_create(
+            config_type='robots_txt',
+            defaults={
+                'title': 'Robots.txt 配置',
+                'content': '',
+                'config_value': {},
+                'is_active': True
+            }
+        )
+
+        # 更新 content 字段
+        config.content = serializer.validated_data['content']
+        config.save()
+        return ApiResponse(data={'content': config.content}, message="更新成功")
+
+    @extend_schema(
+        summary="获取 Sitemap.xml 内容",
+        description="获取网站的 Sitemap.xml 配置内容（无需登录）",
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "integer", "example": 200},
+                    "data": {
+                        "type": "object",
+                        "properties": {
+                            "content": {"type": "string", "description": "Sitemap.xml 内容"}
+                        }
+                    },
+                    "message": {"type": "string", "example": "获取成功"}
+                }
+            }
+        }
+    )
+    @action(detail=False, methods=['get'], url_path='sitemap')
+    def get_sitemap(self, request):
+        """获取 Sitemap.xml 内容"""
+        try:
+            config = SiteConfig.objects.get(
+                config_type='sitemap',
+                is_active=True
+            )
+            return ApiResponse(data={'content': config.content}, message="获取成功")
+        except SiteConfig.DoesNotExist:
+            # 返回默认值
+            default_sitemap = """<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <!-- 首页 -->
+    <url>
+        <loc>https://www.markwallpapers.com/markwallpapers/</loc>
+        <changefreq>daily</changefreq>
+        <priority>1.0</priority>
+    </url>
+    <!-- 搜索页 -->
+    <url>
+        <loc>https://www.markwallpapers.com/markwallpapers/#/search</loc>
+        <changefreq>weekly</changefreq>
+        <priority>0.8</priority>
+    </url>
+    <!-- 标签页 -->
+    <url>
+        <loc>https://www.markwallpapers.com/markwallpapers/#/tags</loc>
+        <changefreq>weekly</changefreq>
+        <priority>0.8</priority>
+    </url>
+    <!-- 热门页 -->
+    <url>
+        <loc>https://www.markwallpapers.com/markwallpapers/#/trending</loc>
+        <changefreq>daily</changefreq>
+        <priority>0.85</priority>
+    </url>
+</urlset>"""
+            return ApiResponse(data={'content': default_sitemap}, message="获取成功（默认配置）")
+
+    @extend_schema(
+        summary="更新 Sitemap.xml 内容（管理员）",
+        description="更新网站的 Sitemap.xml 配置内容",
+        request=SitemapUpdateSerializer,
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "integer", "example": 200},
+                    "data": {
+                        "type": "object",
+                        "properties": {
+                            "content": {"type": "string", "description": "Sitemap.xml 内容"}
+                        }
+                    },
+                    "message": {"type": "string", "example": "更新成功"}
+                }
+            },
+            400: "参数错误"
+        }
+    )
+    @action(detail=False, methods=['post'], url_path='update-sitemap', permission_classes=[IsAdmin])
+    def update_sitemap(self, request):
+        """更新 Sitemap.xml 内容"""
+        serializer = SitemapUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        # 获取或创建 Sitemap 记录
+        config, created = SiteConfig.objects.get_or_create(
+            config_type='sitemap',
+            defaults={
+                'title': 'Sitemap 配置',
+                'content': '',
+                'config_value': {},
+                'is_active': True
+            }
+        )
+
+        # 更新 content 字段
+        config.content = serializer.validated_data['content']
+        config.save()
+        return ApiResponse(data={'content': config.content}, message="更新成功")

@@ -266,7 +266,7 @@ class AdminUserUpdateSerializer(serializers.Serializer):
             role=role_code
         )
         try:
-            role = Role.objects.get(code=role_code, user_type='admin')
+            role = Role.objects.get(code=role_code)
             role.user_count += 1
             role.save(update_fields=['user_count'])
         except Role.DoesNotExist:
@@ -324,6 +324,13 @@ class AdminUserViewSet(BaseViewSet):
             serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             user = serializer.save()
+            role_id = None
+            if user.role:
+                try:
+                    role = Role.objects.get(code=user.role)
+                    role_id = role.id
+                except Role.DoesNotExist:
+                    pass
 
             return ApiResponse(
                 data={
@@ -332,6 +339,7 @@ class AdminUserViewSet(BaseViewSet):
                     'email': user.email,
                     'phone': user.phone,
                     'role': user.role,
+                    'role_id':role_id,
                     'role_display': user.get_role_display(),
                 },
                 message="创建成功",
@@ -383,7 +391,7 @@ class AdminUserViewSet(BaseViewSet):
                 # 旧角色用户数 -1
                 if old_role_code:
                     try:
-                        old_role = Role.objects.get(code=old_role_code, user_type='admin')
+                        old_role = Role.objects.get(code=old_role_code)
                         old_role.user_count = max(0, old_role.user_count - 1)
                         old_role.save(update_fields=['user_count'])
                     except Role.DoesNotExist:
@@ -391,9 +399,16 @@ class AdminUserViewSet(BaseViewSet):
 
                 # 新角色用户数 +1
                 try:
-                    new_role = Role.objects.get(code=new_role_code, user_type='admin')
+                    new_role = Role.objects.get(code=new_role_code)
                     new_role.user_count += 1
                     new_role.save(update_fields=['user_count'])
+                except Role.DoesNotExist:
+                    pass
+            role_id = None
+            if instance.role:
+                try:
+                    role = Role.objects.get(code=instance.role)
+                    role_id = role.id
                 except Role.DoesNotExist:
                     pass
 
@@ -404,6 +419,7 @@ class AdminUserViewSet(BaseViewSet):
                     'email': instance.email,
                     'phone': instance.phone,
                     'role': instance.role,
+                    'role_id': role_id,
                     'role_display': instance.get_role_display(),
                 },
                 message="更新成功"
@@ -436,12 +452,20 @@ class AdminUserViewSet(BaseViewSet):
 
         data = []
         for user in queryset:
+            role_id = None
+            if user.role:
+                try:
+                    role = Role.objects.get(code=user.role)
+                    role_id = role.id
+                except Role.DoesNotExist:
+                    pass
             data.append({
                 'id': user.id,
                 'username': user.username,
                 'email': user.email,
                 'phone': user.phone,
                 'role': user.role,
+                'role_id': role_id,
                 'role_display': user.get_role_display(),
                 'last_login': user.last_login,
                 'created_at': user.created_at,
@@ -476,7 +500,7 @@ class AdminUserViewSet(BaseViewSet):
             # 删除前更新角色用户数 -1
             if old_role_code:
                 try:
-                    old_role = Role.objects.get(code=old_role_code, user_type='admin')
+                    old_role = Role.objects.get(code=old_role_code)
                     old_role.user_count = max(0, old_role.user_count - 1)
                     old_role.save(update_fields=['user_count'])
                 except Role.DoesNotExist:

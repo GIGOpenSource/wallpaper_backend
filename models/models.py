@@ -440,7 +440,8 @@ class SiteConfig(models.Model):
     网站配置表：存储帮助与支持、关于、隐私政策等富文本内容
     """
     CONFIG_TYPE_CHOICES = [('help', '帮助与支持'),('about', '关于'),('privacy', '隐私政策'),
-        ('terms', '服务条款'),('basic_settings', '网站基础设置')]
+        ('terms', '服务条款'),('basic_settings', '网站基础设置'),('robots_txt', 'Robots.txt'),
+        ('sitemap', 'Sitemap')]
     LANGUAGE_CHOICES = [('es', '西班牙语'),('en', '英语'),('pt', '葡萄牙语'),
         ('ja', '日语'),('ko', '韩语'),('zh-hans', '简体中文'),('zh-hant', '繁体中文'),
         ('de', '德语'),('fr', '法语'),
