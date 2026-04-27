@@ -441,17 +441,19 @@ class SiteConfig(models.Model):
     """
     CONFIG_TYPE_CHOICES = [('help', '帮助与支持'),('about', '关于'),('privacy', '隐私政策'),
         ('terms', '服务条款'),('basic_settings', '网站基础设置'),('robots_txt', 'Robots.txt'),
-        ('sitemap', 'Sitemap')]
+        ('sitemap', 'Sitemap'),('sitemap_url', 'Sitemap URL')]
     LANGUAGE_CHOICES = [('es', '西班牙语'),('en', '英语'),('pt', '葡萄牙语'),
         ('ja', '日语'),('ko', '韩语'),('zh-hans', '简体中文'),('zh-hant', '繁体中文'),
         ('de', '德语'),('fr', '法语'),
     ]
-    config_type = models.CharField(max_length=20,choices=CONFIG_TYPE_CHOICES,unique=True,verbose_name="配置类型")
+    config_type = models.CharField(max_length=20,choices=CONFIG_TYPE_CHOICES,verbose_name="配置类型")
     config_value = models.JSONField(default=dict,verbose_name="配置值")
-    title = models.CharField(max_length=200, verbose_name="标题")
-    content = models.TextField(verbose_name="富文本内容")  # 存储 HTML 富文本
+    title = models.CharField(max_length=200, blank=True, null=True, verbose_name="标题")
+    content = models.TextField(blank=True, null=True, verbose_name="内容")  # 存储 URL 或富文本
+    priority = models.IntegerField(default=0, verbose_name="优先级（数字越大越靠前）", db_index=True,blank=True)
     is_active = models.BooleanField(default=True, verbose_name="是否启用")
-    language = models.CharField(max_length=10,choices=LANGUAGE_CHOICES,default='zh-hans',verbose_name="语言"
+    language = models.CharField(max_length=10,choices=LANGUAGE_CHOICES,default='zh-hans',verbose_name="语言",
+        blank=True, null=True
     )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")

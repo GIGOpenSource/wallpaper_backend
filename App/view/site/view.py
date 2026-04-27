@@ -15,7 +15,7 @@ from django.utils.translation import get_language
 from models.models import SiteConfig
 from tool.base_views import BaseViewSet
 from tool.permissions import IsAdmin
-from tool.utils import ApiResponse
+from tool.utils import ApiResponse, CustomPagination
 
 
 class SiteConfigSerializer(serializers.ModelSerializer):
@@ -53,6 +53,25 @@ class RobotsTxtUpdateSerializer(serializers.Serializer):
 class SitemapUpdateSerializer(serializers.Serializer):
     """Sitemap 更新序列化器"""
     content = serializers.CharField(required=True, help_text="Sitemap.xml 内容")
+
+class SitemapURLCreateUpdateSerializer(serializers.Serializer):
+    """Sitemap URL 创建/更新序列化器"""
+    content = serializers.URLField(required=True, help_text="URL 地址")
+    title = serializers.CharField(max_length=200, required=False, allow_blank=True, help_text="标题")
+    priority = serializers.IntegerField(required=False, default=0, min_value=0, max_value=100, help_text="优先级（0-100）")
+    index_status = serializers.ChoiceField(
+        choices=['pending', 'indexed', 'excluded'],
+        required=False,
+        default='pending',
+        help_text="索引状态：pending=待索引，indexed=已索引，excluded=已排除"
+    )
+    changefreq = serializers.ChoiceField(
+        choices=['always', 'hourly', 'daily', 'weekly', 'monthly', 'yearly', 'never'],
+        required=False,
+        default='weekly',
+        help_text="更新频率"
+    )
+    is_active = serializers.BooleanField(required=False, default=True, help_text="是否启用")
 
 
 @extend_schema(tags=["网站配置"])
@@ -499,3 +518,168 @@ Sitemap: https://example.com/sitemap.xml"""
         config.content = serializer.validated_data['content']
         config.save()
         return ApiResponse(data={'content': config.content}, message="更新成功")
+
+
+# @extend_schema(tags=["Sitemap URL管理1"])
+# @extend_schema_view(
+#     list=extend_schema(
+#         summary="获取 Sitemap URL 列表",
+#         description="分页获取 Sitemap URL 列表，支持按索引状态和更新频率筛选",
+#         parameters=[
+#             OpenApiParameter(name="index_status", type=str, required=False, description="索引状态筛选 (pending/indexed/excluded)"),
+#             OpenApiParameter(name="changefreq", type=str, required=False, description="更新频率筛选 (daily/weekly/monthly)"),
+#             OpenApiParameter(name="is_active", type=bool, required=False, description="是否启用筛选"),
+#             OpenApiParameter(name="currentPage", type=int, required=False, description="当前页码"),
+#             OpenApiParameter(name="pageSize", type=int, required=False, description="每页数量"),
+#         ],
+#     ),
+#     retrieve=extend_schema(summary="获取标签详情", responses={200: SitemapURLSerializer, 404: "标签不存在"}),
+#     update=extend_schema(summary="更新标签(Admin)", request=SitemapURLSerializer),
+#     partial_update=extend_schema(summary="部分更新标签(Admin)", request=SitemapURLSerializer),
+#     destroy=extend_schema(summary="删除标签(Admin)", description="删除指定标签记录",
+#                           responses={204: "删除成功", 404: "标签不存在"})
+#
+# )
+    # permission_classes = [IsAdmin]
+    #
+    # def get_queryset(self):
+    #     """获取查询集，支持筛选"""
+    #     queryset = super().get_queryset()
+    #
+    #     # 索引状态筛选
+    #     index_status = self.request.query_params.get('index_status')
+    #     if index_status:
+    #         # 使用 JSONField 查询
+    #         queryset = queryset.filter(config_value__index_status=index_status)
+    #
+    #     # 更新频率筛选
+    #     changefreq = self.request.query_params.get('changefreq')
+    #     if changefreq:
+    #         queryset = queryset.filter(config_value__changefreq=changefreq)
+    #
+    #     # 是否启用筛选
+    #     is_active = self.request.query_params.get('is_active')
+    #     if is_active is not None:
+    #         queryset = queryset.filter(is_active=is_active.lower() == 'true')
+    #
+    #     # 按优先级排序
+    #     return queryset.order_by('priority', '-created_at')
+    #
+    # @extend_schema(
+    #     summary="创建 Sitemap URL",
+    #     request=SitemapURLCreateUpdateSerializer,
+    # )
+    # def create(self, request, *args, **kwargs):
+    #     """创建 Sitemap URL"""
+    #     try:
+    #         serializer = self.get_serializer(data=request.data)
+    #         serializer.is_valid(raise_exception=True)
+    #
+    #         validated_data = serializer.validated_data
+    #
+    #         # 构建 config_value
+    #         config_value = {
+    #             'index_status': validated_data.get('index_status', 'pending'),
+    #             'changefreq': validated_data.get('changefreq', 'weekly')
+    #         }
+    #
+    #         # 创建记录
+    #         config = SiteConfig.objects.create(
+    #             config_type='sitemap_url',
+    #             content=validated_data['content'],
+    #             title=validated_data.get('title', ''),
+    #             priority=validated_data.get('priority', 0),
+    #             config_value=config_value,
+    #             is_active=validated_data.get('is_active', True)
+    #         )
+    #
+    #         # 返回结果
+    #         result_serializer = SitemapURLSerializer(config)
+    #         return ApiResponse(
+    #             data=result_serializer.data,
+    #             message="创建成功",
+    #             code=201
+    #         )
+    #     except Exception as e:
+    #         return ApiResponse(code=500, message=f"创建失败: {str(e)}")
+    #
+    # def list(self, request, *args, **kwargs):
+    #     """获取 Sitemap URL 列表"""
+    #     queryset = SiteConfig.objects.filter(config_type='sitemap_url')
+    #
+    #     index_status = request.query_params.get('index_status')
+    #     if index_status:
+    #         queryset = queryset.filter(config_value__index_status=index_status)
+    #     changefreq = request.query_params.get('changefreq')
+    #     if changefreq:
+    #         queryset = queryset.filter(config_value__changefreq=changefreq)
+    #
+    #     is_active = request.query_params.get('is_active')
+    #     if is_active is not None:
+    #         queryset = queryset.filter(is_active=is_active.lower() == 'true')
+    #
+    #     url = request.query_params.get('url')
+    #     if url:
+    #         queryset = queryset.filter(content__icontains=url)
+    #
+    #     queryset = queryset.order_by('priority', '-created_at')
+    #
+    #     page = self.paginate_queryset(queryset)
+    #     if page is not None:
+    #         serializer = self.get_serializer(page, many=True)
+    #         return self.get_paginated_response(serializer.data)
+    #
+    #     serializer = self.get_serializer(queryset, many=True)
+    #     return ApiResponse(data=serializer.data, message="列表获取成功")
+    #
+    # @extend_schema(
+    #     summary="更新 Sitemap URL",
+    #     request=SitemapURLCreateUpdateSerializer,
+    # )
+    # def update(self, request, *args, **kwargs):
+    #     """更新 Sitemap URL"""
+    #     try:
+    #         instance = self.get_object()
+    #         serializer = self.get_serializer(instance, data=request.data)
+    #         serializer.is_valid(raise_exception=True)
+    #
+    #         validated_data = serializer.validated_data
+    #
+    #         # 更新字段
+    #         if 'content' in validated_data:
+    #             instance.content = validated_data['content']
+    #         if 'title' in validated_data:
+    #             instance.title = validated_data.get('title', '')
+    #         if 'priority' in validated_data:
+    #             instance.priority = validated_data['priority']
+    #         if 'is_active' in validated_data:
+    #             instance.is_active = validated_data['is_active']
+    #
+    #         # 更新 config_value
+    #         if 'index_status' in validated_data or 'changefreq' in validated_data:
+    #             config_value = instance.config_value or {}
+    #             if 'index_status' in validated_data:
+    #                 config_value['index_status'] = validated_data['index_status']
+    #             if 'changefreq' in validated_data:
+    #                 config_value['changefreq'] = validated_data['changefreq']
+    #             instance.config_value = config_value
+    #
+    #         instance.save()
+    #
+    #         result_serializer = SitemapURLSerializer(instance)
+    #         return ApiResponse(data=result_serializer.data, message="更新成功")
+    #     except Exception as e:
+    #         return ApiResponse(code=500, message=f"更新失败: {str(e)}")
+    #
+    # def partial_update(self, request, *args, **kwargs):
+    #     """部分更新 Sitemap URL"""
+    #     return self.update(request, *args, **kwargs)
+    #
+    # def destroy(self, request, *args, **kwargs):
+    #     """删除 Sitemap URL"""
+    #     try:
+    #         instance = self.get_object()
+    #         instance.delete()
+    #         return ApiResponse(message="删除成功")
+    #     except Exception as e:
+    #         return ApiResponse(code=500, message=f"删除失败: {str(e)}")
