@@ -438,12 +438,22 @@ class AdminUserViewSet(BaseViewSet):
         if page is not None:
             data = []
             for user in page:
+                role_id = None
+                if user.role:
+                    try:
+                        role = Role.objects.get(code=user.role, user_type='admin')
+                        role_id = role.id
+                    except Role.DoesNotExist:
+                        role_id = None
+                        pass
+
                 data.append({
                     'id': user.id,
                     'username': user.username,
                     'email': user.email,
                     'phone': user.phone,
                     'role': user.role,
+                    'role_id': role_id,
                     'role_display': user.get_role_display(),
                     'last_login': user.last_login,
                     'created_at': user.created_at,
