@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.http import HttpResponse
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
 from rest_framework import serializers
 from rest_framework.decorators import action
@@ -182,3 +183,85 @@ class SitemapURLViewSet(BaseViewSet):
         instance = self.get_object()
         instance.delete()
         return ApiResponse(message="删除成功")
+
+    @extend_schema(
+        summary="获取 Sitemap 统计信息",
+        description="获取 URL 总数、已索引数、待索引数、索引率等统计信息",
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "integer", "example": 200},
+                    "data": {
+                        "type": "object",
+                        "properties": {
+                            "total_urls": {"type": "integer", "description": "总 URL 数"},
+                            "indexed_count": {"type": "integer", "description": "已索引数"},
+                            "pending_count": {"type": "integer", "description": "待索引数"},
+                            "excluded_count": {"type": "integer", "description": "已排除数"},
+                            "index_rate": {"type": "number", "description": "索引率（百分比）"}
+                        }
+                    },
+                    "message": {"type": "string"}
+                }
+            }
+        }
+    )
+    @action(detail=False, methods=['get'], url_path='statistics')
+    def statistics(self, request):
+        """获取 Sitemap 统计信息"""
+        queryset = SiteConfig.objects.filter(config_type='sitemap_url')
+
+        total_urls = queryset.count()
+        indexed_count = queryset.filter(config_value__index_status='indexed').count()
+        pending_count = queryset.filter(config_value__index_status='pending').count()
+        excluded_count = queryset.filter(config_value__index_status='excluded').count()
+
+        index_rate = round((indexed_count / total_urls * 100), 2) if total_urls > 0 else 0
+
+        return ApiResponse(
+            data={
+                'total_urls': total_urls,
+                'indexed_count': indexed_count,
+                'pending_count': pending_count,
+                'excluded_count': excluded_count,
+                'index_rate': index_rate
+            },
+            message="获取成功"
+        )
+
+    @extend_schema(
+        summary="生成 Sitemap XML",
+        description="根据数据库中的 URL 记录生成标准 Sitemap XML 文件",
+        responses={
+            200: {
+                "type": "string",
+                "description": "Sitemap XML 内容"
+            }
+        }
+    )
+    @action(detail=False, methods=['get'], url_path='generate-xml')
+    def generate_xml(self, request):
+        """生成 Sitemap XML"""
+        queryset = SiteConfig.objects.filter(
+            config_type='sitemap_url',
+            is_active=True
+        ).order_by('-priority', '-created_at')
+
+        xml_content = '<?xml version="1.0" encoding="UTF-8"?>\n'
+        xml_content += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+
+        for item in queryset:
+            url = item.content
+            changefreq = item.config_value.get('changefreq', 'weekly')
+            priority_value = item.priority / 100 if item.priority else 0.5
+
+            xml_content += '  <url>\n'
+            xml_content += f'    <loc>{url}</loc>\n'
+            xml_content += f'    <changefreq>{changefreq}</changefreq>\n'
+            xml_content += f'    <priority>{priority_value:.1f}</priority>\n'
+            xml_content += '  </url>\n'
+
+        xml_content += '</urlset>'
+
+        return HttpResponse(xml_content, content_type='application/xml')
