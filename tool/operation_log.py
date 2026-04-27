@@ -48,12 +48,14 @@ def log_operation(operator=None, module="", operation_type="other", target_id=No
 
     # 获取操作人姓名
     operator_name = ""
+    operator_id = None
     if operator:
         operator_name = getattr(operator, 'username', '') or getattr(operator, 'email', '')
+        operator_id = getattr(operator, 'id', None)
 
     # 创建日志记录
     log = OperationLog.objects.create(
-        operator=operator,
+        operator_id=operator_id,
         operator_name=operator_name,
         module=module,
         operation_type=operation_type,
@@ -68,5 +70,5 @@ def log_operation(operator=None, module="", operation_type="other", target_id=No
         status=status,
         error_message=error_message,
     )
-
     return log
+
