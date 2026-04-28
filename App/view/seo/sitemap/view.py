@@ -319,16 +319,20 @@ class SitemapURLViewSet(BaseViewSet):
     def check_status(self, request):
         """检测 Sitemap 状态（固定URL）"""
         import requests
+        from datetime import datetime
         sitemap_url = "https://www.markwallpapers.com/sitemap.xml"
         try:
-            # 最简单的请求，能访问就行
             res = requests.get(sitemap_url, timeout=5)
-            if res.status_code == 200:
-                return ApiResponse(message="Sitemap 可正常访问")
-            else:
-                return ApiResponse(code=400, message="Sitemap 无法访问")
+            status = res.status_code == 200
         except:
-            return ApiResponse(code=500, message="Sitemap 访问失败")
+            # 请求失败也算 false
+            status = False
+        # 只返回你要的两个字段
+        data = {
+            "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),  # 当前时间
+            "status": status  # true / false
+        }
+        return ApiResponse(data=data, message="检测完成")
 
     @extend_schema(
         summary="提交 Sitemap 到搜索引擎",
