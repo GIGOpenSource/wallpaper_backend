@@ -221,7 +221,7 @@ class RoleViewSet(BaseViewSet):
                 message=f"用户数量已更新为 {count}"
             )
         except Exception as e:
-            return ApiResponse(code=500, message=f"更新失败: {str(e)}")
+            return ApiResponse(code=500, message=f"更新失败: {', '.join(e.args)}")
 
 
 class AdminUserUpdateSerializer(serializers.Serializer):
@@ -345,11 +345,8 @@ class AdminUserViewSet(BaseViewSet):
                 message="创建成功",
                 code=201
             )
-        except serializers.ValidationError as e:
-
-            return ApiResponse(code=500, message=f"创建失败: {str(e)}")
         except Exception as e:
-            return ApiResponse(code=500, message=f"创建失败: {str(e)}")
+            return ApiResponse(code=500, message=f"创建失败: {', '.join(e.args)}")
 
 
     def update(self, request, *args, **kwargs):
@@ -430,7 +427,7 @@ class AdminUserViewSet(BaseViewSet):
             )
 
         except Exception as e:
-            return ApiResponse(code=500, message=f"创建失败: {str(e)}")
+            return ApiResponse(code=500, message=f"更新失败: {', '.join(e.args)}")
 
 
     def partial_update(self, request, *args, **kwargs):
@@ -505,7 +502,7 @@ class AdminUserViewSet(BaseViewSet):
             }
             return ApiResponse(data=data, message="详情获取成功")
         except Exception as e:
-            return ApiResponse(code=500, message=f"详情获取失败: {str(e)}")
+            return ApiResponse(code=500, message=f"获取详情失败: {', '.join(e.args)}")
 
     def destroy(self, request, *args, **kwargs):
         """删除管理员"""
@@ -531,5 +528,5 @@ class AdminUserViewSet(BaseViewSet):
                     raise db_err
             return ApiResponse(message="删除成功")
         except Exception as e:
-            return ApiResponse(code=500, message=f"删除失败: {str(e)}")
+            return ApiResponse(code=500, message=f"删除失败: {', '.join(e.args)}")
 

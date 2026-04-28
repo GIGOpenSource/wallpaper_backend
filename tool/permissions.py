@@ -45,7 +45,7 @@ class IsAdmin(BasePermission):
         if not request.user or not role:
             raise AuthenticationFailed({"code": 401, "message": "请提供有效的管理员token"})
         try:
-            if role in ['operator', 'admin']:
+            if role in ['operator', 'admin','super_admin']:
                 return True
             else:
                 raise AuthenticationFailed({"code": 401, "message": "管理员role权限不够"})
