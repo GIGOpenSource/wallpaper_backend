@@ -189,8 +189,8 @@ class SitemapURLViewSet(BaseViewSet):
             "content": config.content,
             "title": config.title,
             "priority": config.priority/10,
-            "index_status": config.index_status,
-            "changefreq": config.changefreq,
+            "index_status": config.config_value.get("index_status"),
+            "changefreq": config.config_value.get("changefreq"),
             "is_active": config.is_active,
             "created_at": config.created_at,
             "updated_at": config.updated_at
