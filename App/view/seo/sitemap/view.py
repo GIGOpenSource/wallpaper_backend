@@ -230,51 +230,30 @@ class SitemapURLViewSet(BaseViewSet):
             message="获取成功"
         )
 
-    @extend_schema(
-        summary="获取 Sitemap XML",
-        description="直接返回生成的 Sitemap XML 内容",
-        responses={
-            200: {
-                "type": "string",
-                "description": "Sitemap XML 内容"
-            }
-        }
-    )
-    @action(detail=False, methods=['get'], url_path='get-xml')
-    def get_xml(self, request):
-        """获取 Sitemap XML"""
-        queryset = SiteConfig.objects.filter(
-            config_type='sitemap_url',
-            is_active=True
-        ).order_by('-priority', '-created_at')
-        xml_content = '<?xml version="1.0" encoding="UTF-8"?>\n'
-        xml_content += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-        for item in queryset:
-            url = item.content
-            changefreq = item.config_value.get('changefreq', 'weekly')
-            priority_value = item.priority / 100 if item.priority else 0.5
-            xml_content += '  <url>\n'
-            xml_content += f'    <loc>{url}</loc>\n'
-            xml_content += f'    <changefreq>{changefreq}</changefreq>\n'
-            xml_content += f'    <priority>{priority_value:.1f}</priority>\n'
-            xml_content += '  </url>\n'
-        xml_content += '</urlset>'
-
-        return HttpResponse(xml_content, content_type='application/xml')
 
     @extend_schema(
         summary="生成 Sitemap XML",
-        description="根据内容类型、频率、优先级生成 Sitemap XML 并保存到数据库",
+        description="根据内容类型、更新频率、默认优先级生成 Sitemap XML 文件并保存到数据库",
         request={
             "application/json": {
                 "type": "object",
                 "properties": {
-                    "content_type": {"type": "string", "enum": ["article", "category", "tag", "page"],
-                                     "description": "内容类型"},
-                    "changefreq": {"type": "string",
-                                   "enum": ["always", "hourly", "daily", "weekly", "monthly", "yearly", "never"],
-                                   "description": "更新频率"},
-                    "priority": {"type": "integer", "minimum": 0, "maximum": 100, "description": "优先级（0-100）"}
+                    "content_type": {
+                        "type": "string",
+                        "enum": ["article", "category", "tag", "page"],
+                        "description": "Sitemap 类型（文章/分类/标签/页面）"
+                    },
+                    "changefreq": {
+                        "type": "string",
+                        "enum": ["always", "hourly", "daily", "weekly", "monthly", "yearly", "never"],
+                        "description": "更新频率"
+                    },
+                    "priority": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 100,
+                        "description": "默认优先级（0-100）"
+                    }
                 },
                 "required": ["content_type", "changefreq", "priority"]
             }
@@ -288,11 +267,12 @@ class SitemapURLViewSet(BaseViewSet):
                         "type": "object",
                         "properties": {
                             "id": {"type": "integer"},
-                            "content_type": {"type": "string"},
-                            "url_count": {"type": "integer", "description": "生成的 URL 数量"}
+                            "title": {"type": "string", "description": "文件名"},
+                            "url_count": {"type": "integer", "description": "URL 数量"},
+                            "file_size": {"type": "integer", "description": "文件大小（字节）"}
                         }
                     },
-                    "message": {"type": "string", "example": "Sitemap XML 生成成功"}
+                    "message": {"type": "string"}
                 }
             },
             400: "参数错误"
@@ -304,17 +284,21 @@ class SitemapURLViewSet(BaseViewSet):
         content_type = request.data.get('content_type')
         changefreq = request.data.get('changefreq', 'weekly')
         priority = request.data.get('priority', 50)
+        # 参数验证
         if not content_type or content_type not in ['article', 'category', 'tag', 'page']:
             return ApiResponse(code=400, message="请提供有效的内容类型（article/category/tag/page）")
         if changefreq not in ['always', 'hourly', 'daily', 'weekly', 'monthly', 'yearly', 'never']:
             return ApiResponse(code=400, message="请提供有效的更新频率")
-
         if not isinstance(priority, int) or priority < 0 or priority > 100:
             return ApiResponse(code=400, message="优先级必须在 0-100 之间")
+        # 根据内容类型筛选 sitemap_url 记录
         queryset = SiteConfig.objects.filter(
             config_type='sitemap_url',
-            is_active=True
+            is_active=True,
+            title=content_type,
+            priority=priority
         ).order_by('-priority', '-created_at')
+        # 生成 XML 内容
         xml_content = '<?xml version="1.0" encoding="UTF-8"?>\n'
         xml_content += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
         url_count = 0
@@ -329,26 +313,32 @@ class SitemapURLViewSet(BaseViewSet):
             xml_content += '  </url>\n'
             url_count += 1
         xml_content += '</urlset>'
-        sitemap_config, created = SiteConfig.objects.update_or_create(
-            config_type='sitemap',
-            content_type=content_type,
-            defaults={
-                'content': xml_content,
-                'priority': priority,
-                'config_value': {
-                    'changefreq': changefreq,
-                    'generated_at': timezone.now().isoformat(),
-                    'url_count': url_count
-                },
-                'is_active': True
-            }
+        # 计算文件大小
+        file_size = len(xml_content.encode('utf-8'))
+        # 生成文件名：类型_更新频率
+        filename = f"{content_type}_{changefreq}"
+        # 保存到 SiteConfig 表
+        sitemap_config = SiteConfig.objects.create(
+            config_type='sitemap_file',
+            title=filename,
+            content=xml_content,
+            priority=priority,
+            config_value={
+                'changefreq': changefreq,
+                'url_count': url_count,
+                'file_size': file_size,
+                'applied': False,  # 默认未应用
+            },
+            created_at=timezone.now().isoformat(),
+            is_active=True
         )
         return ApiResponse(
             data={
                 'id': sitemap_config.id,
+                'title': filename,
                 'content_type': content_type,
                 'url_count': url_count,
-                'created': created
+                'file_size': file_size
             },
-            message=f"Sitemap XML 生成成功，共 {url_count} 个 URL"
+            message=f"Sitemap XML 生成成功，共 {url_count} 个 URL，文件大小 {file_size} 字节"
         )
