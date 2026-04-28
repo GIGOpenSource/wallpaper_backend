@@ -533,3 +533,104 @@ class SitemapURLViewSet(BaseViewSet):
             },
             message=f"Sitemap XML 生成成功，共 {url_count} 个 URL，文件大小 {file_size} 字节"
         )
+
+    @extend_schema(
+        summary="更新 Sitemap XML 记录",
+        description="根据 ID 直接更新 sitemap_file 记录的 title、content、config_value 字段",
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "description": "sitemap_file 记录ID"
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "文件名（可选）"
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "XML 内容（可选）"
+                    },
+                    "config_value": {
+                        "type": "object",
+                        "description": "配置值 JSON（可选）",
+                        "properties": {
+                            "applied": {"type": "boolean", "description": "应用状态"},
+                            "file_size": {"type": "integer", "description": "文件大小"},
+                            "url_count": {"type": "integer", "description": "URL 数量"},
+                            "changefreq": {"type": "string", "description": "更新频率"}
+                        }
+                    }
+                },
+                "required": ["id"]
+            }
+        },
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "integer", "example": 200},
+                    "data": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "integer"},
+                            "title": {"type": "string"},
+                            "content_type": {"type": "string"},
+                            "url_count": {"type": "integer"},
+                            "file_size": {"type": "integer"}
+                        }
+                    },
+                    "message": {"type": "string"}
+                }
+            },
+            400: "参数错误",
+            404: "Sitemap 不存在"
+        }
+    )
+    @action(detail=False, methods=['post'], url_path='update-sitemap-xml')
+    def update_sitemap_xml(self, request):
+        """更新 Sitemap XML 记录"""
+        sitemap_id = request.data.get('id')
+        
+        if not sitemap_id:
+            return ApiResponse(code=400, message="请提供 id")
+        
+        try:
+            # 查询 sitemap_file 记录
+            sitemap_config = SiteConfig.objects.get(
+                id=sitemap_id,
+                config_type='sitemap_file'
+            )
+            # 更新 title（如果提供）
+            if 'title' in request.data:
+                sitemap_config.title = request.data['title']
+            # 更新 content（如果提供）
+            if 'content' in request.data:
+                sitemap_config.content = request.data['content']
+            # 更新 config_value（如果提供）
+            if 'config_value' in request.data:
+                # 合并现有的 config_value 和新的 config_value
+                existing_config = sitemap_config.config_value or {}
+                new_config = request.data['config_value']
+                existing_config.update(new_config)
+                sitemap_config.config_value = existing_config
+            sitemap_config.save()
+            # 从 title 解析 content_type
+            title_parts = sitemap_config.title.split('_')
+            content_type = title_parts[0] if len(title_parts) >= 1 else 'unknown'
+            return ApiResponse(
+                data={
+                    'id': sitemap_config.id,
+                    'title': sitemap_config.title,
+                    'content_type': content_type,
+                    'url_count': sitemap_config.config_value.get('url_count', 0),
+                    'file_size': sitemap_config.config_value.get('file_size', 0)
+                },
+                message="更新成功"
+            )
+        except SiteConfig.DoesNotExist:
+            return ApiResponse(code=404, message="Sitemap 记录不存在或类型不正确")
+        except Exception as e:
+            return ApiResponse(code=500, message=f"更新失败：{str(e)}")
