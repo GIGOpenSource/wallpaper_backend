@@ -706,15 +706,8 @@ class OperationLog(models.Model):
         ('audit', '审核'),
         ('other', '其他'),
     ]
-    operator = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="operation_logs",
-        verbose_name="操作人",
-        db_constraint=False
-    )
+    operator_id = models.IntegerField(null=True, blank=True, verbose_name="操作人ID",
+                                      help_text="冗余字段，避免外键约束问题")
     operator_name = models.CharField(max_length=50, verbose_name="操作人姓名",
                                      help_text="冗余字段，避免操作人删除后无法查看")
     module = models.CharField(max_length=50, verbose_name="操作模块", help_text="如：用户管理、壁纸管理、角色管理")
@@ -738,7 +731,7 @@ class OperationLog(models.Model):
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['-created_at']),
-            models.Index(fields=['operator', '-created_at']),
+            models.Index(fields=['operator_id', '-created_at']),
             models.Index(fields=['module', '-created_at']),
             models.Index(fields=['operation_type', '-created_at']),
         ]

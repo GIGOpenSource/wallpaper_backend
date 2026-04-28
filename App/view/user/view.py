@@ -505,6 +505,13 @@ class AdminUserViewSet(BaseViewSet):
             return ApiResponse(code=500, message=f"获取详情失败: {', '.join(e.args)}")
 
     def destroy(self, request, *args, **kwargs):
+        try:
+            if request.user.role == 'super_admin':
+                pass
+            else:
+                return ApiResponse(code=401, message=f"删除失败: 非超级管理员不可删除")
+        except Exception as e:
+            return ApiResponse(code=401, message=f"删除失败:权限有问题，请联系管理员")
         """删除管理员"""
         try:
             instance = self.get_object()
@@ -518,15 +525,9 @@ class AdminUserViewSet(BaseViewSet):
                     old_role.save(update_fields=['user_count'])
                 except Role.DoesNotExist:
                     pass
-            try:
-                instance.delete()
-            except Exception as db_err:
-                # 如果是因为关联表缺失报错，且你确定要删，可以强制从 User 表直接删
-                if "does not exist" in str(db_err):
-                    User.objects.filter(id=instance.id).delete()
-                else:
-                    raise db_err
+
+            instance.delete()
             return ApiResponse(message="删除成功")
         except Exception as e:
-            return ApiResponse(code=500, message=f"删除失败: {', '.join(e.args)}")
-
+            error_messages = "; ".join(str(msg) for msg in e.args) if e.args else str(e)
+            return ApiResponse(code=500, message=f"删除失败: {error_messages}")
