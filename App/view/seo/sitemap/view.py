@@ -201,9 +201,6 @@ class SitemapURLViewSet(BaseViewSet):
         summary="获取 Sitemap 记录列表",
         description="获取已生成的 Sitemap XML 文件列表，支持按类型、应用状态筛选",
         parameters=[
-            OpenApiParameter(name="content_type", type=str, required=False,
-                             description="内容类型（article/category/tag/page）"),
-            OpenApiParameter(name="applied", type=bool, required=False, description="应用状态（true/false）"),
             OpenApiParameter(name="currentPage", type=int, required=False, description="当前页码"),
             OpenApiParameter(name="pageSize", type=int, required=False, description="每页数量"),
         ],
@@ -211,22 +208,9 @@ class SitemapURLViewSet(BaseViewSet):
     @action(detail=False, methods=['get'], url_path='list-sitemaps')
     def list_sitemaps(self, request):
         """获取 Sitemap 记录列表"""
-        queryset = SiteConfig.objects.filter(config_type='sitemap')
-
-        # 按内容类型筛选
-        content_type = request.query_params.get('content_type')
-        if content_type and content_type in ['article', 'category', 'tag', 'page']:
-            queryset = queryset.filter(content_type=content_type)
-
-        # 按应用状态筛选
-        applied = request.query_params.get('applied')
-        if applied is not None:
-            applied_bool = applied.lower() == 'true'
-            queryset = queryset.filter(config_value__applied=applied_bool)
-
+        queryset = SiteConfig.objects.filter(config_type='sitemap_file')
         # 排序：按创建时间倒序
         queryset = queryset.order_by('-created_at')
-
         # 分页
         page = self.paginate_queryset(queryset)
         if page is not None:
