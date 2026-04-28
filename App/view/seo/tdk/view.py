@@ -40,10 +40,12 @@ class PageTDKSerializer(serializers.ModelSerializer):
 @extend_schema_view(
     list=extend_schema(
         summary="获取页面TDK列表",
-        description="支持按页面类型、是否模板、是否启用筛选",
+        description="支持按页面类型、是否模板、是否启用筛选，"
+                    "page_type:category,tag,detail,search,article,custom",
         parameters=[
             OpenApiParameter(name="currentPage", type=int, required=False, description="当前页码"),
             OpenApiParameter(name="pageSize", type=int, required=False, description="每页数量"),
+            OpenApiParameter(name="is_template", type=int, required=False, description="是否模板"),
         ],
     ),
     retrieve=extend_schema(summary="获取页面TDK详情"),
