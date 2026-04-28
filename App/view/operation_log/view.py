@@ -18,7 +18,7 @@ class OperationLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = OperationLog
         fields = [
-            'id', 'operator', 'operator_info', 'operator_name', 'module',
+            'id', 'operator_id', 'operator_info', 'operator_name', 'module',
             'operation_type', 'operation_type_display', 'target_id', 'target_name',
             'description', 'request_method', 'request_url', 'ip_address',
             'status', 'status_display', 'error_message', 'extra_data', 'created_at'
