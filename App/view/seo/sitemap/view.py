@@ -312,6 +312,25 @@ class SitemapURLViewSet(BaseViewSet):
 
 
     @extend_schema(
+        summary="检测 Sitemap 状态",
+        description="通过 HTTP 请求检测指定 Sitemap URL 是否可正常访问",
+    )
+    @action(detail=False, methods=['post'], url_path='check-status')
+    def check_status(self, request):
+        """检测 Sitemap 状态（固定URL）"""
+        import requests
+        sitemap_url = "https://www.markwallpapers.com/sitemap.xml"
+        try:
+            # 最简单的请求，能访问就行
+            res = requests.get(sitemap_url, timeout=5)
+            if res.status_code == 200:
+                return ApiResponse(message="Sitemap 可正常访问")
+            else:
+                return ApiResponse(code=400, message="Sitemap 无法访问")
+        except:
+            return ApiResponse(code=500, message="Sitemap 访问失败")
+
+    @extend_schema(
         summary="提交 Sitemap 到搜索引擎",
         description="根据 sitemap_id 获取 sitemap.xml 内容并提交到搜索引擎（模拟）",
         request={
@@ -346,37 +365,60 @@ class SitemapURLViewSet(BaseViewSet):
     @action(detail=False, methods=['post'], url_path='submit-to-search-engine')
     def submit_to_search_engine(self, request):
         """提交 Sitemap 到搜索引擎"""
-        sitemap_id = request.data.get('sitemap_id')
-        
-        if not sitemap_id:
-            return ApiResponse(code=400, message="请提供 sitemap_id")
-        
-        # 查询 sitemap 记录
-        try:
-            sitemap_config = SiteConfig.objects.get(
-                id=sitemap_id,
-                config_type='sitemap_file'
-            )
-        except SiteConfig.DoesNotExist:
-            return ApiResponse(code=404, message="Sitemap 不存在或类型不正确")
-        
-        # 获取 XML 内容
-        xml_content = sitemap_config.content
-        
-        # TODO: 实际项目中这里应该调用搜索引擎的 API（如 Google Search Console、Bing Webmaster Tools）
-        # 示例：Google Search Console API
-        # from googleapiclient.discovery import build
-        # service = build('searchconsole', 'v1', credentials=credentials)
-        # service.sitemaps().submit(siteUrl=site_url, feedpath=sitemap_url).execute()
-        
-        # 模拟提交成功
+        sitemap_ids = request.data.get('sitemap_ids', [])
+
+        # 2. 校验是否为空
+        if not isinstance(sitemap_ids, list) or len(sitemap_ids) == 0:
+            return ApiResponse(code=400, message="请提供非空的 sitemap_ids 数组")
+
+        result_list = []
+        success_count = 0
+        fail_count = 0
+
+        # 3. 循环处理每一个 sitemap_id
+        for sitemap_id in sitemap_ids:
+            try:
+                # 查询 sitemap 记录
+                sitemap_config = SiteConfig.objects.get(
+                    id=sitemap_id,
+                    config_type='sitemap_file'
+                )
+                xml_content = sitemap_config.content
+
+                # TODO 实际调用搜索引擎API
+                result_list.append({
+                    'sitemap_id': sitemap_config.id,
+                    'content': xml_content,
+                    'submit_status': 'success',
+                    'message': '提交成功'
+                })
+                success_count += 1
+
+            except SiteConfig.DoesNotExist:
+                # 不存在的记录
+                result_list.append({
+                    'sitemap_id': sitemap_id,
+                    'submit_status': 'fail',
+                    'message': 'Sitemap 不存在或类型不正确'
+                })
+                fail_count += 1
+                # 获取 XML 内容
+            xml_content = sitemap_config.content
+
+            # TODO: 实际项目中这里应该调用搜索引擎的 API（如 Google Search Console、Bing Webmaster Tools）
+            # 示例：Google Search Console API
+            # from googleapiclient.discovery import build
+            # service = build('searchconsole', 'v1', credentials=credentials)
+            # service.sitemaps().submit(siteUrl=site_url, feedpath=sitemap_url).execute()
+        # 4. 返回批量结果
         return ApiResponse(
             data={
-                'sitemap_id': sitemap_config.id,
-                'content': xml_content,
-                'submit_status': 'success'
+                'total': len(sitemap_ids),
+                'success': success_count,
+                'fail': fail_count,
+                'items': result_list
             },
-            message="Sitemap 提交成功"
+            message=f"批量提交完成，成功{success_count}条，失败{fail_count}条"
         )
 
     @extend_schema(
