@@ -737,3 +737,52 @@ class OperationLog(models.Model):
         ]
     def __str__(self):
         return f"{self.operator_name} - {self.module} - {self.get_operation_type_display()} - {self.created_at}"
+
+
+class PageTDK(models.Model):
+    """
+    页面TDK配置表：管理页面的Title、Description、Keywords（SEO优化）
+    """
+    PAGE_TYPE_CHOICES = [
+        ('home', '首页'),
+        ('category', '分类页'),
+        ('tag', '标签页'),
+        ('detail', '详情页'),
+        ('search', '搜索页'),
+        ('article', '文章页'),
+        ('custom', '自定义页面'),
+    ]
+    page_type = models.CharField(max_length=20, choices=PAGE_TYPE_CHOICES, verbose_name="页面类型")
+    title = models.CharField(max_length=200, verbose_name="页面标题（Title）")
+    description = models.TextField(blank=True, null=True, verbose_name="页面描述（Description）")
+    keywords = models.CharField(max_length=500, blank=True, null=True, verbose_name="关键词（Keywords）")
+    url = models.ForeignKey(
+        SiteConfig,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="page_tdk_configs",
+        verbose_name="关联URL",
+        help_text="关联 sitemap_url 类型的配置记录",
+        limit_choices_to={'config_type': 'sitemap_url'}
+    )
+    applied_count = models.PositiveIntegerField(default=0, verbose_name="应用页面数")
+    is_template = models.BooleanField(default=False, verbose_name="是否为模板")
+    is_active = models.BooleanField(default=True, verbose_name="是否启用")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="最后更新时间")
+
+    class Meta:
+        db_table = 't_page_tdk'
+        verbose_name = '页面TDK配置'
+        verbose_name_plural = '页面TDK配置'
+        ordering = ['-updated_at']
+        indexes = [
+            models.Index(fields=['page_type']),
+            models.Index(fields=['is_active']),
+            models.Index(fields=['url', '-updated_at']),
+        ]
+
+    def __str__(self):
+        url_str = self.url.content if self.url else '未关联'
+        return f"{self.get_page_type_display()} - {url_str}"

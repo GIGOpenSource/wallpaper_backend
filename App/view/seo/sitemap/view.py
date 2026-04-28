@@ -312,6 +312,74 @@ class SitemapURLViewSet(BaseViewSet):
 
 
     @extend_schema(
+        summary="提交 Sitemap 到搜索引擎",
+        description="根据 sitemap_id 获取 sitemap.xml 内容并提交到搜索引擎（模拟）",
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "sitemap_id": {"type": "integer", "description": "Sitemap 文件ID（config_type=sitemap_file）"}
+                },
+                "required": ["sitemap_id"]
+            }
+        },
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "integer", "example": 200},
+                    "data": {
+                        "type": "object",
+                        "properties": {
+                            "sitemap_id": {"type": "integer"},
+                            "content": {"type": "string", "description": "Sitemap XML 内容"},
+                            "submit_status": {"type": "string", "description": "提交状态"}
+                        }
+                    },
+                    "message": {"type": "string"}
+                }
+            },
+            400: "参数错误",
+            404: "Sitemap 不存在"
+        }
+    )
+    @action(detail=False, methods=['post'], url_path='submit-to-search-engine')
+    def submit_to_search_engine(self, request):
+        """提交 Sitemap 到搜索引擎"""
+        sitemap_id = request.data.get('sitemap_id')
+        
+        if not sitemap_id:
+            return ApiResponse(code=400, message="请提供 sitemap_id")
+        
+        # 查询 sitemap 记录
+        try:
+            sitemap_config = SiteConfig.objects.get(
+                id=sitemap_id,
+                config_type='sitemap_file'
+            )
+        except SiteConfig.DoesNotExist:
+            return ApiResponse(code=404, message="Sitemap 不存在或类型不正确")
+        
+        # 获取 XML 内容
+        xml_content = sitemap_config.content
+        
+        # TODO: 实际项目中这里应该调用搜索引擎的 API（如 Google Search Console、Bing Webmaster Tools）
+        # 示例：Google Search Console API
+        # from googleapiclient.discovery import build
+        # service = build('searchconsole', 'v1', credentials=credentials)
+        # service.sitemaps().submit(siteUrl=site_url, feedpath=sitemap_url).execute()
+        
+        # 模拟提交成功
+        return ApiResponse(
+            data={
+                'sitemap_id': sitemap_config.id,
+                'content': xml_content,
+                'submit_status': 'success'
+            },
+            message="Sitemap 提交成功"
+        )
+
+    @extend_schema(
         summary="生成 Sitemap XML",
         description="根据内容类型、更新频率、默认优先级生成 Sitemap XML 文件并保存到数据库",
         request={
@@ -369,8 +437,9 @@ class SitemapURLViewSet(BaseViewSet):
             return ApiResponse(code=400, message="请提供有效的内容类型（article/category/tag/page）")
         if changefreq not in ['always', 'hourly', 'daily', 'weekly', 'monthly', 'yearly', 'never']:
             return ApiResponse(code=400, message="请提供有效的更新频率")
-        if not isinstance(priority, int) or priority < 0 or priority > 100:
-            return ApiResponse(code=400, message="优先级必须在 0-100 之间")
+        # if not isinstance(priority, int) or priority < 0 or priority > 100:
+        #     return ApiResponse(code=400, message="优先级必须在 0-100 之间")
+        priority = priority*10
         # 根据内容类型筛选 sitemap_url 记录
         queryset = SiteConfig.objects.filter(
             config_type='sitemap_url',

@@ -12,10 +12,12 @@ from rest_framework.routers import DefaultRouter
 
 from App.view.seo.view import SEOViewSet
 from App.view.seo.sitemap import urls as sitemap_urls
+from App.view.seo.tdk import urls as tdk_urls
 router = DefaultRouter()
 router.register(r'seo_view', SEOViewSet, basename='seo_view')
 
 urlpatterns = [
     path('', include(router.urls)),
-    path('sitemap_urls/', include(sitemap_urls))
+    path('sitemap_urls/', include(sitemap_urls)),
+    path('tdk/', include(tdk_urls))
 ]
