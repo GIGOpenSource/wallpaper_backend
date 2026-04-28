@@ -345,8 +345,12 @@ class AdminUserViewSet(BaseViewSet):
                 message="创建成功",
                 code=201
             )
+        except serializers.ValidationError as e:
+
+            return ApiResponse(code=500, message=f"创建失败: {str(e)}")
         except Exception as e:
             return ApiResponse(code=500, message=f"创建失败: {str(e)}")
+
 
     def update(self, request, *args, **kwargs):
         """更新管理员信息（包括角色）"""
@@ -424,8 +428,10 @@ class AdminUserViewSet(BaseViewSet):
                 },
                 message="更新成功"
             )
+
         except Exception as e:
-            return ApiResponse(code=500, message=f"更新失败: {str(e)}")
+            return ApiResponse(code=500, message=f"创建失败: {str(e)}")
+
 
     def partial_update(self, request, *args, **kwargs):
         """部分更新管理员信息"""

@@ -23,7 +23,7 @@ class IsOwner(BasePermission):
             return False
         # 只允许 User 表的管理员
         if isinstance(request.user, User):
-            if request.user.role in ['admin', 'operator']:
+            if request.user.role in ['admin', 'operator', 'super_admin']:
                 return True
         return False
 
@@ -91,7 +91,7 @@ class IsOwnerOrAdmin(BasePermission):
 
         # 管理员可以操作所有对象
         if isinstance(request.user, User):
-            if hasattr(request.user, 'role') and request.user.role in ['admin', 'operator']:
+            if hasattr(request.user, 'role') and request.user.role in ['admin', 'operator', 'super_admin']:
                 return True
 
         # 客户用户只能操作自己上传的壁纸
