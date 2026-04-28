@@ -93,7 +93,7 @@ class RecommendStrategyViewSet(BaseViewSet):
         name = (self.request.query_params.get("name") or "").strip()
         filter_status = (self.request.query_params.get("filter_status") or "").strip()
 
-        if strategy_type in ["home", "hot"]:
+        if strategy_type:
             queryset = queryset.filter(strategy_type=strategy_type)
         if status in ["draft", "active", "inactive"]:
             queryset = queryset.filter(status=status)
