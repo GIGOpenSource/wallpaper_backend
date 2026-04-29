@@ -217,10 +217,11 @@ class NotificationViewSet(BaseViewSet):
             queryset = Notification.objects.filter(recipient_id=current_user_id).select_related('sender')
         n_type = request.query_params.get('type')
         notification_type = request.query_params.get('notification_type')
-        if n_type == 'announcement' and not notification_type:
-            queryset = queryset.filter(notification_type__in=['system', 'feature', 'Activity'])
-        else:
-            queryset = queryset.filter(notification_type=notification_type)
+        if n_type:
+            if n_type == 'announcement' and not notification_type:
+                queryset = queryset.filter(notification_type__in=['system', 'feature', 'Activity'])
+            else:
+                queryset = queryset.filter(notification_type=notification_type)
         title = request.query_params.get('title', '').strip()
         if title:
             queryset = queryset.filter(extra_data__title__icontains=title)
