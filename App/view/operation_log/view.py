@@ -27,12 +27,13 @@ class OperationLogSerializer(serializers.ModelSerializer):
 
     def get_operator_info(self, obj):
         """获取操作人信息"""
-        if obj.operator:
+        if obj.operator_id:
+            user = User.objects.get(id=obj.operator_id)
             return {
-                'id': obj.operator.id,
-                'username': obj.operator.username,
-                'role': obj.operator.role,
-                'role_display': obj.operator.get_role_display(),
+                'id': user.id,
+                'username': user.username,
+                'role': user.role,
+                'role_display': user.get_role_display()
             }
         return None
 
