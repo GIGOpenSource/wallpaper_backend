@@ -695,6 +695,23 @@ class WallpapersViewSet(BaseViewSet):
                     ).annotate(
                         _sort_weight=Value(1, output_field=IntegerField())
                     ).order_by('-hot_score', '-like_count', '-created_at')
+
+                    if is_admin:
+                        strategy_queryset = strategy_queryset.prefetch_related('tags', 'category').select_related(
+                            'customer_upload__customer')
+                        normal_queryset = normal_queryset.prefetch_related('tags', 'category').select_related(
+                            'customer_upload__customer')
+                    else:
+                        strategy_queryset = strategy_queryset.prefetch_related('tags').only(
+                            'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
+                            'has_watermark', 'is_live', 'is_hd', 'hot_score', 'like_count',
+                            'collect_count', 'download_count', 'view_count', 'created_at', 'audit_status'
+                        )
+                        normal_queryset = normal_queryset.prefetch_related('tags').only(
+                            'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
+                            'has_watermark', 'is_live', 'is_hd', 'hot_score', 'like_count',
+                            'collect_count', 'download_count', 'view_count', 'created_at', 'audit_status'
+                        )
                     # 2.4 使用 union 拼接两个查询集（按 _sort_weight 排序）
                     queryset = strategy_queryset.union(normal_queryset).order_by('_sort_weight')
                 else:
@@ -715,18 +732,6 @@ class WallpapersViewSet(BaseViewSet):
             else:
                 # 默认排序
                 queryset = queryset.order_by('-hot_score', '-created_at')
-        # 根据用户角色选择不同的查询优化策略
-        if is_admin:
-            # 管理员：使用详细序列化器，预加载关联数据
-            queryset = queryset.prefetch_related('tags', 'category').select_related('customer_upload__customer')
-        else:
-            # 普通用户：使用轻量级序列化器
-            queryset = queryset.prefetch_related('tags').only(
-                'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
-                'has_watermark', 'is_live', 'is_hd', 'hot_score', 'like_count',
-                'collect_count', 'download_count', 'view_count', 'created_at', 'audit_status'
-            )
-
         customer_id = self.get_serializer_context().get("customer_id")
         if customer_id:
             liked_ids = set(
