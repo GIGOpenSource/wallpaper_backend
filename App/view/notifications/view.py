@@ -172,7 +172,6 @@ class NotificationViewSet(BaseViewSet):
     def get_queryset(self):
         """只返回当前用户的通知"""
         current_user_id = self.get_serializer_context().get('current_user_id')
-
         is_admin = self.get_serializer_context().get('is_admin', False)
         if is_admin:
             return Notification.objects.all()
@@ -205,7 +204,6 @@ class NotificationViewSet(BaseViewSet):
     def list(self, request, *args, **kwargs):
         """获取通知列表"""
         current_user_id = self.get_serializer_context().get('current_user_id')
-        user_type = self.get_serializer_context().get('user_type')
         is_admin = self.get_serializer_context().get('is_admin', False)
 
         if not current_user_id:

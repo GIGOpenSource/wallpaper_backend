@@ -258,24 +258,37 @@ class DashboardStatsViewSet(BaseViewSet):
     @action(detail=False, methods=['get'], url_path='wallpaper-category-distribution')
     def wallpaper_category_distribution(self, request):
         """
-        获取壁纸分类分布数据（饼状图）
-        返回每个分类的ID、名称和壁纸数量
+        获取壁纸分类分布数据（按分类数量累加求总数，占比总和100%）
         """
-        # 查询所有分类，并统计每个分类下的壁纸数量
         categories = WallpaperCategory.objects.all().order_by('sort')
 
-        distribution_data = []
+        # 第一步：先算出所有分类的数量总和
+        total_count = 0
+        category_counts = []
+
         for category in categories:
-            # 统计该分类下的壁纸数量（通过中间表关联）
-            wallpaper_count = Wallpapers.objects.filter(
-                category=category
-            ).count()
+            count = Wallpapers.objects.filter(category=category).count()
+            category_counts.append(count)
+            total_count += count  # 分类数量累加得到总数
+
+        # 第二步：计算每个分类占比
+        distribution_data = []
+        for i, category in enumerate(categories):
+            count = category_counts[i]
+
+            if total_count > 0:
+                percentage = round((count / total_count) * 100, 2)
+            else:
+                percentage = 0.0
 
             distribution_data.append({
                 'category_id': category.id,
                 'category_name': category.name,
-                'count': wallpaper_count
+                'count': count,
+                'percentage': percentage,  # 所有分类加起来 = 100%
+                'total': total_count  # 分类数量总和
             })
+
         return ApiResponse(
             data=distribution_data,
             message="获取壁纸分类分布成功"
