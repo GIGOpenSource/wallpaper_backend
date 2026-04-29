@@ -121,6 +121,8 @@ class WallpapersListSerializer(serializers.ModelSerializer):
     # is_collected = serializers.SerializerMethodField()
 
     class Meta:
+
+
         model = Wallpapers
         fields = [
             'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
@@ -1297,6 +1299,7 @@ class WallpapersViewSet(BaseViewSet):
             OpenApiParameter(name="currentPage", type=int, required=False, description="当前页码"),
             OpenApiParameter(name="pageSize", type=int, required=False, description="每页数量"),
             OpenApiParameter(name="platform", type=str, required=False, description="平台筛选：PC 或 PHONE"),
+            OpenApiParameter(name="customer_id", type=str, required=False, description="他人id"),
         ],
     )
     @action(
@@ -1308,7 +1311,19 @@ class WallpapersViewSet(BaseViewSet):
     def my_collections(self, request):
         token = request.headers.get("token")
         is_valid, customer_id = CustomTokenTool.verify_customer_token(token)
-        if not is_valid or not customer_id:
+        target_customer_id = request.query_params.get('customer_id')
+        role = False
+        if target_customer_id and request.user and hasattr(request.user, 'role'):
+            role = True
+            # 检查是否为管理员（假设 role 字段存在且为 admin 相关角色）
+            try:
+                customer_id = int(target_customer_id)
+            except Exception as e:
+                return ApiResponse(code=400, message="无效的 customer_id")
+
+        user_allowed = is_valid and customer_id
+        admin_allowed = role and customer_id
+        if not (user_allowed or admin_allowed):
             return ApiResponse(code=401, message="客户 Token 无效或已过期")
 
         qs = (
@@ -1549,12 +1564,13 @@ class WallpapersViewSet(BaseViewSet):
             return ApiResponse(code=500, message=f"保存壁纸失败：{e}")
 
     @extend_schema(
-        summary="我的上传列表（仅需客户 Token）",
+        summary="我的上传列表（仅需客户 Token）/管理员权限+他人id",
         description="查看当前用户上传的所有壁纸记录，支持分页和平台筛选",
         parameters=[
             OpenApiParameter(name="currentPage", type=int, required=False, description="当前页码"),
             OpenApiParameter(name="pageSize", type=int, required=False, description="每页数量"),
             OpenApiParameter(name="platform", type=str, required=False, description="平台筛选：PC 或 PHONE"),
+            OpenApiParameter(name="customer_id", type=str, required=False, description="其他用户id"),
         ],
     )
     @action(
@@ -1566,10 +1582,21 @@ class WallpapersViewSet(BaseViewSet):
     def my_uploads(self, request):
         token = request.headers.get("token")
         is_valid, customer_id = CustomTokenTool.verify_customer_token(token)
-        if not is_valid or not customer_id:
-            return ApiResponse(code=401, message="客户 Token 无效或已过期")
 
-        # 通过 CustomerWallpaperUpload 关联查询壁纸
+        target_customer_id = request.query_params.get('customer_id')
+        role = False
+
+        if target_customer_id and request.user and hasattr(request.user, 'role'):
+            role = True
+            # 检查是否为管理员（假设 role 字段存在且为 admin 相关角色）
+            try:
+                customer_id = int(target_customer_id)
+            except Exception as e:
+                return ApiResponse(code=400, message="无效的 customer_id")
+        user_allowed = is_valid and customer_id
+        admin_allowed = role and customer_id
+        if not (user_allowed or admin_allowed):
+            return ApiResponse(code=401, message="客户 Token 无效或已过期")
         qs = (
             CustomerWallpaperUpload.objects
             .filter(customer_id=customer_id)
