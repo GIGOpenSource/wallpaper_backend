@@ -46,6 +46,7 @@ class PageTDKSerializer(serializers.ModelSerializer):
             OpenApiParameter(name="currentPage", type=int, required=False, description="当前页码"),
             OpenApiParameter(name="pageSize", type=int, required=False, description="每页数量"),
             OpenApiParameter(name="is_template", type=str, required=False, description="是否模板"),
+            OpenApiParameter(name="url", type=str, required=False, description="是否模板"),
         ],
     ),
     retrieve=extend_schema(summary="获取页面TDK详情"),
@@ -62,7 +63,7 @@ class PageTDKViewSet(BaseViewSet):
     queryset = PageTDK.objects.all()
     serializer_class = PageTDKSerializer
     pagination_class = CustomPagination
-    permission_classes = [IsAdmin]
+    # permission_classes = [IsAdmin]
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -70,16 +71,17 @@ class PageTDKViewSet(BaseViewSet):
         page_type = self.request.query_params.get('page_type')
         if page_type:
             queryset = queryset.filter(page_type=page_type)
-
         # 按是否模板筛选
         is_template = self.request.query_params.get('is_template')
         if is_template is not None:
             queryset = queryset.filter(is_template=is_template.lower() == 'true')
-
         # 按是否启用筛选
         is_active = self.request.query_params.get('is_active')
         if is_active is not None:
             queryset = queryset.filter(is_active=is_active.lower() == 'true')
+        url = self.request.query_params.get('url', '').strip()
+        if url:
+            queryset = queryset.filter(url__content=url)
 
         return queryset.order_by('-updated_at')
 
