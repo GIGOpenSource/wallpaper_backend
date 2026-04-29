@@ -143,7 +143,8 @@ class AnnouncementSerializer(serializers.Serializer):
                     "**普通用户**：只返回自己的通知\n\n"
                     "**后台管理员**：返回所有用户的通知",
         parameters=[
-            OpenApiParameter(name="type", type=str, required=False, description="通知类型筛选 (like/comment/follow/reward/announcement)"),
+            OpenApiParameter(name="notification_type", type=str, required=False, description="通知类型筛选 (feature/Activity/system)"),
+            OpenApiParameter(name="type", type=str, required=False, description="通知公告 announcement"),
             OpenApiParameter(name="currentPage", type=int, required=False, description="当前页码"),
             OpenApiParameter(name="pageSize", type=int, required=False, description="每页数量"),
         ],
@@ -215,11 +216,11 @@ class NotificationViewSet(BaseViewSet):
             queryset = Notification.objects.filter(recipient_id=current_user_id).select_related('sender')
 
         n_type = request.query_params.get('type')
-        if n_type:
-            if n_type == 'announcement':
-                queryset = queryset.filter(notification_type__in=['system', 'feature', 'Activity'])
-            else:
-                queryset = queryset.filter(notification_type=n_type)
+        notification_type = request.query_params.get('notification_type')
+        if n_type == 'announcement' and not notification_type:
+            queryset = queryset.filter(notification_type__in=['system', 'feature', 'Activity'])
+        else:
+            queryset = queryset.filter(notification_type=notification_type)
 
         queryset = queryset.order_by('-created_at')
 

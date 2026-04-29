@@ -135,6 +135,8 @@ class WallpaperCommentAdminSerializer(serializers.ModelSerializer):
             OpenApiParameter(name="currentPage", type=int, required=False, description="当前页码"),
             OpenApiParameter(name="pageSize", type=int, required=False, description="每页数量"),
             OpenApiParameter(name="is_hidden", type=bool, required=False, description="按隐藏状态筛选"),
+            OpenApiParameter(name="nickname", type=str, required=False, description="用户昵称"),
+            OpenApiParameter(name="content", type=str, required=False, description="评论内容"),
         ],
         responses={
             200: {
@@ -245,6 +247,13 @@ class WallpaperCommentViewSet(BaseViewSet):
                 queryset = queryset.filter(is_hidden=True)
             elif is_hidden.lower() == 'false':
                 queryset = queryset.filter(is_hidden=False)
+        content = request.query_params.get('content', '').strip()
+        if content:
+            queryset = queryset.filter(content__icontains=content)
+        nickname = request.query_params.get('nickname', '').strip()
+        if nickname:
+            queryset = queryset.filter(customer__nickname__icontains=nickname)
+
         # 按时间倒序
         queryset = queryset.order_by('-created_at')
         page = self.paginate_queryset(queryset)
