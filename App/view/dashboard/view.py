@@ -23,6 +23,7 @@ from models.models import (
     WallpaperLike,
     WallpaperCollection,
     DashboardStats,
+    WallpaperCategory,
 )
 
 
@@ -161,6 +162,124 @@ class DashboardStatsViewSet(BaseViewSet):
         
         serializer = self.get_serializer(instance)
         return ApiResponse(data=serializer.data, message="获取成功")
+
+    @extend_schema(
+        summary="获取用户增长趋势",
+        description="返回最近N天的用户增长趋势数据，包含日期和新增用户数",
+        parameters=[
+            OpenApiParameter(
+                name="days",
+                type=int,
+                required=False,
+                description="查询天数，默认30天",
+                default=30
+            ),
+        ],
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "integer", "example": 200},
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "date": {"type": "string", "description": "日期，格式：YYYY-MM-DD"},
+                                "new_users": {"type": "integer", "description": "新增用户数"}
+                            }
+                        }
+                    },
+                    "message": {"type": "string"}
+                }
+            }
+        }
+    )
+    @action(detail=False, methods=['get'], url_path='user-growth-trend')
+    def user_growth_trend(self, request):
+        """
+        获取用户增长趋势
+        返回最近N天的每日新增用户数
+        """
+        # 获取查询天数，默认30天
+        days = request.query_params.get('days', 30)
+        try:
+            days = int(days)
+            if days <= 0 or days > 365:
+                days = 30
+        except (ValueError, TypeError):
+            days = 30
+        # 计算起始日期
+        end_date = timezone.now().date()
+        start_date = end_date - timedelta(days=days - 1)
+        # 查询指定日期范围内的统计数据
+        stats_records = DashboardStats.objects.filter(
+            stat_date__gte=start_date,
+            stat_date__lte=end_date
+        ).order_by('stat_date')
+
+        # 构建趋势数据
+        trend_data = []
+        for record in stats_records:
+            trend_data.append({
+                'date': record.stat_date.strftime('%Y-%m-%d'),
+                'new_users': record.new_users_today
+            })
+
+        return ApiResponse(
+            data=trend_data,
+            message=f"获取最近{days}天用户增长趋势成功"
+        )
+
+    @extend_schema(
+        summary="获取壁纸分类分布",
+        description="返回每个分类的ID、名称和壁纸数量，用于饼状图展示",
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "integer", "example": 200},
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "category_id": {"type": "integer", "description": "分类ID"},
+                                "category_name": {"type": "string", "description": "分类名称"},
+                                "count": {"type": "integer", "description": "该分类下的壁纸数量"}
+                            }
+                        }
+                    },
+                    "message": {"type": "string"}
+                }
+            }
+        }
+    )
+    @action(detail=False, methods=['get'], url_path='wallpaper-category-distribution')
+    def wallpaper_category_distribution(self, request):
+        """
+        获取壁纸分类分布数据（饼状图）
+        返回每个分类的ID、名称和壁纸数量
+        """
+        # 查询所有分类，并统计每个分类下的壁纸数量
+        categories = WallpaperCategory.objects.all().order_by('sort')
+
+        distribution_data = []
+        for category in categories:
+            # 统计该分类下的壁纸数量（通过中间表关联）
+            wallpaper_count = Wallpapers.objects.filter(
+                category=category
+            ).count()
+
+            distribution_data.append({
+                'category_id': category.id,
+                'category_name': category.name,
+                'count': wallpaper_count
+            })
+        return ApiResponse(
+            data=distribution_data,
+            message="获取壁纸分类分布成功"
+        )
 
     def _calculate_and_save_stats(self, stat_date, now):
         """
