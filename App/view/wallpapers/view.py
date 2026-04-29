@@ -1791,19 +1791,15 @@ class WallpapersViewSet(BaseViewSet):
             limit = int(request.query_params.get("limit", 6))
         except (TypeError, ValueError):
             limit = 6
-
         from django.utils import timezone
         now = timezone.now()
-
         matched_strategy = None
-
         if platform in ['PC', 'PHONE']:
             platform_strategies = RecommendStrategy.objects.filter(
                 platform=platform.lower(),
-                strategy_type="home",
+                strategy_type="banner",
                 status="active",
             ).order_by("-priority", "-created_at")
-
             for item in platform_strategies:
                 if item.start_time and now < item.start_time:
                     continue
