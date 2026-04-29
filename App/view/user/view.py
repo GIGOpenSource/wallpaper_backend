@@ -43,7 +43,7 @@ class LoginSerializer(serializers.Serializer):
     username = serializers.CharField()
     password = serializers.CharField(write_only=True)
 
-@extend_schema(tags=["(Admin)系统用户管理"])
+@extend_schema(tags=["(Admin)系统用户管理 管理员登录注册退出"])
 @extend_schema_view(
     list=extend_schema(summary='获取管理员列表（需有效 Token）'),
     retrieve=extend_schema(summary='获取用户详情（需有效 Token）'),
@@ -160,7 +160,8 @@ class RoleSerializer(serializers.ModelSerializer):
         summary="获取所有角色管理列表",
         description="获取角色管理列表",
         parameters=[
-            OpenApiParameter(name="user_type", type=int, required=False, description="角色"),
+            OpenApiParameter(name="user_type", type=str, required=False, description="角色类型：admin、customer"),
+            OpenApiParameter(name="name", type=str, required=False, description="角色名称中文名"),
         ],
     ),
     create=extend_schema(summary="创建角色"),
@@ -202,6 +203,9 @@ class RoleViewSet(BaseViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
         user_type = self.request.query_params.get('user_type')
+        name = self.request.query_params.get('name')
+        if name:
+            queryset = queryset.filter(name__icontains=name)
         if user_type in ['admin', 'customer']:
             queryset = queryset.filter(user_type=user_type)
         return queryset.order_by('user_type', 'sort_order', '-created_at')
@@ -284,6 +288,7 @@ class AdminUserUpdateSerializer(serializers.Serializer):
         parameters=[
             OpenApiParameter(name="currentPage", type=int, required=False, description="当前页码"),
             OpenApiParameter(name="pageSize", type=int, required=False, description="每页数量"),
+            OpenApiParameter(name="username", type=str, required=False, description="管理员名字"),
         ],
     ),
     retrieve=extend_schema(summary="获取管理员详情"),
@@ -317,6 +322,13 @@ class AdminUserViewSet(BaseViewSet):
         if self.action in ['update', 'partial_update']:
             return AdminUserUpdateSerializer
         return AdminUserUpdateSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        username = self.request.query_params.get('username')
+        if username:
+            queryset = queryset.filter(username__icontains=username)
+        return queryset.order_by('-created_at')
 
     def create(self, request, *args, **kwargs):
         """创建管理员"""
