@@ -112,6 +112,62 @@ def _image_meta_from_bytes(content: bytes):
         return 0, 0, None
 
 
+def _decrement_user_counters_on_wallpaper_delete(wallpaper_ids):
+    """
+    删除壁纸时，同步扣减相关用户的计数
+
+    Args:
+        wallpaper_ids: 壁纸ID列表（可以是单个ID或列表）
+
+    Returns:
+        dict: 统计信息 {'deleted_count': int, 'affected_users': int}
+    """
+    from django.db.models import Count
+    # 确保是列表格式
+    if not isinstance(wallpaper_ids, list):
+        wallpaper_ids = [wallpaper_ids]
+    if not wallpaper_ids:
+        return {'deleted_count': 0, 'affected_users': 0}
+    # 去重
+    wallpaper_ids = list(set(wallpaper_ids))
+    # 记录需要更新的计数器 {customer_id: {'upload': count, 'collect': count}}
+    user_counters = {}
+    # 1. 处理上传者计数
+    uploads = CustomerWallpaperUpload.objects.filter(
+        wallpaper_id__in=wallpaper_ids
+    ).select_related('customer')
+    for upload in uploads:
+        cid = upload.customer_id
+        if cid not in user_counters:
+            user_counters[cid] = {'upload': 0, 'collect': 0}
+        user_counters[cid]['upload'] += 1
+    # 2. 处理收藏者计数（批量查询优化）
+    collections = WallpaperCollection.objects.filter(wallpaper_id__in=wallpaper_ids)
+    if collections.exists():
+        collect_stats = collections.values('user_id').annotate(cnt=Count('user_id'))
+        for stat in collect_stats:
+            uid = stat['user_id']
+            if uid not in user_counters:
+                user_counters[uid] = {'upload': 0, 'collect': 0}
+            user_counters[uid]['collect'] += stat['cnt']
+    # 3. 批量更新用户计数（使用 Greatest 防止负数）
+    affected_users = 0
+    try:
+        for cid, counts in user_counters.items():
+            updated = CustomerUser.objects.filter(id=cid).update(
+                upload_count=Greatest(F('upload_count') - counts['upload'], 0),
+                collection_count=Greatest(F('collection_count') - counts['collect'], 0)
+            )
+            if updated:
+                affected_users += 1
+    except Exception as e:
+        logger.error(f"删除壁纸后更新用户计数失败: {e}", exc_info=True)
+    return {
+        'deleted_count': len(wallpaper_ids),
+        'affected_users': affected_users
+    }
+
+
 # ====================优化查询218start===============================
 class WallpapersListSerializer(serializers.ModelSerializer):
     """壁纸列表序列化器（轻量级，只包含必要字段）"""
@@ -618,6 +674,30 @@ class WallpapersViewSet(BaseViewSet):
             serializer = WallpapersListSerializer(queryset, many=True, context=context)
 
         return ApiResponse(serializer.data)
+
+    def destroy(self, request, *args, **kwargs):
+        try:
+            instance = self.get_object()
+            wallpaper_id = instance.id
+            # 在删除前，先扣减相关用户计数
+            _decrement_user_counters_on_wallpaper_delete([wallpaper_id])
+            # 执行物理删除
+            self.perform_destroy(instance)
+            log_operation(
+                operator=request.user,
+                module="壁纸管理",
+                operation_type="delete",
+                target_id=wallpaper_id,
+                target_name=instance.name,
+                description=f"删除壁纸：{instance.name}",
+                request=request
+            )
+            return ApiResponse(message="删除成功")
+        except ObjectDoesNotExist:
+            return ApiResponse(code=404, message=f"{self.queryset.model.__name__}不存在")
+        except Exception as e:
+            logger.error(f"删除壁纸失败: {e}", exc_info=True)
+            return ApiResponse(code=500, message=f"删除失败: {str(e)}")
 
     def retrieve(self, request, *args, **kwargs):
         """
@@ -1251,6 +1331,7 @@ class WallpapersViewSet(BaseViewSet):
         }
     )
     @action(detail=False, methods=['post'], url_path='batch-delete')
+    @action(detail=False, methods=['post'], url_path='batch-delete')
     def batch_delete(self, request):
         wallpaper_ids = request.data.get('wallpaper_ids', [])
         if not isinstance(wallpaper_ids, list) or not wallpaper_ids:
@@ -1262,13 +1343,31 @@ class WallpapersViewSet(BaseViewSet):
                 valid_ids.append(int(item))
             except (TypeError, ValueError):
                 return ApiResponse(code=400, message="wallpaper_ids 只能包含整数ID")
+
         # 去重，避免重复删除
         valid_ids = list(set(valid_ids))
+
         queryset = Wallpapers.objects.filter(id__in=valid_ids)
         deleted_count = queryset.count()
         if deleted_count == 0:
             return ApiResponse(code=404, message="未找到可删除的壁纸")
-        queryset.delete()
+
+        # 1. 在删除前，预取相关数据用于日志记录
+        wallpapers_to_delete = list(queryset.select_related('customer_upload__customer'))
+        wallpaper_names = [wp.name for wp in wallpapers_to_delete]
+
+        # 2. 执行物理删除（在事务中保证原子性）
+        with transaction.atomic():
+            # 先删除关联的点赞和收藏记录（防止外键约束或脏数据）
+            WallpaperLike.objects.filter(wallpaper_id__in=valid_ids).delete()
+            WallpaperCollection.objects.filter(wallpaper_id__in=valid_ids).delete()
+
+            # 删除壁纸本身
+            queryset.delete()
+
+        # 3. 扣减相关用户计数（复用通用函数）
+        counter_result = _decrement_user_counters_on_wallpaper_delete(valid_ids)
+
         log_operation(
             operator=request.user,
             module="壁纸管理",
@@ -1276,12 +1375,21 @@ class WallpapersViewSet(BaseViewSet):
             target_id=",".join(map(str, valid_ids)),
             description=f"批量删除 {deleted_count} 张壁纸",
             request=request,
-            extra_data={"wallpaper_ids": valid_ids}
+            extra_data={
+                "wallpaper_ids": valid_ids,
+                "wallpaper_names": wallpaper_names[:10],  # 只记录前10个名称
+                "affected_users": counter_result['affected_users']
+            }
         )
         return ApiResponse(
-            data={"deleted_count": deleted_count, "wallpaper_ids": valid_ids},
-            message=f"批量删除成功，共删除 {deleted_count} 条"
+            data={
+                "deleted_count": deleted_count,
+                "wallpaper_ids": valid_ids,
+                "affected_users": counter_result['affected_users']
+            },
+            message=f"批量删除成功，共删除 {deleted_count} 条，影响 {counter_result['affected_users']} 个用户"
         )
+
     @extend_schema(summary="记录一次下载并返回累计下载量（需客户 Token）")
     @action(
         detail=False,
