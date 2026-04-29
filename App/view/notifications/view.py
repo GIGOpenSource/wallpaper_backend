@@ -145,6 +145,7 @@ class AnnouncementSerializer(serializers.Serializer):
         parameters=[
             OpenApiParameter(name="notification_type", type=str, required=False, description="通知类型筛选 (feature/Activity/system)"),
             OpenApiParameter(name="type", type=str, required=False, description="通知公告 announcement"),
+            OpenApiParameter(name="title", type=str, required=False, description="通知标题"),
             OpenApiParameter(name="currentPage", type=int, required=False, description="当前页码"),
             OpenApiParameter(name="pageSize", type=int, required=False, description="每页数量"),
         ],
@@ -214,21 +215,20 @@ class NotificationViewSet(BaseViewSet):
             queryset = Notification.objects.all().select_related('sender', 'recipient')
         else:
             queryset = Notification.objects.filter(recipient_id=current_user_id).select_related('sender')
-
         n_type = request.query_params.get('type')
         notification_type = request.query_params.get('notification_type')
         if n_type == 'announcement' and not notification_type:
             queryset = queryset.filter(notification_type__in=['system', 'feature', 'Activity'])
         else:
             queryset = queryset.filter(notification_type=notification_type)
-
+        title = request.query_params.get('title', '').strip()
+        if title:
+            queryset = queryset.filter(extra_data__title__icontains=title)
         queryset = queryset.order_by('-created_at')
-
         page = self.paginate_queryset(queryset)
         if page is not None:
             serializer = self.get_serializer(page, many=True)
             return self.get_paginated_response(serializer.data)
-
         serializer = self.get_serializer(queryset, many=True)
         return ApiResponse(data=serializer.data, message="通知列表获取成功")
 
