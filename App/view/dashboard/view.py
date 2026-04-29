@@ -9,7 +9,7 @@
 """
 from django.db.models import Sum, Count
 from django.utils import timezone
-from datetime import timedelta
+from datetime import timedelta, datetime, date
 from rest_framework.decorators import action
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
 from tool.base_views import BaseViewSet
@@ -457,6 +457,9 @@ class CustomerUserListSerializer(serializers.ModelSerializer):
             OpenApiParameter(name="pageSize", type=int, required=False, description="每页数量"),
             OpenApiParameter(name="email", type=str, required=False, description="按邮箱模糊搜索"),
             OpenApiParameter(name="nickname", type=str, required=False, description="按昵称模糊搜索"),
+            OpenApiParameter(name="gender", type=int, required=False, description="性别"),
+            OpenApiParameter(name="register_start_date", type=date, required=False, description="注册开始日期 20260101"),
+            OpenApiParameter(name="register_end_date", type=date, required=False, description="注册结束日期 20260101"),
             OpenApiParameter(name="status", type=int, required=False, description="用户状态：1=正常，2=禁用"),
             OpenApiParameter(
                 name="order",
@@ -526,11 +529,19 @@ class CustomerUserViewSet(BaseViewSet):
         email = request.query_params.get("email", "").strip()
         if email:
             queryset = queryset.filter(email__icontains=email)
+        register_start_date = request.query_params.get("register_start_date")
+        register_end_date = request.query_params.get("register_end_date")
+        if register_start_date:
+            queryset = queryset.filter(created_at__gte=register_start_date)
+        if register_end_date:
+            queryset = queryset.filter(created_at__lte=register_end_date)
         # 按昵称搜索
         nickname = request.query_params.get("nickname", "").strip()
         if nickname:
             queryset = queryset.filter(nickname__icontains=nickname)
-        # 按状态筛选：1=正常，2=禁用
+        gender = request.query_params.get("gender")
+        if gender:
+            queryset = queryset.filter(gender=gender)
         status = request.query_params.get("status")
         if status:
             try:
