@@ -488,6 +488,10 @@ class DashboardStats(models.Model):
     total_collections = models.IntegerField(default=0, verbose_name="总收藏数")
     daily_active_users = models.IntegerField(default=0, verbose_name="日活跃用户数")
     weekly_active_users = models.IntegerField(default=0, verbose_name="周活跃用户数")
+    new_users_today = models.IntegerField(default=0, verbose_name="今日新增用户数")
+    new_wallpapers_today = models.IntegerField(default=0, verbose_name="今日新增壁纸数")
+    new_daily_active_users = models.IntegerField(default=0, verbose_name="今日新增日活跃用户数")
+    new_weekly_active_users = models.IntegerField(default=0, verbose_name="今日新增周活跃用户数")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
     

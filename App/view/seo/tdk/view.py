@@ -45,7 +45,7 @@ class PageTDKSerializer(serializers.ModelSerializer):
         parameters=[
             OpenApiParameter(name="currentPage", type=int, required=False, description="当前页码"),
             OpenApiParameter(name="pageSize", type=int, required=False, description="每页数量"),
-            OpenApiParameter(name="is_template", type=int, required=False, description="是否模板"),
+            OpenApiParameter(name="is_template", type=str, required=False, description="是否模板"),
         ],
     ),
     retrieve=extend_schema(summary="获取页面TDK详情"),

@@ -34,7 +34,10 @@ class DashboardStatsSerializer(serializers.ModelSerializer):
         fields = [
             'stat_date', 'total_users', 'total_wallpapers', 'total_views',
             'total_downloads', 'total_likes', 'total_collections',
-            'daily_active_users', 'weekly_active_users', 'updated_at'
+            'daily_active_users', 'weekly_active_users',
+            'new_users_today', 'new_wallpapers_today',
+            'new_daily_active_users', 'new_weekly_active_users',
+            'updated_at'
         ]
         read_only_fields = fields
 
@@ -87,7 +90,6 @@ class DashboardStatsViewSet(BaseViewSet):
         动态过滤查询
         """
         queryset = super().get_queryset()
-        
         # 如果是指定日期查询，按日期过滤
         if self.action == 'retrieve':
             stat_date = self.kwargs.get('pk')
@@ -131,7 +133,6 @@ class DashboardStatsViewSet(BaseViewSet):
                 yesterday = today - timedelta(days=1)
                 if stats_record.stat_date == yesterday:
                     need_refresh = True
-            
             if need_refresh:
                 logger.info(f"刷新今日({today})面板统计数据...")
                 self._calculate_and_save_stats(today, now)
@@ -160,45 +161,88 @@ class DashboardStatsViewSet(BaseViewSet):
         
         serializer = self.get_serializer(instance)
         return ApiResponse(data=serializer.data, message="获取成功")
-    
+
     def _calculate_and_save_stats(self, stat_date, now):
         """
         计算统计数据并保存到数据库
         :param stat_date: 统计日期
         :param now: 当前时间
         """
+        from django.db.models import Q
+
         # 总用户数量
         total_users = CustomerUser.objects.count()
-        
+
         # 总壁纸数量
         total_wallpapers = Wallpapers.objects.count()
-        
+
         # 总浏览量
         total_views_result = Wallpapers.objects.aggregate(total=Sum('view_count'))
         total_views = total_views_result['total'] or 0
-        
+
         # 总下载量
         total_downloads_result = Wallpapers.objects.aggregate(total=Sum('download_count'))
         total_downloads = total_downloads_result['total'] or 0
-        
+
         # 总点赞数
         total_likes = WallpaperLike.objects.count()
-        
+
         # 总收藏数
         total_collections = WallpaperCollection.objects.count()
-        
+
         # 日活跃用户（最近24小时内有登录记录的用户）
-        yesterday = now - timedelta(hours=24)
+        yesterday_time = now - timedelta(hours=24)
         daily_active_users = CustomerUser.objects.filter(
-            last_login__gte=yesterday
+            last_login__gte=yesterday_time
         ).count()
-        
+
         # 周活跃用户（最近7天内有登录记录的用户）
         week_ago = now - timedelta(days=7)
         weekly_active_users = CustomerUser.objects.filter(
             last_login__gte=week_ago
         ).count()
-        
+
+        # === 新增：计算今日新增数据（今天 - 昨天）===
+        today_start = timezone.make_aware(
+            timezone.datetime.combine(stat_date, timezone.datetime.min.time())
+        )
+        yesterday_start = today_start - timedelta(days=1)
+
+        # 今日新增用户数 = 今天创建的用户数 - 昨天创建的用户数
+        users_created_today = CustomerUser.objects.filter(
+            created_at__gte=today_start
+        ).count()
+        users_created_yesterday = CustomerUser.objects.filter(
+            created_at__gte=yesterday_start,
+            created_at__lt=today_start
+        ).count()
+        new_users_today = max(0, users_created_today - users_created_yesterday)
+
+        # 今日新增壁纸数 = 今天创建的壁纸数 - 昨天创建的壁纸数
+        wallpapers_created_today = Wallpapers.objects.filter(
+            created_at__gte=today_start
+        ).count()
+        wallpapers_created_yesterday = Wallpapers.objects.filter(
+            created_at__gte=yesterday_start,
+            created_at__lt=today_start
+        ).count()
+        new_wallpapers_today = max(0, wallpapers_created_today - wallpapers_created_yesterday)
+
+        # 今日新增日活跃用户数 = 今天的日活 - 昨天的日活
+        # 今天的日活：从今天0点到现在有登录的用户
+        daily_active_today = CustomerUser.objects.filter(
+            last_login__gte=today_start
+        ).count()
+        # 昨天的日活：从昨天0点到今天0点有登录的用户
+        daily_active_yesterday = CustomerUser.objects.filter(
+            last_login__gte=yesterday_start,
+            last_login__lt=today_start
+        ).count()
+        new_daily_active_users = max(0, daily_active_today - daily_active_yesterday)
+
+        # 今日新增周活跃用户数 = 今日新增日活跃 * 7（简化计算）
+        new_weekly_active_users = new_daily_active_users * 7
+
         # 保存或更新统计数据
         stats_record, created = DashboardStats.objects.update_or_create(
             stat_date=stat_date,
@@ -211,9 +255,12 @@ class DashboardStatsViewSet(BaseViewSet):
                 'total_collections': total_collections,
                 'daily_active_users': daily_active_users,
                 'weekly_active_users': weekly_active_users,
+                'new_users_today': new_users_today,
+                'new_wallpapers_today': new_wallpapers_today,
+                'new_daily_active_users': new_daily_active_users,
+                'new_weekly_active_users': new_weekly_active_users,
             }
         )
-        
         logger.info(f"统计数据已保存: {stat_date}, 创建: {created}")
 
 class CustomerUserSerializer(serializers.ModelSerializer):
