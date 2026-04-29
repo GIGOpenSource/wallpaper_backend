@@ -237,3 +237,124 @@ class CustomerUserViewSet(viewsets.ViewSet):
             },
             message=_("保存成功"),
         )
+
+    @extend_schema(
+        summary="批量删除用户",
+        description="根据用户ID列表批量删除用户",
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "user_ids": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "用户ID列表，如 [1, 2, 3, 4]"
+                    }
+                },
+                "required": ["user_ids"]
+            }
+        },
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "integer", "example": 200},
+                    "message": {"type": "string"},
+                    "data": {
+                        "type": "object",
+                        "properties": {
+                            "deleted_count": {"type": "integer", "description": "删除的用户数量"}
+                        }
+                    }
+                }
+            },
+            400: "参数错误"
+        }
+    )
+    @action(detail=False, methods=['post'], url_path='batch-delete')
+    def batch_delete(self, request):
+        """
+        批量删除用户
+        """
+        user_ids = request.data.get('user_ids', [])
+        if not user_ids or not isinstance(user_ids, list):
+            return ApiResponse(code=400, message="请提供有效的用户ID列表")
+        try:
+            # 转换为整数列表
+            user_ids = [int(uid) for uid in user_ids]
+        except (ValueError, TypeError):
+            return ApiResponse(code=400, message="用户ID格式错误")
+        if not user_ids:
+            return ApiResponse(code=400, message="用户ID列表不能为空")
+        # 执行批量删除
+        deleted_count, _ = CustomerUser.objects.filter(id__in=user_ids).delete()
+        return ApiResponse(
+            data={'deleted_count': deleted_count},
+            message=f"成功删除 {deleted_count} 个用户"
+        )
+
+    @extend_schema(
+        summary="批量修改用户状态",
+        description="根据用户ID列表批量修改用户状态（设置状态为2）",
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "user_ids": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "用户ID列表，如 [1, 2, 3, 4]"
+                    },
+                    "status": {
+                        "type": "integer",
+                        "description": "(1, 正常), (2, 禁用)"
+                    }
+                },
+                "required": ["user_ids"]
+            }
+        },
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "integer", "example": 200},
+                    "message": {"type": "string"},
+                    "data": {
+                        "type": "object",
+                        "properties": {
+                            "disabled_count": {"type": "integer", "description": "禁用的用户数量"}
+                        }
+                    }
+                }
+            },
+            400: "参数错误"
+        }
+    )
+    @action(detail=False, methods=['post'], url_path='batch-disable')
+    def batch_disable(self, request):
+        """
+        批量禁用用户
+        """
+        status = request.data.get('status')
+        user_ids = request.data.get('user_ids', [])
+        if not user_ids or not isinstance(user_ids, list):
+            return ApiResponse(code=400, message="请提供有效的用户ID列表")
+        try:
+            # 转换为整数列表
+            user_ids = [int(uid) for uid in user_ids]
+        except (ValueError, TypeError):
+            return ApiResponse(code=400, message="用户ID格式错误")
+        if not user_ids:
+            return ApiResponse(code=400, message="用户ID列表不能为空")
+        # 执行批量禁用（设置 status=2）
+        updated_count = CustomerUser.objects.filter(id__in=user_ids).update(status=status)
+        if status == 2:
+            message = f"成功禁用 {updated_count} 个用户"
+        else:
+            message = f"成功启用 {updated_count} 个用户"
+        return ApiResponse(
+            data={'disabled_count': updated_count},
+            message=message
+        )
+
+

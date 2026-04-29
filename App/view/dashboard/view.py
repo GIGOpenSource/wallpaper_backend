@@ -574,3 +574,4 @@ class CustomerUserViewSet(BaseViewSet):
         instance = self.get_object()
         serializer = self.get_serializer(instance)
         return ApiResponse(data=serializer.data, message="用户详情获取成功")
+

@@ -338,11 +338,29 @@ class WallpapersSerializer(serializers.ModelSerializer):
 # ======================优化结束end================================
 class CollectionItemSerializer(serializers.ModelSerializer):
     wallpaper = WallpapersSerializer(read_only=True)
+    uploader = serializers.SerializerMethodField(help_text="上传者信息")
 
     class Meta:
         model = WallpaperCollection
-        fields = ["id", "created_at", "wallpaper"]
+        fields = ["id", "created_at", "wallpaper", "uploader"]
 
+    def get_uploader(self, obj):
+        """获取壁纸的上传者信息"""
+        try:
+            # 通过 wallpaper_id 查询 CustomerWallpaperUpload
+            upload_record = CustomerWallpaperUpload.objects.get(
+                wallpaper_id=obj.wallpaper_id
+            )
+            customer = upload_record.customer
+            return {
+                'id': customer.id,
+                'nickname': customer.nickname,
+                'email': customer.email,
+                'avatar_url': customer.avatar_url
+            }
+        except CustomerWallpaperUpload.DoesNotExist:
+            # 如果没有上传记录，返回空
+            return None
 
 @extend_schema(tags=["壁纸管理"])
 @extend_schema_view(
