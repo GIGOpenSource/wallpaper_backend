@@ -1811,7 +1811,7 @@ class WallpapersViewSet(BaseViewSet):
             if not matched_strategy:
                 all_strategies = RecommendStrategy.objects.filter(
                     platform="all",
-                    strategy_type="home",
+                    strategy_type="banner",
                     status="active",
                 ).order_by("-priority", "-created_at")
 
