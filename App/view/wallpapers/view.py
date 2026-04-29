@@ -620,6 +620,101 @@ class WallpapersViewSet(BaseViewSet):
         if hasattr(request, 'user') and isinstance(request.user, User):
             if request.user.role in ['admin', 'operator']:
                 is_admin = True
+
+        order = request.query_params.get("order", "").lower()
+        platform = request.query_params.get("platform", "").upper()
+        # 如果是 hot 排序，先应用推荐策略
+        if order == 'hot':
+            from django.utils import timezone
+            from django.db.models import Value, IntegerField
+            now = timezone.now()
+            matched_strategy = None
+            # 1. 查找匹配的策略
+            if platform in ['PC', 'PHONE']:
+                platform_strategies = RecommendStrategy.objects.filter(
+                    platform=platform.lower(),
+                    strategy_type="hot",
+                    status="active",
+                ).order_by("-priority", "-created_at")
+                for item in platform_strategies:
+                    if item.start_time and now < item.start_time:
+                        continue
+                    if item.end_time and now > item.end_time:
+                        continue
+                    matched_strategy = item
+                    break
+                if not matched_strategy:
+                    all_strategies = RecommendStrategy.objects.filter(
+                        platform="all",
+                        strategy_type="hot",
+                        status="active",
+                    ).order_by("-priority", "-created_at")
+                    for item in all_strategies:
+                        if item.start_time and now < item.start_time:
+                            continue
+                        if item.end_time and now > item.end_time:
+                            continue
+                        matched_strategy = item
+                        break
+            else:
+                all_strategies = RecommendStrategy.objects.filter(
+                    platform="all",
+                    strategy_type="hot",
+                    status="active",
+                ).order_by("-priority", "-created_at")
+
+                for item in all_strategies:
+                    if item.start_time and now < item.start_time:
+                        continue
+                    if item.end_time and now > item.end_time:
+                        continue
+                    matched_strategy = item
+                    break
+                    # 2. 如果有匹配的策略，拼接策略壁纸 + 正常壁纸
+            if matched_strategy:
+                from django.db.models import Count, Q
+                # 2.1 获取策略关联的壁纸（按 sort_order 排序）
+                strategy_relations = StrategyWallpaperRelation.objects.filter(
+                    strategy=matched_strategy
+                ).select_related('wallpaper').order_by('sort_order', '-created_at')
+                # 如果策略有限制数量
+                if matched_strategy.content_limit and matched_strategy.content_limit > 0:
+                    strategy_relations = strategy_relations[:matched_strategy.content_limit]
+                # 提取策略壁纸的 ID 列表
+                strategy_wallpaper_ids = [rel.wallpaper_id for rel in strategy_relations if rel.wallpaper_id]
+                if strategy_wallpaper_ids:
+                    # 2.2 构建策略壁纸查询集（添加排序权重 0，确保排在最前面）
+                    strategy_queryset = Wallpapers.objects.filter(
+                        id__in=strategy_wallpaper_ids
+                    ).annotate(
+                        _sort_weight=Value(0, output_field=IntegerField())
+                    )
+                    # 2.3 构建正常壁纸查询集（排除策略壁纸，添加排序权重 1）
+                    normal_queryset = queryset.exclude(
+                        id__in=strategy_wallpaper_ids
+                    ).annotate(
+                        _sort_weight=Value(1, output_field=IntegerField())
+                    ).order_by('-hot_score', '-like_count', '-created_at')
+                    # 2.4 使用 union 拼接两个查询集（按 _sort_weight 排序）
+                    queryset = strategy_queryset.union(normal_queryset).order_by('_sort_weight')
+                else:
+                    # 策略没有壁纸，直接使用正常查询
+                    queryset = queryset.order_by('-hot_score', '-like_count', '-created_at')
+            else:
+                # 没有匹配的策略，直接使用正常查询
+                queryset = queryset.order_by('-hot_score', '-like_count', '-created_at')
+        else:
+            # 其他排序规则
+            order_mapping = {
+                "latest": "-created_at",
+                "views": "-view_count",
+                "downloads": "-download_count",
+            }
+            if order in order_mapping:
+                queryset = queryset.order_by(order_mapping[order])
+            else:
+                # 默认排序
+                queryset = queryset.order_by('-hot_score', '-created_at')
         # 根据用户角色选择不同的查询优化策略
         if is_admin:
             # 管理员：使用详细序列化器，预加载关联数据
@@ -631,15 +726,7 @@ class WallpapersViewSet(BaseViewSet):
                 'has_watermark', 'is_live', 'is_hd', 'hot_score', 'like_count',
                 'collect_count', 'download_count', 'view_count', 'created_at', 'audit_status'
             )
-        order = request.query_params.get("order", "").lower()
-        order_mapping = {
-            "latest": "-created_at",
-            "views": "-view_count",
-            "downloads": "-download_count",
-            "hot": "-hot_score",
-        }
-        if order in order_mapping:
-            queryset = queryset.order_by(order_mapping[order])
+
         customer_id = self.get_serializer_context().get("customer_id")
         if customer_id:
             liked_ids = set(
@@ -1807,7 +1894,6 @@ class WallpapersViewSet(BaseViewSet):
                     continue
                 matched_strategy = item
                 break
-
             if not matched_strategy:
                 all_strategies = RecommendStrategy.objects.filter(
                     platform="all",
