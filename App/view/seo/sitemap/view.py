@@ -5,6 +5,7 @@ from rest_framework import serializers
 from rest_framework.decorators import action
 from django.utils.translation import get_language
 from models.models import SiteConfig
+from seo.seo_tools import gsc_tool
 from tool.base_views import BaseViewSet
 from tool.permissions import IsAdmin
 from tool.utils import ApiResponse, CustomPagination
@@ -358,15 +359,18 @@ class SitemapURLViewSet(BaseViewSet):
     )
     @action(detail=False, methods=['post'], url_path='submit-and-apply')
     def submit_and_apply(self, request):
-        """应用 Sitemap 并通知搜索引擎"""
-        import time
-        import requests
+        """应用 Sitemap 并通过 GSC API 通知 Google"""
+        from seo.seo_tools import gsc_tool
 
         sitemap_id = request.data.get('sitemap_id')
-        search_engines = request.data.get('search_engines', ['google', 'bing'])
+        site_url = request.data.get('site_url', 'https://www.markwallpapers.com/')
 
         if not sitemap_id:
             return ApiResponse(code=400, message="请提供 sitemap_id")
+
+        # 确保 URL 格式正确
+        if not site_url.endswith('/'):
+            site_url += '/'
 
         try:
             with transaction.atomic():
@@ -384,41 +388,35 @@ class SitemapURLViewSet(BaseViewSet):
                 target.config_value = config_value
                 target.save()
 
-            # 2. 等待 10 秒确保 Nginx 缓存或数据库同步
-            time.sleep(10)
+            # 2. 构造 Sitemap URL
+            sitemap_url = f"{site_url}sitemap.xml"
 
-            # 3. 通知搜索引擎（Ping 机制）
-            sitemap_url = "https://www.markwallpapers.com/sitemap.xml"
-            results = {}
+            # 3. 通过 Google Search Console API 提交 Sitemap
+            gsc_result = None
+            submit_status = 'success'
+            submit_message = '已通过 Google Search Console API 提交'
 
-            if 'google' in search_engines:
-                try:
-                    google_ping = f"https://www.google.com/ping?sitemap={sitemap_url}"
-                    res = requests.get(google_ping, timeout=10)
-                    results['google'] = 'success' if res.status_code == 200 else 'failed'
-                except:
-                    results['google'] = 'failed'
-
-            if 'bing' in search_engines:
-                try:
-                    bing_ping = f"https://www.bing.com/ping?sitemap={sitemap_url}"
-                    res = requests.get(bing_ping, timeout=10)
-                    results['bing'] = 'success' if res.status_code == 200 else 'failed'
-                except:
-                    results['bing'] = 'failed'
+            try:
+                gsc_result = gsc_tool.submit_sitemap(site_url, sitemap_url)
+            except Exception as e:
+                submit_status = 'failed'
+                submit_message = f'GSC API 提交失败: {str(e)}'
+                gsc_result = {'error': str(e)}
 
             return ApiResponse(
                 data={
                     'sitemap_id': target.id,
                     'title': target.title,
                     'url_count': target.config_value.get('url_count', 0),
-                    'ping_results': results
+                    'sitemap_url': sitemap_url,
+                    'submit_status': submit_status,
+                    'submit_message': submit_message,
+                    'gsc_result': gsc_result
                 },
-                message="应用成功并已通知搜索引擎"
+                message="应用成功并已提交到 Google Search Console"
             )
         except SiteConfig.DoesNotExist:
             return ApiResponse(code=404, message="Sitemap 不存在")
-
 
     @extend_schema(
         summary="获取当前应用的 Sitemap XML",

@@ -670,6 +670,43 @@ class GoogleSearchConsoleTool:
             print(f"❌ 获取索引覆盖率失败: {e}")
             return {}
 
+    def submit_sitemap(self, site_url, sitemap_url):
+        """
+        通过 Google Search Console API 提交 Sitemap
+
+        Args:
+            site_url: 网站 URL（如 https://www.markwallpapers.com/）
+            sitemap_url: Sitemap URL（如 https://www.markwallpapers.com/sitemap.xml）
+
+        Returns:
+            提交结果字典
+        """
+        if not self.service:
+            raise Exception("Google Search Console 服务未初始化")
+
+        try:
+            print(f"📤 提交 Sitemap 到 GSC: {sitemap_url}")
+
+            # 调用 GSC API 提交 Sitemap
+            response = self.service.sitemaps().submit(
+                siteUrl=site_url,
+                feedpath=sitemap_url
+            ).execute()
+
+            print(f"✅ Sitemap 提交成功: {response}")
+
+            return {
+                'status': 'success',
+                'message': 'Sitemap 已成功提交到 Google Search Console',
+                'sitemap_url': sitemap_url,
+                'submitted_at': datetime.now().isoformat()
+            }
+        except Exception as e:
+            error_msg = f"提交 Sitemap 失败: {str(e)}"
+            print(f"❌ {error_msg}")
+            import traceback
+            traceback.print_exc()
+            raise Exception(error_msg)
 
 class KeywordResearchTool:
     """关键词研究工具类 - 支持多个第三方 API"""
