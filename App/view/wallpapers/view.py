@@ -662,7 +662,6 @@ class WallpapersViewSet(BaseViewSet):
     def _list_for_customer(self, request, customer_id):
         """普通用户列表逻辑：轻量级字段、支持策略排序、点赞/收藏状态"""
         queryset = self.filter_queryset(self.get_queryset())
-
         # ---- 筛选条件 ----
         platform = request.query_params.get("platform", "").upper()
         if platform == 'PC':

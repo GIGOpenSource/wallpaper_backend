@@ -45,6 +45,8 @@ class OperationLogSerializer(serializers.ModelSerializer):
         description="支持按操作人、模块、操作类型、时间范围筛选",
         parameters=[
             OpenApiParameter(name="operator_id", type=int, required=False, description="操作人ID"),
+            OpenApiParameter(name="username", type=str, required=False, description="操作人名字 模糊查询"),
+
             OpenApiParameter(name="module", type=str, required=False, description="操作模块"),
             OpenApiParameter(name="operation_type", type=str, required=False, description="操作类型"),
             OpenApiParameter(name="start_date", type=str, required=False, description="开始日期（YYYY-MM-DD）"),
@@ -68,22 +70,18 @@ class OperationLogViewSet(BaseViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
-
         # 按操作人筛选
         operator_id = self.request.query_params.get('operator_id')
         if operator_id:
             queryset = queryset.filter(operator_id=operator_id)
-
         # 按模块筛选
         module = self.request.query_params.get('module')
         if module:
             queryset = queryset.filter(module=module)
-
         # 按操作类型筛选
         operation_type = self.request.query_params.get('operation_type')
         if operation_type:
             queryset = queryset.filter(operation_type=operation_type)
-
         # 按时间范围筛选
         start_date = self.request.query_params.get('start_date')
         end_date = self.request.query_params.get('end_date')
@@ -91,7 +89,9 @@ class OperationLogViewSet(BaseViewSet):
             queryset = queryset.filter(created_at__date__gte=start_date)
         if end_date:
             queryset = queryset.filter(created_at__date__lte=end_date)
-
+        username = self.request.query_params.get('username')
+        if username:
+            queryset = queryset.filter(operator_name__icontains=username)
         return queryset.order_by('-created_at')
 
     def list(self, request, *args, **kwargs):
