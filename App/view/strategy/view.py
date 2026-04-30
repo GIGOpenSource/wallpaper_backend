@@ -30,6 +30,7 @@ class RecommendStrategySerializer(serializers.ModelSerializer):
             "remark",
             "created_at",
             "updated_at",
+            "time_mode"
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
     def get_content_current_count(self, obj):

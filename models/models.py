@@ -578,7 +578,13 @@ class RecommendStrategy(models.Model):
     remark = models.CharField(max_length=255, blank=True, null=True, verbose_name="备注")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
-
+    # 生效模式固定区间 / 每日循环 / 每周循环
+    TIME_MODE_CHOICES = (
+        ("fixed", "固定区间"),  # 全时段：指定开始~结束时间
+        ("daily", "每日循环"),  # 每天固定时间段生效
+        ("weekly", "每周循环"),  # 每周几 + 时间段生效
+    )
+    time_mode = models.CharField(max_length=20, choices=TIME_MODE_CHOICES, default="fixed", verbose_name="生效模式",db_default="fixed",blank= True)
     class Meta:
         db_table = "t_recommend_strategy"
         verbose_name = "推荐策略"
