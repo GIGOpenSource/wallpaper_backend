@@ -214,7 +214,7 @@ class BacklinkManagementViewSet(BaseViewSet):
 
     @extend_schema(
         summary="获取外链统计信息",
-        description="获取外链总数、各状态数量、平均质量评分等统计信息",
+        description="获取外链总数、正常外链数、失效外链数、有毒外链数",
         responses={
             200: {
                 "type": "object",
@@ -223,15 +223,10 @@ class BacklinkManagementViewSet(BaseViewSet):
                     "data": {
                         "type": "object",
                         "properties": {
-                            "total_count": {"type": "integer", "description": "外链总数"},
-                            "active_count": {"type": "integer", "description": "有效外链数"},
+                            "total_count": {"type": "integer", "description": "总外链数"},
+                            "active_count": {"type": "integer", "description": "正常外链数（有效）"},
                             "inactive_count": {"type": "integer", "description": "失效外链数"},
-                            "pending_count": {"type": "integer", "description": "待审核外链数"},
-                            "toxic_count": {"type": "integer", "description": "有毒外链数"},
-                            "avg_quality_score": {"type": "number", "description": "平均质量评分"},
-                            "avg_da_score": {"type": "number", "description": "平均DA评分"},
-                            "dofollow_count": {"type": "integer", "description": "Dofollow外链数"},
-                            "nofollow_count": {"type": "integer", "description": "Nofollow外链数"}
+                            "toxic_count": {"type": "integer", "description": "危险域名（有毒）"}
                         }
                     },
                     "message": {"type": "string"}
@@ -245,32 +240,14 @@ class BacklinkManagementViewSet(BaseViewSet):
         total_count = BacklinkManagement.objects.count()
         active_count = BacklinkManagement.objects.filter(status='active').count()
         inactive_count = BacklinkManagement.objects.filter(status='inactive').count()
-        pending_count = BacklinkManagement.objects.filter(status='pending').count()
         toxic_count = BacklinkManagement.objects.filter(status='toxic').count()
-        
-        # 计算平均质量评分和DA评分
-        avg_quality = BacklinkManagement.objects.aggregate(
-            avg_quality=models.Avg('quality_score')
-        )['avg_quality'] or 0
-        
-        avg_da = BacklinkManagement.objects.aggregate(
-            avg_da=models.Avg('da_score')
-        )['avg_da'] or 0
-        
-        dofollow_count = BacklinkManagement.objects.filter(attribute='dofollow').count()
-        nofollow_count = BacklinkManagement.objects.filter(attribute='nofollow').count()
         
         return ApiResponse(
             data={
                 'total_count': total_count,
                 'active_count': active_count,
                 'inactive_count': inactive_count,
-                'pending_count': pending_count,
-                'toxic_count': toxic_count,
-                'avg_quality_score': round(avg_quality, 2),
-                'avg_da_score': round(avg_da, 2),
-                'dofollow_count': dofollow_count,
-                'nofollow_count': nofollow_count
+                'toxic_count': toxic_count
             },
             message="统计信息获取成功"
         )
