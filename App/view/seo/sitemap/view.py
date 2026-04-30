@@ -166,7 +166,10 @@ class SitemapURLViewSet(BaseViewSet):
     def create(self, request, *args, **kwargs):
         """创建 Sitemap URL"""
         serializer = self.get_serializer(data=request.data)
-        request.data["priority"] = int(request.data.get("priority", 1) * 10)
+        priority_str = request.data.get("priority", "1.0")
+        priority_value = int(float(priority_str) * 10)
+        request.data["priority"] = priority_value
+
         serializer.is_valid(raise_exception=True)
         validated_data = serializer.validated_data
         config_value = {
