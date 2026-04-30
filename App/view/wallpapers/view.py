@@ -503,22 +503,99 @@ class WallpapersViewSet(BaseViewSet):
                 ctx["customer_id"] = cid
         return ctx
 
+    def _apply_strategy_sorting(self, queryset, order, platform, page_num, page_size):
+        """
+        应用推荐策略（仅对普通用户生效）
+        order: 'hot' 或 'home'
+        返回应用策略后的 queryset
+        """
+        from django.utils import timezone
+        from django.db.models import Value, IntegerField
+        from models.models import RecommendStrategy, StrategyWallpaperRelation
+
+        if order not in ['hot', 'home']:
+            return queryset
+
+        now = timezone.now()
+        # 查找策略：优先平台，其次 all
+        matched_strategy = None
+        platforms = [platform.lower()] if platform in ['PC', 'PHONE'] else ['all']
+        platforms.append('all')  # 确保 all 作为 fallback
+
+        for p in set(platforms):
+            strategies = RecommendStrategy.objects.filter(
+                platform=p, strategy_type=order, status='active'
+            ).order_by('-priority', '-created_at')
+            for s in strategies:
+                if s.start_time and now < s.start_time:
+                    continue
+                if s.end_time and now > s.end_time:
+                    continue
+                matched_strategy = s
+                break
+            if matched_strategy:
+                break
+
+        if not matched_strategy:
+            # 无策略，按默认排序
+            if order == 'hot':
+                return queryset.order_by('-hot_score', '-created_at')
+            else:  # home
+                return queryset.order_by('-created_at')
+
+        # 获取策略关联的壁纸 ID（按 sort_order, created_at 排序）
+        strategy_ids = list(
+            StrategyWallpaperRelation.objects.filter(strategy=matched_strategy)
+            .order_by('sort_order', '-created_at')
+            .values_list('wallpaper_id', flat=True)
+        )
+        if matched_strategy.content_limit and matched_strategy.content_limit > 0:
+            strategy_ids = strategy_ids[:matched_strategy.content_limit]
+
+        strategy_count = len(strategy_ids)
+        start_idx = (page_num - 1) * page_size
+
+        # 如果策略数据已展示完，直接返回正常排序
+        if start_idx >= strategy_count:
+            if order == 'hot':
+                return queryset.order_by('-hot_score', '-created_at')
+            else:
+                return queryset.order_by('-created_at')
+
+        # 构造策略查询集（权重0）
+        strategy_qs = Wallpapers.objects.filter(id__in=strategy_ids).annotate(
+            _sort_weight=Value(0, output_field=IntegerField())
+        )
+        # 正常查询集（权重1），排除策略中的壁纸
+        normal_qs = queryset.exclude(id__in=strategy_ids).annotate(
+            _sort_weight=Value(1, output_field=IntegerField())
+        )
+        if order == 'hot':
+            normal_qs = normal_qs.order_by('-hot_score', '-like_count', '-created_at')
+        else:
+            normal_qs = normal_qs.order_by('-created_at')
+
+        # 合并并排序（权重0的在前面）
+        return strategy_qs.union(normal_qs).order_by('_sort_weight')
+
     def get_queryset(self):
         """
-        基础查询集：只处理审核状态过滤
+        基础查询集：只处理审核状态过滤（管理员/普通用户通用）
         """
         from models.models import User
         queryset = super().get_queryset()
         is_admin = False
         if hasattr(self.request, 'user') and isinstance(self.request.user, User):
-            if self.request.user.role in ['admin', 'operator','super_admin']:
+            if self.request.user.role in ['admin', 'operator', 'super_admin']:
                 is_admin = True
+
         if not is_admin:
             queryset = queryset.exclude(audit_status='rejected')
         else:
             audit_status = self.request.query_params.get("audit_status", "").strip()
             if audit_status and audit_status in ['pending', 'approved', 'rejected']:
                 queryset = queryset.filter(audit_status=audit_status)
+
         return queryset
 
     def list(self, request, *args, **kwargs):
@@ -526,54 +603,67 @@ class WallpapersViewSet(BaseViewSet):
         壁纸列表接口：管理员与普通用户完全分离
         """
         from models.models import User
-        is_admin = hasattr(request, 'user') and isinstance(request.user, User) and request.user.role in ['admin', 'operator','super_admin']
+        is_admin = hasattr(request, 'user') and isinstance(request.user, User) and \
+                   request.user.role in ['admin', 'operator', 'super_admin']
         customer_id = self.get_serializer_context().get("customer_id")
+
         if is_admin:
             return self._list_for_admin(request, customer_id)
         else:
             return self._list_for_customer(request, customer_id)
 
     def _list_for_admin(self, request, customer_id):
-        """管理员列表逻辑：包含完整字段、审核状态筛选、策略排序"""
+        """管理员列表逻辑：包含完整字段、不应用策略，按参数直接排序"""
         queryset = self.filter_queryset(self.get_queryset())
 
-        # 1. 筛选条件
+        # ---- 筛选条件（与普通用户保持一致）----
         platform = request.query_params.get("platform", "").upper()
         if platform == 'PC':
             queryset = queryset.filter(category__id=1).distinct()
         elif platform == 'PHONE':
             queryset = queryset.filter(category__id=2).distinct()
+
         tag_name = request.query_params.get("tag_name", "").strip()
         if tag_name:
             tag_ids = list(WallpaperTag.objects.filter(name__icontains=tag_name).values_list('id', flat=True))
             if tag_ids:
                 queryset = queryset.filter(tags__id__in=tag_ids).distinct()
+
         tag_ids_param = request.query_params.get("tag_id")
         if tag_ids_param:
             ids = [int(t) for t in tag_ids_param.split(',') if t.strip().isdigit()]
             if ids:
                 queryset = queryset.filter(tags__id__in=ids).distinct()
 
-        # 2. 排序策略（管理员支持 order=hot/home 策略排序）
+        # ---- 排序（管理员不使用策略，直接按参数排序）----
         order = request.query_params.get("order", "").lower()
-        page_num = int(request.query_params.get("currentPage", 1))
-        page_size = int(request.query_params.get("pageSize", 10))
-        queryset = self._apply_strategy_sorting(queryset, order, platform, page_num, page_size)
-        # 3. 预加载数据
+        order_mapping = {
+            "hot": "-hot_score",
+            "latest": "-created_at",
+            "views": "-view_count",
+            "downloads": "-download_count",
+        }
+        if order in order_mapping:
+            queryset = queryset.order_by(order_mapping[order], '-created_at')
+        else:
+            queryset = queryset.order_by('-hot_score', '-created_at')
+
+        # ---- 预加载数据 ----
         queryset = queryset.prefetch_related('tags', 'category').select_related('customer_upload__customer')
-        # 4. 分页与序列化
+
+        # ---- 分页与序列化 ----
         page = self.paginate_queryset(queryset)
-        if page is not None:
+        if page:
             serializer = WallpapersAdminListSerializer(page, many=True, context=self.get_serializer_context())
             return self.get_paginated_response(serializer.data)
         serializer = WallpapersAdminListSerializer(queryset, many=True, context=self.get_serializer_context())
         return ApiResponse(serializer.data)
 
     def _list_for_customer(self, request, customer_id):
-        """普通用户列表逻辑：轻量级字段、基础排序、点赞/收藏状态"""
+        """普通用户列表逻辑：轻量级字段、支持策略排序、点赞/收藏状态"""
         queryset = self.filter_queryset(self.get_queryset())
 
-        # 1. 筛选条件（普通用户支持更多筛选维度）
+        # ---- 筛选条件 ----
         platform = request.query_params.get("platform", "").upper()
         if platform == 'PC':
             queryset = queryset.filter(category__id=1).distinct()
@@ -591,13 +681,11 @@ class WallpapersViewSet(BaseViewSet):
             ids = [int(t) for t in tag_ids_param.split(',') if t.strip().isdigit()]
             if ids:
                 queryset = queryset.filter(tags__id__in=ids).distinct()
-
         media_live = request.query_params.get("media_live", "").lower()
         if media_live == 'true':
             queryset = queryset.filter(category__id=4).distinct()
         elif media_live == 'false':
             queryset = queryset.filter(category__id=3).distinct()
-
         resolution = request.query_params.get("resolution", "")
         if resolution:
             from django.db.models import Q
@@ -611,90 +699,48 @@ class WallpapersViewSet(BaseViewSet):
                         pass
             if q:
                 queryset = queryset.filter(q).distinct()
-        # 2. 排序策略（普通用户同样支持 order=hot/home 策略排序）
+        # ---- 名称/标签映射筛选 ----
+        user_input = request.query_params.get("name", "").strip()
+        if user_input:
+            matched_tags = []
+            for keyword, tag_id in TAG_MAPPING.items():
+                if keyword.lower() in user_input.lower():
+                    matched_tags.append((len(keyword), keyword, tag_id))
+            if matched_tags:
+                matched_tags.sort(key=lambda x: x[0], reverse=True)
+                tag_id = matched_tags[0][2]
+                queryset = queryset.filter(tags__id=tag_id).distinct()
+            else:
+                queryset = queryset.filter(name__icontains=user_input)
+        # ---- 排序（支持策略）----
         order = request.query_params.get("order", "").lower()
         page_num = int(request.query_params.get("currentPage", 1))
         page_size = int(request.query_params.get("pageSize", 10))
         queryset = self._apply_strategy_sorting(queryset, order, platform, page_num, page_size)
-        # 3. 预加载轻量级数据
+        # ---- 预加载轻量级数据 ----
         queryset = queryset.prefetch_related('tags').only(
             'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
             'has_watermark', 'is_live', 'is_hd', 'hot_score', 'like_count',
             'collect_count', 'download_count', 'view_count', 'created_at', 'audit_status'
         )
-        # 4. 获取用户点赞和收藏 ID
-        liked_ids, collected_ids = set(), set()
+        # ---- 用户互动信息 ----
+        liked_ids = collected_ids = set()
         if customer_id:
             liked_ids = set(
                 WallpaperLike.objects.filter(customer_id=customer_id).values_list('wallpaper_id', flat=True))
             collected_ids = set(
                 WallpaperCollection.objects.filter(user_id=customer_id).values_list('wallpaper_id', flat=True))
-        # 5. 分页与序列化
+        # ---- 分页与序列化 ----
         page = self.paginate_queryset(queryset)
-        if page is not None:
-            context = self.get_serializer_context()
-            context['liked_wallpaper_ids'] = liked_ids
-            context['collected_wallpaper_ids'] = collected_ids
-            serializer = WallpapersListSerializer(page, many=True, context=context)
-            return self.get_paginated_response(serializer.data)
-
         context = self.get_serializer_context()
         context['liked_wallpaper_ids'] = liked_ids
         context['collected_wallpaper_ids'] = collected_ids
+        if page:
+            serializer = WallpapersListSerializer(page, many=True, context=context)
+            return self.get_paginated_response(serializer.data)
         serializer = WallpapersListSerializer(queryset, many=True, context=context)
         return ApiResponse(serializer.data)
 
-    def _apply_strategy_sorting(self, queryset, order, platform, page_num, page_size):
-        """公共方法：处理策略排序逻辑"""
-        strategy_type = None
-        if order == 'hot':
-            strategy_type = "hot"
-        elif order == 'home':
-            strategy_type = "home"
-
-        if not strategy_type:
-            return queryset.order_by('-hot_score', '-created_at')
-
-        from django.utils import timezone
-        from django.db.models import Value, IntegerField
-
-        now = timezone.now()
-        matched_strategy = None
-        if platform in ['PC', 'PHONE']:
-            for item in RecommendStrategy.objects.filter(platform=platform.lower(), strategy_type=strategy_type,
-                                                         status="active").order_by("-priority", "-created_at"):
-                if (not item.start_time or now >= item.start_time) and (not item.end_time or now <= item.end_time):
-                    matched_strategy = item
-                    break
-        if not matched_strategy:
-            for item in RecommendStrategy.objects.filter(platform="all", strategy_type=strategy_type,
-                                                         status="active").order_by("-priority", "-created_at"):
-                if (not item.start_time or now >= item.start_time) and (not item.end_time or now <= item.end_time):
-                    matched_strategy = item
-                    break
-
-        if not matched_strategy:
-            return queryset.order_by('-hot_score', '-created_at')
-
-        relations = StrategyWallpaperRelation.objects.filter(strategy=matched_strategy).select_related(
-            'wallpaper').order_by('sort_order', '-created_at')
-        if matched_strategy.content_limit:
-            relations = relations[:matched_strategy.content_limit]
-
-        strategy_ids = [r.wallpaper_id for r in relations if r.wallpaper_id]
-        if not strategy_ids:
-            return queryset.order_by('-hot_score', '-created_at')
-
-        start_index = (page_num - 1) * page_size
-        if start_index >= len(strategy_ids):
-            return queryset.order_by('-hot_score', '-created_at')
-
-        s_qs = Wallpapers.objects.filter(id__in=strategy_ids).annotate(
-            _sort_weight=Value(0, output_field=IntegerField()))
-        n_qs = queryset.exclude(id__in=strategy_ids).annotate(
-            _sort_weight=Value(1, output_field=IntegerField())).order_by('-hot_score', '-like_count', '-created_at')
-
-        return s_qs.union(n_qs).order_by('_sort_weight')
 
     def destroy(self, request, *args, **kwargs):
         try:
