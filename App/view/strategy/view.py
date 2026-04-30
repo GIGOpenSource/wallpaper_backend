@@ -10,8 +10,8 @@ from tool.utils import ApiResponse, CustomPagination
 
 
 class RecommendStrategySerializer(serializers.ModelSerializer):
+    content_current_count = serializers.SerializerMethodField()
     """推荐策略序列化器"""
-
     class Meta:
         model = RecommendStrategy
         fields = [
@@ -19,6 +19,7 @@ class RecommendStrategySerializer(serializers.ModelSerializer):
             "name",
             "priority",
             "content_limit",
+            "content_current_count",
             "strategy_type",
             "apply_area",
             "start_time",
@@ -31,7 +32,12 @@ class RecommendStrategySerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
-
+    def get_content_current_count(self, obj):
+        # 统计当前策略关联的壁纸数量
+        count = StrategyWallpaperRelation.objects.filter(
+            strategy_id=obj.id
+        ).count()
+        return count
 
     def validate(self, attrs):
         start_time = attrs.get("start_time", getattr(self.instance, "start_time", None))
