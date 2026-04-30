@@ -326,7 +326,10 @@ class SiteConfigViewSet(BaseViewSet):
 
     @extend_schema(
         summary="获取 Robots.txt 内容",
-        description="获取网站的 Robots.txt 配置内容（无需登录）",
+        description="获取网站的 Robots.txt 配置内容（无需登录）。添加参数 ?raw=1 可返回纯文本格式",
+        parameters=[
+            OpenApiParameter(name="raw", type=int, required=False, description="设置为 1 时返回纯文本格式"),
+        ],
         responses={
             200: {
                 "type": "object",
@@ -346,35 +349,23 @@ class SiteConfigViewSet(BaseViewSet):
     @action(detail=False, methods=['get'], url_path='robots-txt')
     def get_robots_txt(self, request):
         """获取 Robots.txt 内容"""
+        from django.http import HttpResponse
+
+        # 如果请求 raw=1，则返回纯文本格式供 Nginx 代理
+        if request.query_params.get('raw') == '1':
+            try:
+                config = SiteConfig.objects.get(config_type='robots_txt', is_active=True)
+                return HttpResponse(config.content, content_type='text/plain')
+            except SiteConfig.DoesNotExist:
+                return HttpResponse("User-agent: *\nDisallow: /", content_type='text/plain')
+
+        # 默认返回 JSON 格式
         try:
-            config = SiteConfig.objects.get(
-                config_type='robots_txt',
-                is_active=True
-            )
+            config = SiteConfig.objects.get(config_type='robots_txt', is_active=True)
             return ApiResponse(data={'content': config.content}, message="获取成功")
         except SiteConfig.DoesNotExist:
-            # 返回默认值
-            default_robots = """User-agent: *
-Allow: /wallpaper/
-Allow: /category/
-Allow: /tag/
-Disallow: /admin/
-Disallow: /api/
-Disallow: /private/
-Disallow: /search?
-Crawl-delay: 1
-
-User-agent: Googlebot
-Allow: /
-Disallow: /admin/
-
-User-agent: Googlebot-Image
-Allow: /wallpaper/
-Allow: /category/
-Disallow: /admin/
-
-Sitemap: https://example.com/sitemap.xml"""
-            return ApiResponse(data={'content': default_robots}, message="获取成功（默认配置）")
+            default_robots = """User-agent: *\nDisallow: /"""
+            return ApiResponse(data={'content': default_robots}, message="使用默认配置")
 
     @extend_schema(
         summary="更新 Robots.txt 内容（管理员）",
