@@ -588,7 +588,6 @@ class WallpapersViewSet(BaseViewSet):
         if hasattr(self.request, 'user') and isinstance(self.request.user, User):
             if self.request.user.role in ['admin', 'operator', 'super_admin']:
                 is_admin = True
-
         if not is_admin:
             queryset = queryset.exclude(audit_status='rejected')
         else:
@@ -646,7 +645,7 @@ class WallpapersViewSet(BaseViewSet):
         if order in order_mapping:
             queryset = queryset.order_by(order_mapping[order], '-created_at')
         else:
-            queryset = queryset.order_by('-hot_score', '-created_at')
+            queryset = queryset.order_by('-created_at','-hot_score')
 
         # ---- 预加载数据 ----
         queryset = queryset.prefetch_related('tags', 'category').select_related('customer_upload__customer')
