@@ -332,18 +332,22 @@ class SitemapURLViewSet(BaseViewSet):
         }
         return ApiResponse(data=data, message="检测完成")
 
+
     @extend_schema(
-        summary="提交 Sitemap 到搜索引擎",
-        description="选择 sitemap_file 记录并应用到 /sitemap.xml，随后通知搜索引擎收录",
+        summary="批量应用 Sitemap 并通知搜索引擎",
+        description="选择多个 sitemap_file 记录并依次应用到 /sitemap.xml，每次应用后通过 Google Search Console API 通知收录（间隔 10 秒）",
         request={
             "application/json": {
                 "type": "object",
                 "properties": {
-                    "sitemap_id": {"type": "integer", "description": "要应用的 sitemap_file ID"},
-                    "search_engines": {"type": "array", "items": {"type": "string"},
-                                       "description": "要通知的搜索引擎：['google', 'bing']"}
+                    "sitemap_ids": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "要应用的 sitemap_file ID 数组"
+                    },
+                    "site_url": {"type": "string", "description": "网站 URL（如 https://www.markwallpapers.com/）"}
                 },
-                "required": ["sitemap_id"]
+                "required": ["sitemap_ids"]
             }
         },
         responses={
@@ -357,54 +361,68 @@ class SitemapURLViewSet(BaseViewSet):
             }
         }
     )
-    @action(detail=False, methods=['post'], url_path='submit-and-apply')
-    def submit_and_apply(self, request):
-        """应用 Sitemap 并通过 GSC API 通知 Google"""
+    @action(detail=False, methods=['post'], url_path='submit-to-search-engine')
+    def submit_to_search_engine(self, request):
+        """批量应用 Sitemap 并通过 GSC API 通知 Google"""
+        import time
         from seo.seo_tools import gsc_tool
 
-        sitemap_id = request.data.get('sitemap_id')
+        sitemap_ids = request.data.get('sitemap_ids', [])
         site_url = request.data.get('site_url', 'https://www.markwallpapers.com/')
 
-        if not sitemap_id:
-            return ApiResponse(code=400, message="请提供 sitemap_id")
+        # 校验参数
+        if not isinstance(sitemap_ids, list) or len(sitemap_ids) == 0:
+            return ApiResponse(code=400, message="请提供非空的 sitemap_ids 数组")
 
         # 确保 URL 格式正确
         if not site_url.endswith('/'):
             site_url += '/'
 
-        try:
-            with transaction.atomic():
-                # 1. 找到目标 sitemap 并设置为 applied
-                target = SiteConfig.objects.get(id=sitemap_id, config_type='sitemap_file')
+        results = []
+        success_count = 0
+        fail_count = 0
 
-                # 取消其他 sitemap 的 applied 状态
-                SiteConfig.objects.filter(config_type='sitemap_file').update(
-                    config_value__applied=False
-                )
-
-                # 应用当前 sitemap
-                config_value = target.config_value or {}
-                config_value['applied'] = True
-                target.config_value = config_value
-                target.save()
-
-            # 2. 构造 Sitemap URL
-            sitemap_url = f"{site_url}sitemap.xml"
-
-            # 3. 通过 Google Search Console API 提交 Sitemap
-            gsc_result = None
-            submit_status = 'success'
-            submit_message = '已通过 Google Search Console API 提交'
-
+        # 循环处理每个 sitemap_id
+        for idx, sitemap_id in enumerate(sitemap_ids):
             try:
-                gsc_result = gsc_tool.submit_sitemap(site_url, sitemap_url)
-            except Exception as e:
-                submit_status = 'failed'
-                submit_message = f'GSC API 提交失败: {str(e)}'
-                gsc_result = {'error': str(e)}
+                with transaction.atomic():
+                    # 1. 找到目标 sitemap 并设置为 applied
+                    target = SiteConfig.objects.get(id=sitemap_id, config_type='sitemap_file')
 
-            return ApiResponse(
-                data={
+                    # 2. 取消其他 sitemap 的 applied 状态（手动遍历更新）
+                    other_sitemaps = SiteConfig.objects.filter(
+                        config_type='sitemap_file'
+                    ).exclude(id=sitemap_id)
+
+                    for sm in other_sitemaps:
+                        cv = sm.config_value or {}
+                        if cv.get('applied', False):
+                            cv['applied'] = False
+                            sm.config_value = cv
+                            sm.save(update_fields=['config_value'])
+
+                    # 3. 应用当前 sitemap
+                    config_value = target.config_value or {}
+                    config_value['applied'] = True
+                    target.config_value = config_value
+                    target.save(update_fields=['config_value'])
+
+                # 2. 构造 Sitemap URL
+                sitemap_url = f"{site_url}sitemap.xml"
+
+                # 3. 通过 Google Search Console API 提交 Sitemap
+                gsc_result = None
+                submit_status = 'success'
+                submit_message = '已通过 Google Search Console API 提交'
+
+                try:
+                    gsc_result = gsc_tool.submit_sitemap(site_url, sitemap_url)
+                except Exception as e:
+                    submit_status = 'failed'
+                    submit_message = f'GSC API 提交失败: {str(e)}'
+                    gsc_result = {'error': str(e)}
+
+                results.append({
                     'sitemap_id': target.id,
                     'title': target.title,
                     'url_count': target.config_value.get('url_count', 0),
@@ -412,11 +430,38 @@ class SitemapURLViewSet(BaseViewSet):
                     'submit_status': submit_status,
                     'submit_message': submit_message,
                     'gsc_result': gsc_result
-                },
-                message="应用成功并已提交到 Google Search Console"
-            )
-        except SiteConfig.DoesNotExist:
-            return ApiResponse(code=404, message="Sitemap 不存在")
+                })
+
+                if submit_status == 'success':
+                    success_count += 1
+                else:
+                    fail_count += 1
+
+                # 4. 如果不是最后一个，等待 10 秒
+                if idx < len(sitemap_ids) - 1:
+                    time.sleep(10)
+
+            except SiteConfig.DoesNotExist:
+                results.append({
+                    'sitemap_id': sitemap_id,
+                    'submit_status': 'failed',
+                    'submit_message': 'Sitemap 不存在或类型不正确'
+                })
+                fail_count += 1
+
+                # 失败的也等待 10 秒（保持节奏一致）
+                if idx < len(sitemap_ids) - 1:
+                    time.sleep(10)
+
+        return ApiResponse(
+            data={
+                'total': len(sitemap_ids),
+                'success': success_count,
+                'fail': fail_count,
+                'results': results
+            },
+            message=f"批量处理完成，成功{success_count}条，失败{fail_count}条"
+        )
 
     @extend_schema(
         summary="获取当前应用的 Sitemap XML",

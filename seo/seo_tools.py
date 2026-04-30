@@ -16,8 +16,8 @@ from google_auth_httplib2 import AuthorizedHttp
 class GoogleSearchConsoleTool:
     """Google Search Console API 工具类"""
 
-    SCOPES = ['https://www.googleapis.com/auth/webmasters.readonly']
-
+    # SCOPES = ['https://www.googleapis.com/auth/webmasters.readonly']
+    SCOPES = ['https://www.googleapis.com/auth/webmasters']
     def __init__(self):
         self.credentials = None
         self.service = None
