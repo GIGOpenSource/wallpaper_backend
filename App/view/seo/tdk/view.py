@@ -81,7 +81,7 @@ class PageTDKViewSet(BaseViewSet):
             queryset = queryset.filter(is_active=is_active.lower() == 'true')
         url = self.request.query_params.get('url', '').strip()
         if url:
-            queryset = queryset.filter(url__content=url)
+            queryset = queryset.filter(url__content__icontains=url)
 
         return queryset.order_by('-updated_at')
 
