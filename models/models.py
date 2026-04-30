@@ -143,6 +143,7 @@ class Wallpapers(models.Model):
     download_count = models.PositiveIntegerField(default=0, verbose_name="下载量",blank=True)
     view_count = models.PositiveIntegerField(default=0, verbose_name="浏览量", blank=True)
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
 
     class Meta:
         db_table = 't_wallpapers'
@@ -808,7 +809,11 @@ class BacklinkManagement(models.Model):
         ('pending', '待审核'),
         ('toxic', '有毒'),
     ]
-    
+
+    # Nofollow 对你SEO没用，不加权重 告诉搜索引擎：别信这个链接
+    # UGC 用户生成内容（User Generated Content）
+    # Dofollow 会给你的网站加分、提升排名
+    # Sponsored 付费、广告、赞助链接 必须标这个，不传递权重
     ATTRIBUTE_CHOICES = [
         ('dofollow', 'Dofollow'),
         ('nofollow', 'Nofollow'),

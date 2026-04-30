@@ -645,7 +645,7 @@ class WallpapersViewSet(BaseViewSet):
         if order in order_mapping:
             queryset = queryset.order_by(order_mapping[order], '-created_at')
         else:
-            queryset = queryset.order_by('-created_at','-hot_score')
+            queryset = queryset.order_by('-updated_at','-created_at','-hot_score')
 
         # ---- 预加载数据 ----
         queryset = queryset.prefetch_related('tags', 'category').select_related('customer_upload__customer')
