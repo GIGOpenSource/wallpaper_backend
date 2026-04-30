@@ -116,15 +116,12 @@ class SitemapURLViewSet(BaseViewSet):
     def list(self, request, *args, **kwargs):
         """获取 Sitemap URL 列表"""
         queryset = SiteConfig.objects.filter(config_type='sitemap_url')
-
         index_status = request.query_params.get('index_status')
         if index_status:
             queryset = queryset.filter(config_value__index_status=index_status)
-
         changefreq = request.query_params.get('changefreq')
         if changefreq:
             queryset = queryset.filter(config_value__changefreq=changefreq)
-
         is_active = request.query_params.get('is_active')
         if is_active is not None:
             queryset = queryset.filter(is_active=is_active.lower() == 'true')
@@ -336,12 +333,14 @@ class SitemapURLViewSet(BaseViewSet):
 
     @extend_schema(
         summary="提交 Sitemap 到搜索引擎",
-        description="根据 sitemap_id 获取 sitemap.xml 内容并提交到搜索引擎（模拟）",
+        description="选择 sitemap_file 记录并应用到 /sitemap.xml，随后通知搜索引擎收录",
         request={
             "application/json": {
                 "type": "object",
                 "properties": {
-                    "sitemap_id": {"type": "integer", "description": "Sitemap 文件ID（config_type=sitemap_file）"}
+                    "sitemap_id": {"type": "integer", "description": "要应用的 sitemap_file ID"},
+                    "search_engines": {"type": "array", "items": {"type": "string"},
+                                       "description": "要通知的搜索引擎：['google', 'bing']"}
                 },
                 "required": ["sitemap_id"]
             }
@@ -350,80 +349,135 @@ class SitemapURLViewSet(BaseViewSet):
             200: {
                 "type": "object",
                 "properties": {
+                    "code": {"type": "integer"},
+                    "data": {"type": "object"},
+                    "message": {"type": "string"}
+                }
+            }
+        }
+    )
+    @action(detail=False, methods=['post'], url_path='submit-and-apply')
+    def submit_and_apply(self, request):
+        """应用 Sitemap 并通知搜索引擎"""
+        import time
+        import requests
+
+        sitemap_id = request.data.get('sitemap_id')
+        search_engines = request.data.get('search_engines', ['google', 'bing'])
+
+        if not sitemap_id:
+            return ApiResponse(code=400, message="请提供 sitemap_id")
+
+        try:
+            with transaction.atomic():
+                # 1. 找到目标 sitemap 并设置为 applied
+                target = SiteConfig.objects.get(id=sitemap_id, config_type='sitemap_file')
+
+                # 取消其他 sitemap 的 applied 状态
+                SiteConfig.objects.filter(config_type='sitemap_file').update(
+                    config_value__applied=False
+                )
+
+                # 应用当前 sitemap
+                config_value = target.config_value or {}
+                config_value['applied'] = True
+                target.config_value = config_value
+                target.save()
+
+            # 2. 等待 10 秒确保 Nginx 缓存或数据库同步
+            time.sleep(10)
+
+            # 3. 通知搜索引擎（Ping 机制）
+            sitemap_url = "https://www.markwallpapers.com/sitemap.xml"
+            results = {}
+
+            if 'google' in search_engines:
+                try:
+                    google_ping = f"https://www.google.com/ping?sitemap={sitemap_url}"
+                    res = requests.get(google_ping, timeout=10)
+                    results['google'] = 'success' if res.status_code == 200 else 'failed'
+                except:
+                    results['google'] = 'failed'
+
+            if 'bing' in search_engines:
+                try:
+                    bing_ping = f"https://www.bing.com/ping?sitemap={sitemap_url}"
+                    res = requests.get(bing_ping, timeout=10)
+                    results['bing'] = 'success' if res.status_code == 200 else 'failed'
+                except:
+                    results['bing'] = 'failed'
+
+            return ApiResponse(
+                data={
+                    'sitemap_id': target.id,
+                    'title': target.title,
+                    'url_count': target.config_value.get('url_count', 0),
+                    'ping_results': results
+                },
+                message="应用成功并已通知搜索引擎"
+            )
+        except SiteConfig.DoesNotExist:
+            return ApiResponse(code=404, message="Sitemap 不存在")
+
+
+    @extend_schema(
+        summary="获取当前应用的 Sitemap XML",
+        description="获取标记为 applied=True 的 Sitemap XML 内容。添加参数 ?raw=1 可返回纯 XML 格式供 Nginx 代理",
+        parameters=[
+            OpenApiParameter(name="raw", type=int, required=False, description="设置为 1 时返回纯 XML 格式"),
+        ],
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
                     "code": {"type": "integer", "example": 200},
                     "data": {
                         "type": "object",
                         "properties": {
-                            "sitemap_id": {"type": "integer"},
-                            "content": {"type": "string", "description": "Sitemap XML 内容"},
-                            "submit_status": {"type": "string", "description": "提交状态"}
+                            "id": {"type": "integer"},
+                            "title": {"type": "string"},
+                            "content": {"type": "string"},
+                            "url_count": {"type": "integer"}
                         }
                     },
                     "message": {"type": "string"}
                 }
             },
-            400: "参数错误",
-            404: "Sitemap 不存在"
+            404: "未找到已应用的 Sitemap"
         }
     )
-    @action(detail=False, methods=['post'], url_path='submit-to-search-engine')
-    def submit_to_search_engine(self, request):
-        """提交 Sitemap 到搜索引擎"""
-        sitemap_ids = request.data.get('sitemap_ids', [])
+    @action(detail=False, methods=['get'], url_path='get-sitemap-xml', permission_classes=[])
+    def get_sitemap_xml(self, request):
+        """获取当前应用的 Sitemap XML（支持 raw 纯文本模式）"""
+        from django.http import HttpResponse
 
-        # 2. 校验是否为空
-        if not isinstance(sitemap_ids, list) or len(sitemap_ids) == 0:
-            return ApiResponse(code=400, message="请提供非空的 sitemap_ids 数组")
+        sitemap = SiteConfig.objects.filter(
+            config_type='sitemap_file',
+            is_active=True
+        ).order_by('-created_at').first()
 
-        result_list = []
-        success_count = 0
-        fail_count = 0
+        if not sitemap:
+            # 如果请求 raw，返回空 XML 头
+            if request.query_params.get('raw') == '1':
+                empty_xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>'
+                return HttpResponse(empty_xml, content_type='application/xml; charset=utf-8')
+            return ApiResponse(code=404, message="未找到已应用的 Sitemap")
 
-        # 3. 循环处理每一个 sitemap_id
-        for sitemap_id in sitemap_ids:
-            try:
-                # 查询 sitemap 记录
-                sitemap_config = SiteConfig.objects.get(
-                    id=sitemap_id,
-                    config_type='sitemap_file'
-                )
-                xml_content = sitemap_config.content
+        # raw=1 模式：直接返回 XML 内容（供 Nginx 代理）
+        if request.query_params.get('raw') == '1':
+            return HttpResponse(sitemap.content, content_type='application/xml; charset=utf-8')
 
-                # TODO 实际调用搜索引擎API
-                result_list.append({
-                    'sitemap_id': sitemap_config.id,
-                    'content': xml_content,
-                    'submit_status': 'success',
-                    'message': '提交成功'
-                })
-                success_count += 1
-
-            except SiteConfig.DoesNotExist:
-                # 不存在的记录
-                result_list.append({
-                    'sitemap_id': sitemap_id,
-                    'submit_status': 'fail',
-                    'message': 'Sitemap 不存在或类型不正确'
-                })
-                fail_count += 1
-                # 获取 XML 内容
-            xml_content = sitemap_config.content
-
-            # TODO: 实际项目中这里应该调用搜索引擎的 API（如 Google Search Console、Bing Webmaster Tools）
-            # 示例：Google Search Console API
-            # from googleapiclient.discovery import build
-            # service = build('searchconsole', 'v1', credentials=credentials)
-            # service.sitemaps().submit(siteUrl=site_url, feedpath=sitemap_url).execute()
-        # 4. 返回批量结果
+        # 默认 JSON 模式：供前端调用
         return ApiResponse(
             data={
-                'total': len(sitemap_ids),
-                'success': success_count,
-                'fail': fail_count,
-                'items': result_list
+                'id': sitemap.id,
+                'title': sitemap.title,
+                'content': sitemap.content,
+                'url_count': sitemap.config_value.get('url_count', 0)
             },
-            message=f"批量提交完成，成功{success_count}条，失败{fail_count}条"
+            message="获取成功"
         )
+
 
     @extend_schema(
         summary="生成 Sitemap XML",
