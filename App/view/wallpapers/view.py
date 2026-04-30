@@ -429,6 +429,8 @@ class CollectionItemSerializer(serializers.ModelSerializer):
             OpenApiParameter(name="name", type=str, required=False, description="壁纸名称搜索"),
             OpenApiParameter(name="tag_id", type=str, required=False,
                              description="标签 ID 查询，支持单个或多个（逗号分隔）"),
+            OpenApiParameter(name="tag_name", type=str, required=False,
+                             description="标签名称搜索"),
             OpenApiParameter(name="category_id", type=str, required=False,
                              description="分类 ID 筛选，支持单个或多个（逗号分隔）"),
             OpenApiParameter(name="media_live", type=str, required=False, description="静态false或动态true"),
@@ -500,316 +502,199 @@ class WallpapersViewSet(BaseViewSet):
             if ok:
                 ctx["customer_id"] = cid
         return ctx
+
     def get_queryset(self):
         """
-        动态过滤查询
+        基础查询集：只处理审核状态过滤
         """
         from models.models import User
         queryset = super().get_queryset()
-        # 默认过滤：排除审核不通过的壁纸（除非是管理员查看）
         is_admin = False
         if hasattr(self.request, 'user') and isinstance(self.request.user, User):
-            if self.request.user.role in ['admin', 'operator']:
+            if self.request.user.role in ['admin', 'operator','super_admin']:
                 is_admin = True
-
         if not is_admin:
-            # 非管理员：只显示审核通过或未审核的壁纸
             queryset = queryset.exclude(audit_status='rejected')
         else:
-            # 管理员可以按审核状态筛选
             audit_status = self.request.query_params.get("audit_status", "").strip()
             if audit_status and audit_status in ['pending', 'approved', 'rejected']:
                 queryset = queryset.filter(audit_status=audit_status)
-
-
-        if self.action == 'retrieve':
-            queryset = queryset.select_related('customer_upload__customer')
-
-        # 筛选参数：platform
-        platform = self.request.query_params.get("platform", "")
-        if platform.upper() == 'PC':
-            queryset = queryset.filter(category__id=1).distinct()
-        elif platform.upper() == 'PHONE':
-            queryset = queryset.filter(category__id=2).distinct()
-
-        media_live = self.request.query_params.get("media_live", "")
-        if media_live.lower() == 'true':
-            queryset = queryset.filter(category__id=4).distinct()
-        elif media_live.lower() == 'false':
-            queryset = queryset.filter(category__id=3).distinct()
-
-        user_input = self.request.query_params.get("name", "").strip()
-        if user_input:
-            # 1. 找出所有用户输入中包含的TAG_MAPPING关键词
-            matched_tags = []
-            for keyword, tag_id in TAG_MAPPING.items():
-                # 判断用户输入是否包含当前关键词（不区分大小写）
-                if keyword.lower() in user_input.lower():
-                    matched_tags.append((len(keyword), keyword, tag_id))
-
-            if matched_tags:
-                # 2. 排序：优先匹配长度更长的关键词（多个关键词时优先匹配更精准的）
-                # 例如：输入"关键词123"，同时匹配"关键词1"和"关键词123"，优先选后者
-                matched_tags.sort(key=lambda x: x[0], reverse=True)
-
-                # 3. 获取优先级最高的标签ID进行筛选
-                highest_priority_tag_id = matched_tags[0][2]
-                queryset = queryset.filter(tags__id=highest_priority_tag_id).distinct()
-
-                # 可选：如果需要同时匹配所有包含的标签（交集），取消下面注释
-                # tag_ids = [tag[2] for tag in matched_tags]
-                # queryset = queryset.filter(tags__id__in=tag_ids).distinct()
-            else:
-                # 4. 未匹配到任何TAG_MAPPING关键词 → 降级为原有的名称模糊搜索
-                queryset = queryset.filter(name__icontains=user_input)
-        from django.db.models import F, Q
-        # 筛选参数：tag_id（支持单个和多个，逗号分隔）
-        tag_ids = self.request.query_params.get("tag_id")
-        if tag_ids:
-            tag_id_list = [int(tid.strip()) for tid in tag_ids.split(',') if tid.strip().isdigit()]
-            if tag_id_list:
-                # 使用 filter 进行多对多查询，会匹配包含任一标签的壁纸
-                queryset = queryset.filter(tags__id__in=tag_id_list).distinct()
-        resolution = self.request.query_params.get("resolution", "")
-        if resolution:
-            res_list = [r.strip() for r in resolution.split(',') if r.strip()]
-            if res_list:
-                q_resolution = Q()
-                for res in res_list:
-                    if 'x' in res.lower():
-                        parts = res.lower().split('x')
-                        if len(parts) == 2:
-                            try:
-                                w, h = int(parts[0]), int(parts[1])
-                                q_resolution |= Q(width=w, height=h)
-                            except ValueError:
-                                continue
-                if q_resolution:
-                    queryset = queryset.filter(q_resolution).distinct()
-
-        aspect_ratio = self.request.query_params.get("aspect_ratio", "")
-        if aspect_ratio:
-            # 支持 16:9 和 16-9 两种格式
-            aspect_ratio = aspect_ratio.replace('-', ':')
-            ratio_list = [r.strip() for r in aspect_ratio.split(',') if r.strip()]
-            if ratio_list:
-                where_clauses = []
-                params = []
-                for ratio in ratio_list:
-                    if ':' in ratio:
-                        try:
-                            w_ratio, h_ratio = map(int, ratio.split(':'))
-                            if w_ratio > 0 and h_ratio > 0:
-                                # 使用原生 SQL 片段进行比例计算： width * h_ratio = height * w_ratio
-                                where_clauses.append("(width * %s = height * %s AND width > 0 AND height > 0)")
-                                params.extend([h_ratio, w_ratio])
-                        except ValueError:
-                            continue
-
-                if where_clauses:
-                    # 将多个比例条件用 OR 连接，例如：(条件1) OR (条件2)
-                    sql_or = " OR ".join(where_clauses)
-                    queryset = queryset.extra(where=[f"({sql_or})"], params=params)
         return queryset
 
     def list(self, request, *args, **kwargs):
+        """
+        壁纸列表接口：管理员与普通用户完全分离
+        """
+        from models.models import User
+        is_admin = hasattr(request, 'user') and isinstance(request.user, User) and request.user.role in ['admin', 'operator','super_admin']
+        customer_id = self.get_serializer_context().get("customer_id")
+        if is_admin:
+            return self._list_for_admin(request, customer_id)
+        else:
+            return self._list_for_customer(request, customer_id)
+
+    def _list_for_admin(self, request, customer_id):
+        """管理员列表逻辑：包含完整字段、审核状态筛选、策略排序"""
         queryset = self.filter_queryset(self.get_queryset())
 
-        # 判断是否为管理员
-        from models.models import User
-        is_admin = False
-        if hasattr(request, 'user') and isinstance(request.user, User):
-            if request.user.role in ['admin', 'operator']:
-                is_admin = True
-
-        # 获取分页和排序参数
-        order = request.query_params.get("order", "").lower()
+        # 1. 筛选条件
         platform = request.query_params.get("platform", "").upper()
+        if platform == 'PC':
+            queryset = queryset.filter(category__id=1).distinct()
+        elif platform == 'PHONE':
+            queryset = queryset.filter(category__id=2).distinct()
+        tag_name = request.query_params.get("tag_name", "").strip()
+        if tag_name:
+            tag_ids = list(WallpaperTag.objects.filter(name__icontains=tag_name).values_list('id', flat=True))
+            if tag_ids:
+                queryset = queryset.filter(tags__id__in=tag_ids).distinct()
+        tag_ids_param = request.query_params.get("tag_id")
+        if tag_ids_param:
+            ids = [int(t) for t in tag_ids_param.split(',') if t.strip().isdigit()]
+            if ids:
+                queryset = queryset.filter(tags__id__in=ids).distinct()
+
+        # 2. 排序策略（管理员支持 order=hot/home 策略排序）
+        order = request.query_params.get("order", "").lower()
         page_num = int(request.query_params.get("currentPage", 1))
         page_size = int(request.query_params.get("pageSize", 10))
+        queryset = self._apply_strategy_sorting(queryset, order, platform, page_num, page_size)
+        # 3. 预加载数据
+        queryset = queryset.prefetch_related('tags', 'category').select_related('customer_upload__customer')
+        # 4. 分页与序列化
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = WallpapersAdminListSerializer(page, many=True, context=self.get_serializer_context())
+            return self.get_paginated_response(serializer.data)
+        serializer = WallpapersAdminListSerializer(queryset, many=True, context=self.get_serializer_context())
+        return ApiResponse(serializer.data)
 
-        # 确定策略类型
+    def _list_for_customer(self, request, customer_id):
+        """普通用户列表逻辑：轻量级字段、基础排序、点赞/收藏状态"""
+        queryset = self.filter_queryset(self.get_queryset())
+
+        # 1. 筛选条件（普通用户支持更多筛选维度）
+        platform = request.query_params.get("platform", "").upper()
+        if platform == 'PC':
+            queryset = queryset.filter(category__id=1).distinct()
+        elif platform == 'PHONE':
+            queryset = queryset.filter(category__id=2).distinct()
+
+        tag_name = request.query_params.get("tag_name", "").strip()
+        if tag_name:
+            tag_ids = list(WallpaperTag.objects.filter(name__icontains=tag_name).values_list('id', flat=True))
+            if tag_ids:
+                queryset = queryset.filter(tags__id__in=tag_ids).distinct()
+
+        tag_ids_param = request.query_params.get("tag_id")
+        if tag_ids_param:
+            ids = [int(t) for t in tag_ids_param.split(',') if t.strip().isdigit()]
+            if ids:
+                queryset = queryset.filter(tags__id__in=ids).distinct()
+
+        media_live = request.query_params.get("media_live", "").lower()
+        if media_live == 'true':
+            queryset = queryset.filter(category__id=4).distinct()
+        elif media_live == 'false':
+            queryset = queryset.filter(category__id=3).distinct()
+
+        resolution = request.query_params.get("resolution", "")
+        if resolution:
+            from django.db.models import Q
+            q = Q()
+            for res in resolution.split(','):
+                if 'x' in res:
+                    try:
+                        w, h = map(int, res.split('x'))
+                        q |= Q(width=w, height=h)
+                    except:
+                        pass
+            if q:
+                queryset = queryset.filter(q).distinct()
+        # 2. 排序策略（普通用户同样支持 order=hot/home 策略排序）
+        order = request.query_params.get("order", "").lower()
+        page_num = int(request.query_params.get("currentPage", 1))
+        page_size = int(request.query_params.get("pageSize", 10))
+        queryset = self._apply_strategy_sorting(queryset, order, platform, page_num, page_size)
+        # 3. 预加载轻量级数据
+        queryset = queryset.prefetch_related('tags').only(
+            'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
+            'has_watermark', 'is_live', 'is_hd', 'hot_score', 'like_count',
+            'collect_count', 'download_count', 'view_count', 'created_at', 'audit_status'
+        )
+        # 4. 获取用户点赞和收藏 ID
+        liked_ids, collected_ids = set(), set()
+        if customer_id:
+            liked_ids = set(
+                WallpaperLike.objects.filter(customer_id=customer_id).values_list('wallpaper_id', flat=True))
+            collected_ids = set(
+                WallpaperCollection.objects.filter(user_id=customer_id).values_list('wallpaper_id', flat=True))
+        # 5. 分页与序列化
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            context = self.get_serializer_context()
+            context['liked_wallpaper_ids'] = liked_ids
+            context['collected_wallpaper_ids'] = collected_ids
+            serializer = WallpapersListSerializer(page, many=True, context=context)
+            return self.get_paginated_response(serializer.data)
+
+        context = self.get_serializer_context()
+        context['liked_wallpaper_ids'] = liked_ids
+        context['collected_wallpaper_ids'] = collected_ids
+        serializer = WallpapersListSerializer(queryset, many=True, context=context)
+        return ApiResponse(serializer.data)
+
+    def _apply_strategy_sorting(self, queryset, order, platform, page_num, page_size):
+        """公共方法：处理策略排序逻辑"""
         strategy_type = None
         if order == 'hot':
             strategy_type = "hot"
         elif order == 'home':
             strategy_type = "home"
 
-        # 如果需要应用策略
-        if strategy_type:
-            from django.utils import timezone
-            from django.db.models import Value, IntegerField
+        if not strategy_type:
+            return queryset.order_by('-hot_score', '-created_at')
 
-            now = timezone.now()
-            matched_strategy = None
+        from django.utils import timezone
+        from django.db.models import Value, IntegerField
 
-            # 1. 查找匹配的策略（优先平台策略，其次 all 策略）
-            if platform in ['PC', 'PHONE']:
-                platform_strategies = RecommendStrategy.objects.filter(
-                    platform=platform.lower(),
-                    strategy_type=strategy_type,
-                    status="active",
-                ).order_by("-priority", "-created_at")
-
-                for item in platform_strategies:
-                    if item.start_time and now < item.start_time:
-                        continue
-                    if item.end_time and now > item.end_time:
-                        continue
+        now = timezone.now()
+        matched_strategy = None
+        if platform in ['PC', 'PHONE']:
+            for item in RecommendStrategy.objects.filter(platform=platform.lower(), strategy_type=strategy_type,
+                                                         status="active").order_by("-priority", "-created_at"):
+                if (not item.start_time or now >= item.start_time) and (not item.end_time or now <= item.end_time):
+                    matched_strategy = item
+                    break
+        if not matched_strategy:
+            for item in RecommendStrategy.objects.filter(platform="all", strategy_type=strategy_type,
+                                                         status="active").order_by("-priority", "-created_at"):
+                if (not item.start_time or now >= item.start_time) and (not item.end_time or now <= item.end_time):
                     matched_strategy = item
                     break
 
-                if not matched_strategy:
-                    all_strategies = RecommendStrategy.objects.filter(
-                        platform="all",
-                        strategy_type=strategy_type,
-                        status="active",
-                    ).order_by("-priority", "-created_at")
+        if not matched_strategy:
+            return queryset.order_by('-hot_score', '-created_at')
 
-                    for item in all_strategies:
-                        if item.start_time and now < item.start_time:
-                            continue
-                        if item.end_time and now > item.end_time:
-                            continue
-                        matched_strategy = item
-                        break
-            else:
-                all_strategies = RecommendStrategy.objects.filter(
-                    platform="all",
-                    strategy_type=strategy_type,
-                    status="active",
-                ).order_by("-priority", "-created_at")
+        relations = StrategyWallpaperRelation.objects.filter(strategy=matched_strategy).select_related(
+            'wallpaper').order_by('sort_order', '-created_at')
+        if matched_strategy.content_limit:
+            relations = relations[:matched_strategy.content_limit]
 
-                for item in all_strategies:
-                    if item.start_time and now < item.start_time:
-                        continue
-                    if item.end_time and now > item.end_time:
-                        continue
-                    matched_strategy = item
-                    break
+        strategy_ids = [r.wallpaper_id for r in relations if r.wallpaper_id]
+        if not strategy_ids:
+            return queryset.order_by('-hot_score', '-created_at')
 
-            # 2. 处理策略数据
-            if matched_strategy:
-                # 2.1 获取策略关联的壁纸
-                strategy_relations = StrategyWallpaperRelation.objects.filter(
-                    strategy=matched_strategy
-                ).select_related('wallpaper').order_by('sort_order', '-created_at')
+        start_index = (page_num - 1) * page_size
+        if start_index >= len(strategy_ids):
+            return queryset.order_by('-hot_score', '-created_at')
 
-                # 如果策略有限制数量
-                if matched_strategy.content_limit and matched_strategy.content_limit > 0:
-                    strategy_relations = strategy_relations[:matched_strategy.content_limit]
+        s_qs = Wallpapers.objects.filter(id__in=strategy_ids).annotate(
+            _sort_weight=Value(0, output_field=IntegerField()))
+        n_qs = queryset.exclude(id__in=strategy_ids).annotate(
+            _sort_weight=Value(1, output_field=IntegerField())).order_by('-hot_score', '-like_count', '-created_at')
 
-                # 提取策略壁纸的 ID 列表
-                strategy_wallpaper_ids = [rel.wallpaper_id for rel in strategy_relations if rel.wallpaper_id]
-                strategy_count = len(strategy_wallpaper_ids)
-
-                # 2.2 计算当前页应该显示的数据范围
-                start_index = (page_num - 1) * page_size
-                end_index = start_index + page_size
-
-                # 2.3 判断策略数据是否已展示完
-                if start_index >= strategy_count:
-                    # 策略数据已全部展示完，只显示正常数据
-                    queryset = queryset.order_by('-hot_score', '-created_at')
-                else:
-                    # 策略数据未展示完，需要拼接
-                    if strategy_wallpaper_ids:
-                        from django.db.models import Count, Q
-
-                        # 策略壁纸查询集（排序权重 0）
-                        strategy_queryset = Wallpapers.objects.filter(
-                            id__in=strategy_wallpaper_ids
-                        ).annotate(
-                            _sort_weight=Value(0, output_field=IntegerField())
-                        )
-
-                        # 正常壁纸查询集（排序权重 1）
-                        normal_queryset = queryset.exclude(
-                            id__in=strategy_wallpaper_ids
-                        ).annotate(
-                            _sort_weight=Value(1, output_field=IntegerField())
-                        ).order_by('-hot_score', '-like_count', '-created_at')
-
-                        # 在 union 之前分别添加 prefetch_related
-                        if is_admin:
-                            strategy_queryset = strategy_queryset.prefetch_related('tags', 'category').select_related(
-                                'customer_upload__customer')
-                            normal_queryset = normal_queryset.prefetch_related('tags', 'category').select_related(
-                                'customer_upload__customer')
-                        else:
-                            strategy_queryset = strategy_queryset.prefetch_related('tags').only(
-                                'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
-                                'has_watermark', 'is_live', 'is_hd', 'hot_score', 'like_count',
-                                'collect_count', 'download_count', 'view_count', 'created_at', 'audit_status'
-                            )
-                            normal_queryset = normal_queryset.prefetch_related('tags').only(
-                                'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
-                                'has_watermark', 'is_live', 'is_hd', 'hot_score', 'like_count',
-                                'collect_count', 'download_count', 'view_count', 'created_at', 'audit_status'
-                            )
-
-                        # 拼接查询集
-                        queryset = strategy_queryset.union(normal_queryset).order_by('_sort_weight')
-                    else:
-                        # 策略没有壁纸，直接使用正常查询
-                        queryset = queryset.order_by('-hot_score', '-created_at')
-            else:
-                # 没有匹配的策略，直接使用正常查询
-                queryset = queryset.order_by('-hot_score', '-created_at')
-        else:
-            # 默认不传 order，按其他规则排序
-            order_mapping = {
-                "latest": "-created_at",
-                "views": "-view_count",
-                "downloads": "-download_count",
-            }
-            if order in order_mapping:
-                queryset = queryset.order_by(order_mapping[order])
-            else:
-                # 默认排序
-                queryset = queryset.order_by('-hot_score', '-created_at')
-
-        # 3. 获取用户点赞和收藏信息
-        customer_id = self.get_serializer_context().get("customer_id")
-        if customer_id:
-            liked_ids = set(
-                WallpaperLike.objects.filter(customer_id=customer_id)
-                .values_list('wallpaper_id', flat=True)
-            )
-            collected_ids = set(
-                WallpaperCollection.objects.filter(user_id=customer_id)
-                .values_list('wallpaper_id', flat=True)
-            )
-        else:
-            liked_ids = set()
-            collected_ids = set()
-
-        # 4. 分页并序列化
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            context = self.get_serializer_context()
-            context['liked_wallpaper_ids'] = liked_ids
-            context['collected_wallpaper_ids'] = collected_ids
-
-            # 根据管理员身份选择序列化器
-            if is_admin:
-                serializer = WallpapersAdminListSerializer(page, many=True, context=context)
-            else:
-                serializer = WallpapersListSerializer(page, many=True, context=context)
-
-            return self.get_paginated_response(serializer.data)
-
-        # 未分页的情况
-        context = self.get_serializer_context()
-        context['liked_wallpaper_ids'] = liked_ids
-        context['collected_wallpaper_ids'] = collected_ids
-
-        if is_admin:
-            serializer = WallpapersAdminListSerializer(queryset, many=True, context=context)
-        else:
-            serializer = WallpapersListSerializer(queryset, many=True, context=context)
-
-        return ApiResponse(serializer.data)
+        return s_qs.union(n_qs).order_by('_sort_weight')
 
     def destroy(self, request, *args, **kwargs):
         try:
