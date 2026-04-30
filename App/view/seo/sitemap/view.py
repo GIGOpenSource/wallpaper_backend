@@ -259,10 +259,24 @@ class SitemapURLViewSet(BaseViewSet):
         return self.update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
-        """删除 Sitemap URL"""
+        """删除 Sitemap URL（同时删除关联的 PageTDK）"""
+        from models.models import PageTDK
         instance = self.get_object()
-        instance.delete()
-        return ApiResponse(message="删除成功")
+        sitemap_url_id = instance.id
+        try:
+            with transaction.atomic():
+                # 1. 删除关联的 PageTDK 记录（url_id 指向此 sitemap_url）
+                deleted_tdk_count = PageTDK.objects.filter(url_id=sitemap_url_id).delete()[0]
+                # 2. 删除 Sitemap URL 自身
+                instance.delete()
+                if deleted_tdk_count > 0:
+                    return ApiResponse(
+                        message=f"删除成功，同时删除了 {deleted_tdk_count} 条关联的 TDK 配置"
+                    )
+                else:
+                    return ApiResponse(message="删除成功")
+        except Exception as e:
+            return ApiResponse(code=500, message=f"删除失败：{str(e)}")
 
     @extend_schema(
         summary="获取 Sitemap 统计信息",
