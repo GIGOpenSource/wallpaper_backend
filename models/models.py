@@ -796,3 +796,48 @@ class PageTDK(models.Model):
     def __str__(self):
         url_str = self.url.content if self.url else '未关联'
         return f"{self.get_page_type_display()} - {url_str}"
+
+
+class BacklinkManagement(models.Model):
+    """
+    外链管理表：管理网站的外链信息
+    """
+    STATUS_CHOICES = [
+        ('active', '有效'),
+        ('inactive', '失效'),
+        ('pending', '待审核'),
+        ('toxic', '有毒'),
+    ]
+    
+    ATTRIBUTE_CHOICES = [
+        ('dofollow', 'Dofollow'),
+        ('nofollow', 'Nofollow'),
+        ('ugc', 'UGC'),
+        ('sponsored', 'Sponsored'),
+    ]
+    
+    source_page = models.URLField(max_length=500, verbose_name="来源页面")
+    target_page = models.URLField(max_length=500, verbose_name="目标页面")
+    anchor_text = models.CharField(max_length=200, blank=True, null=True, verbose_name="锚文本")
+    da_score = models.IntegerField(default=0, verbose_name="DA评分（Domain Authority）")
+    quality_score = models.IntegerField(default=0, verbose_name="质量评分（0-100）")
+    attribute = models.CharField(max_length=20, choices=ATTRIBUTE_CHOICES, default='dofollow', verbose_name="属性")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', verbose_name="状态")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="发现时间")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="最后更新时间")
+    remark = models.TextField(blank=True, null=True, verbose_name="备注")
+
+    class Meta:
+        db_table = 't_backlink_management'
+        verbose_name = '外链管理'
+        verbose_name_plural = '外链管理'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status']),
+            models.Index(fields=['attribute']),
+            models.Index(fields=['target_page']),
+            models.Index(fields=['-created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.source_page} -> {self.target_page} ({self.anchor_text or '无锚文本'})"
