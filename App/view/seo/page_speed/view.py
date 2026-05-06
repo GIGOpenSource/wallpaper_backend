@@ -262,7 +262,7 @@ class PageSpeedViewSet(BaseViewSet):
         summary="获取资源分析",
         description="根据ID获取页面的资源分析数据，包括页面大小、资源数量、加载时间线等",
         parameters=[
-            OpenApiParameter(name="id", type=int, required=True, location=OpenApiParameter.PATH, description="记录ID"),
+            OpenApiParameter(name="id", type=int, required=True, location=OpenApiParameter.QUERY, description="记录ID"),
         ],
         responses={
             200: {
@@ -291,7 +291,7 @@ class PageSpeedViewSet(BaseViewSet):
             }
         }
     )
-    @action(detail=False, methods=['get'], url_path='resource-analysis/')
+    @action(detail=False, methods=['get'], url_path='resource-analysis')
     def resource_analysis(self, request):
         """
         获取资源分析
@@ -330,7 +330,7 @@ class PageSpeedViewSet(BaseViewSet):
         summary="获取优化建议",
         description="根据ID获取页面的优化建议，返回JSON数组",
         parameters=[
-            OpenApiParameter(name="id", type=int, required=True, location=OpenApiParameter.PATH, description="记录ID"),
+            OpenApiParameter(name="id", type=int, required=True, location=OpenApiParameter.QUERY, description="记录ID"),
         ],
         responses={
             200: {
@@ -354,7 +354,7 @@ class PageSpeedViewSet(BaseViewSet):
             }
         }
     )
-    @action(detail=False, methods=['get'], url_path='optimization-suggestions/')
+    @action(detail=False, methods=['get'], url_path='optimization-suggestions')
     def optimization_suggestions(self, request):
         """
         获取优化建议
