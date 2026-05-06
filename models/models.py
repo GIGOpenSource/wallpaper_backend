@@ -935,6 +935,7 @@ class PageSpeed(models.Model):
     full_url = models.URLField(max_length=1000, verbose_name="完整URL")
     overall_score = models.IntegerField(default=0, verbose_name="综合评分（0-100）")
     mobile_friendly = models.CharField(max_length=20, choices=MOBILE_FRIENDLY_CHOICES, blank=True, null=True, verbose_name="移动友好性")
+    fcp = models.FloatField(default=0.0, verbose_name="FCP（首次内容绘制，秒）")
     lcp = models.FloatField(default=0.0, verbose_name="LCP（最大内容绘制，秒）")
     fid = models.FloatField(default=0.0, verbose_name="FID（首次输入延迟，毫秒）")
     cls = models.FloatField(default=0.0, verbose_name="CLS（累积布局偏移）")

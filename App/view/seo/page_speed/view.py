@@ -23,7 +23,7 @@ class PageSpeedSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'page_path', 'platform', 'platform_display', 'full_url', 'overall_score',
             'mobile_friendly', 'mobile_friendly_display',
-            'lcp', 'fid', 'cls', 'load_time', 'page_size',
+            'fcp','lcp', 'fid', 'cls', 'load_time', 'page_size',
             'issue_count', 'tested_at', 'created_at', 'remark'
         ]
         read_only_fields = ['id', 'full_url', 'tested_at', 'created_at']
@@ -204,6 +204,7 @@ class PageSpeedViewSet(BaseViewSet):
                 'overall_score': test_result['overall_score'],
                 'mobile_friendly': test_result.get('mobile_friendly'),
                 'lcp': test_result['lcp'],
+                'fcp': test_result.get('fcp', 0.0),
                 'fid': test_result['fid'],
                 'cls': test_result['cls'],
                 'load_time': test_result['load_time'],
@@ -307,16 +308,16 @@ class PageSpeedViewSet(BaseViewSet):
         )
 
     @extend_schema(
-        summary="测试新页面",
-        description="传入页面路径，自动测试页面速度并保存结果。支持指定平台类型（桌面端/手机/平板）",
+        summary="测试新页面或重新测试",
+        description="传入页面路径进行测试，或传入ID重新测试已有记录。支持指定平台类型（桌面端/手机/平板）",
         request={
             "application/json": {
                 "type": "object",
                 "properties": {
-                    "page_path": {"type": "string", "description": "页面路径，如 /markwallpapers/search"},
+                    "id": {"type": "integer", "description": "记录ID（可选，传入则重新测试该记录）"},
+                    "page_path": {"type": "string", "description": "页面路径，如 /markwallpapers/search（无ID时必填）"},
                     "platform": {"type": "string", "description": "平台类型：page(桌面端)/phone(手机)/pad(平板)，默认page"}
-                },
-                "required": ["page_path"]
+                }
             }
         },
         responses={
@@ -333,9 +334,12 @@ class PageSpeedViewSet(BaseViewSet):
                             "full_url": {"type": "string"},
                             "overall_score": {"type": "integer"},
                             "mobile_friendly": {"type": "string"},
+                            "fcp": {"type": "number"},
                             "lcp": {"type": "number"},
                             "fid": {"type": "number"},
+                            "inp": {"type": "number"},
                             "cls": {"type": "number"},
+                            "ttfb": {"type": "number"},
                             "load_time": {"type": "number"},
                             "page_size": {"type": "number"},
                             "issue_count": {"type": "integer"}
@@ -349,48 +353,84 @@ class PageSpeedViewSet(BaseViewSet):
     @action(detail=False, methods=['post'], url_path='test')
     def test_new_page(self, request):
         """
-        测试新页面
-        1. 接收页面路径和平台类型
-        2. 拼接完整URL
-        3. 调用PageSpeed API进行测试
-        4. 保存测试结果到数据库
+        测试新页面或重新测试
+        - 如果传入 id：重新测试该记录
+        - 如果传入 page_path：创建或更新测试记录
         """
+        record_id = request.data.get('id')
         page_path = request.data.get('page_path')
-        if not page_path:
-            return ApiResponse(code=400, message="请提供 page_path 参数")
-        # 获取平台类型，默认为 page
         platform = request.data.get('platform', 'page')
+
+        # 如果传入了ID，进行重新测试
+        if record_id:
+            try:
+                page_speed = PageSpeed.objects.get(id=record_id)
+                # 使用记录的原有路径和平台
+                test_page_path = page_speed.page_path
+                test_platform = page_speed.platform
+            except PageSpeed.DoesNotExist:
+                return ApiResponse(code=404, message="记录不存在")
+        else:
+            # 没有ID，必须提供page_path
+            if not page_path:
+                return ApiResponse(code=400, message="请提供 page_path 参数或 id 参数")
+            test_page_path = page_path
+            test_platform = platform
+
         # 拼接完整URL
         site_prefix = get_site_prefix()
-        if not page_path.startswith('/'):
-            page_path_with_slash = '/' + page_path
+        if not test_page_path.startswith('/'):
+            page_path_with_slash = '/' + test_page_path
         else:
-            page_path_with_slash = page_path
+            page_path_with_slash = test_page_path
         full_url = f"{site_prefix}{page_path_with_slash}"
-        
+
         # 调用工具类测试页面速度
-        test_result = test_page_speed(page_path, platform)
-        
-        # 创建或更新记录
-        page_speed, created = PageSpeed.objects.update_or_create(
-            page_path=page_path,
-            platform=platform,
-            defaults={
-                'full_url': full_url,
-                'overall_score': test_result['overall_score'],
-                'mobile_friendly': test_result.get('mobile_friendly'),
-                'lcp': test_result['lcp'],
-                'fid': test_result['fid'],
-                'cls': test_result['cls'],
-                'load_time': test_result['load_time'],
-                'page_size': test_result['page_size'],
-                'issue_count': test_result['issue_count']
-            }
-        )
-        
+        test_result = test_page_speed(test_page_path, test_platform)
+
+        # 如果是重新测试，更新现有记录；否则创建或更新
+        if record_id:
+            page_speed.overall_score = test_result['overall_score']
+            page_speed.mobile_friendly = test_result.get('mobile_friendly')
+            page_speed.fcp = test_result.get('fcp', 0.0)
+            page_speed.lcp = test_result['lcp']
+            page_speed.fid = test_result['fid']
+            page_speed.inp = test_result.get('inp', 0.0)
+            page_speed.cls = test_result['cls']
+            page_speed.ttfb = test_result.get('ttfb', 0.0)
+            page_speed.load_time = test_result['load_time']
+            page_speed.page_size = test_result['page_size']
+            page_speed.issue_count = test_result['issue_count']
+            page_speed.full_url = full_url
+            page_speed.save()
+
+            message = "重新测试成功"
+        else:
+            # 创建或更新记录
+            page_speed, created = PageSpeed.objects.update_or_create(
+                page_path=test_page_path,
+                platform=test_platform,
+                defaults={
+                    'full_url': full_url,
+                    'overall_score': test_result['overall_score'],
+                    'mobile_friendly': test_result.get('mobile_friendly'),
+                    'fcp': test_result.get('fcp', 0.0),
+                    'lcp': test_result['lcp'],
+                    'fid': test_result['fid'],
+                    'inp': test_result.get('inp', 0.0),
+                    'cls': test_result['cls'],
+                    'ttfb': test_result.get('ttfb', 0.0),
+                    'load_time': test_result['load_time'],
+                    'page_size': test_result['page_size'],
+                    'issue_count': test_result['issue_count']
+                }
+            )
+
+            message = "页面速度测试成功" if created else "页面速度更新成功"
+
         result_serializer = PageSpeedSerializer(page_speed)
         return ApiResponse(
             data=result_serializer.data,
-            message="页面速度测试成功" if created else "页面速度更新成功",
+            message=message,
             code=201
         )

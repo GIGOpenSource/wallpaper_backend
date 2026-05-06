@@ -117,40 +117,55 @@ def _scan_with_pagespeed_api(url, platform='page'):
                 'audits', {}
             )
             
+            # FCP (First Contentful Paint) - 秒
+            fcp_audit = metrics.get('first-contentful-paint', {})
+            fcp = fcp_audit.get('numericValue', 0.0)
+
             # LCP (Largest Contentful Paint) - 秒
             lcp_audit = metrics.get('largest-contentful-paint', {})
             lcp = lcp_audit.get('numericValue', 0.0)
-            
+
             # FID (First Input Delay) - 毫秒（注意：FID已被INP替代，但这里仍保留）
             fid_audit = metrics.get('max-potential-fid', {})
             fid = fid_audit.get('numericValue', 0.0)
-            
+
+            # INP (Interaction to Next Paint) - 毫秒
+            inp_audit = metrics.get('interaction-to-next-paint', {})
+            inp = inp_audit.get('numericValue', 0.0)
+
             # CLS (Cumulative Layout Shift)
             cls_audit = metrics.get('cumulative-layout-shift', {})
             cls = cls_audit.get('numericValue', 0.0)
-            
+
+            # TTFB (Time to First Byte) - 秒
+            ttfb_audit = metrics.get('server-response-time', {})
+            ttfb = ttfb_audit.get('numericValue', 0.0) / 1000.0  # 转换为秒
+
             # 加载时间
             load_time_audit = metrics.get('speed-index', {})
             load_time = load_time_audit.get('numericValue', 0.0)
-            
+
             # 页面大小（需要从资源统计中计算）
             page_size = _calculate_page_size(data)
-            
+
             # 问题数（机会和建议的数量）
             issue_count = len(data.get('lighthouseResult', {}).get(
                 'audits', {}
             ).get('opportunities', []))
-            
+
             # 移动友好性检测（仅移动端）
             mobile_friendly = None
             if platform in ['phone', 'pad']:
                 mobile_friendly = _check_mobile_friendly(data)
-            
+
             return {
                 'overall_score': overall_score,
-                'lcp': round(lcp, 2),
+                'fcp': round(fcp / 1000, 2),  # 转换为秒
+                'lcp': round(lcp / 1000, 2),  # 转换为秒
                 'fid': round(fid, 2),
+                'inp': round(inp, 2),
                 'cls': round(cls, 3),
+                'ttfb': round(ttfb, 2),
                 'load_time': round(load_time / 1000, 2),  # 转换为秒
                 'page_size': round(page_size, 2),
                 'issue_count': issue_count,
@@ -159,10 +174,11 @@ def _scan_with_pagespeed_api(url, platform='page'):
         else:
             logger.error(f"PageSpeed API 请求失败: {response.status_code}")
             return _mock_scan(url, platform)
-            
+
     except Exception as e:
         logger.error(f"PageSpeed API 调用失败: {e}")
         return _mock_scan(url, platform)
+
 
 
 def _calculate_page_size(data):
@@ -229,7 +245,6 @@ def _check_mobile_friendly(data):
         logger.error(f"移动友好性检测失败: {e}")
         return 'unfriendly'
 
-
 def _mock_scan(page_path, platform='page'):
     """
     模拟页面速度测试（用于测试或API不可用时）
@@ -238,41 +253,53 @@ def _mock_scan(page_path, platform='page'):
     :param platform: 平台类型
     """
     import hashlib
-    
+
     # 基于页面路径和平台生成稳定的评分
     hash_input = f"{page_path}_{platform}"
     hash_value = int(hashlib.md5(hash_input.encode()).hexdigest(), 16)
-    
+
     # 综合评分 (0-100) - 移动端通常分数会低一些
     if platform in ['phone', 'pad']:
         overall_score = 55 + (hash_value % 40)  # 55-95之间
     else:
         overall_score = 60 + (hash_value % 41)  # 60-100之间
-    
+
+    # FCP (0.5-2.5秒) - 移动端可能更慢
+    if platform in ['phone', 'pad']:
+        fcp = 0.8 + (hash_value % 25) / 10.0
+    else:
+        fcp = 0.5 + (hash_value % 20) / 10.0
+
     # LCP (1.0-4.0秒) - 移动端可能更慢
     if platform in ['phone', 'pad']:
         lcp = 1.5 + (hash_value % 35) / 10.0
     else:
         lcp = 1.0 + (hash_value % 30) / 10.0
-    
+
     # FID (10-100毫秒)
     fid = 10 + (hash_value % 91)
-    
+
+    # INP (50-300毫秒)
+    inp = 50 + (hash_value % 251)
+
     # CLS (0.0-0.25)
     cls = (hash_value % 25) / 100.0
-    
+
+    # TTFB (0.1-0.8秒)
+    ttfb = 0.1 + (hash_value % 70) / 100.0
+
     # 加载时间 (1.0-5.0秒) - 移动端可能更慢
     if platform in ['phone', 'pad']:
         load_time = 1.5 + (hash_value % 45) / 10.0
     else:
         load_time = 1.0 + (hash_value % 40) / 10.0
-    
+
     # 页面大小 (500-3000 KB)
     page_size = 500 + (hash_value % 2500)
-    
+
     # 问题数 (0-10)
     issue_count = hash_value % 11
-    
+
     # 移动友好性（仅移动端）
     mobile_friendly = None
     if platform in ['phone', 'pad']:
@@ -281,14 +308,18 @@ def _mock_scan(page_path, platform='page'):
             mobile_friendly = 'friendly'
         else:
             mobile_friendly = 'unfriendly'
-    
+
     return {
         'overall_score': overall_score,
+        'fcp': round(fcp, 2),
         'lcp': round(lcp, 2),
         'fid': round(fid, 2),
+        'inp': round(inp, 2),
         'cls': round(cls, 3),
+        'ttfb': round(ttfb, 2),
         'load_time': round(load_time, 2),
         'page_size': round(page_size, 2),
         'issue_count': issue_count,
         'mobile_friendly': mobile_friendly
     }
+
