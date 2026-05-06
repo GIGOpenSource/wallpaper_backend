@@ -919,9 +919,22 @@ class PageSpeed(models.Model):
     """
     页面速度表：存储页面性能指标数据
     """
-    page_path = models.CharField(max_length=500, unique=True, verbose_name="页面路径")
+    PLATFORM_CHOICES = [
+        ('page', '桌面端'),
+        ('phone', '手机'),
+        ('pad', '平板'),
+    ]
+    
+    MOBILE_FRIENDLY_CHOICES = [
+        ('friendly', '友好'),
+        ('unfriendly', '不友好'),
+    ]
+    
+    page_path = models.CharField(max_length=500, verbose_name="页面路径")
+    platform = models.CharField(max_length=20, choices=PLATFORM_CHOICES, default='page', verbose_name="平台/设备")
     full_url = models.URLField(max_length=1000, verbose_name="完整URL")
     overall_score = models.IntegerField(default=0, verbose_name="综合评分（0-100）")
+    mobile_friendly = models.CharField(max_length=20, choices=MOBILE_FRIENDLY_CHOICES, blank=True, null=True, verbose_name="移动友好性")
     lcp = models.FloatField(default=0.0, verbose_name="LCP（最大内容绘制，秒）")
     fid = models.FloatField(default=0.0, verbose_name="FID（首次输入延迟，毫秒）")
     cls = models.FloatField(default=0.0, verbose_name="CLS（累积布局偏移）")
@@ -939,9 +952,14 @@ class PageSpeed(models.Model):
         ordering = ['-tested_at']
         indexes = [
             models.Index(fields=['page_path']),
+            models.Index(fields=['platform']),
+            models.Index(fields=['mobile_friendly']),
             models.Index(fields=['-overall_score']),
             models.Index(fields=['-tested_at']),
+            # 联合唯一索引：同一页面路径+平台只能有一条记录
+            models.Index(fields=['page_path', 'platform'], name='idx_page_platform'),
         ]
+        unique_together = ('page_path', 'platform')
 
     def __str__(self):
-        return f"{self.page_path} (评分: {self.overall_score})"
+        return f"{self.page_path} [{self.get_platform_display()}] (评分: {self.overall_score})"
