@@ -409,3 +409,82 @@ class SiteConfigViewSet(BaseViewSet):
         config.content = serializer.validated_data['content']
         config.save()
         return ApiResponse(data={'content': config.content}, message="更新成功")
+
+    @extend_schema(
+        summary="获取 Robots.txt 统计信息",
+        description="解析 Robots.txt 内容，返回规则数量、Allow路径数量、Disallow数量、最后更新时间等统计信息",
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "integer", "example": 200},
+                    "data": {
+                        "type": "object",
+                        "properties": {
+                            "total_rules": {"type": "integer", "description": "总规则数"},
+                            "allow_count": {"type": "integer", "description": "Allow路径数量"},
+                            "disallow_count": {"type": "integer", "description": "Disallow数量"},
+                            "sitemap_count": {"type": "integer", "description": "Sitemap数量"},
+                            "user_agents": {"type": "array", "items": {"type": "string"}, "description": "User-agent列表"},
+                            "last_updated": {"type": "string", "description": "最后更新时间"}
+                        }
+                    },
+                    "message": {"type": "string", "example": "获取成功"}
+                }
+            }
+        }
+    )
+    @action(detail=False, methods=['get'], url_path='robots-statistics')
+    def robots_statistics(self, request):
+        """获取 Robots.txt 统计信息"""
+        try:
+            config = SiteConfig.objects.get(config_type='robots_txt', is_active=True)
+            content = config.content
+            last_updated = config.updated_at
+        except SiteConfig.DoesNotExist:
+            content = "User-agent: *\nDisallow: /"
+            last_updated = None
+
+        # 解析 Robots.txt 内容
+        lines = content.split('\n')
+        allow_count = 0
+        disallow_count = 0
+        sitemap_count = 0
+        user_agents = []
+        total_rules = 0
+
+        for line in lines:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+
+            # 统计 Allow
+            if line.lower().startswith('allow:'):
+                allow_count += 1
+                total_rules += 1
+            # 统计 Disallow
+            elif line.lower().startswith('disallow:'):
+                disallow_count += 1
+                total_rules += 1
+            # 统计 Sitemap
+            elif line.lower().startswith('sitemap:'):
+                sitemap_count += 1
+                total_rules += 1
+            # 统计 User-agent
+            elif line.lower().startswith('user-agent:'):
+                agent = line.split(':', 1)[1].strip()
+                if agent and agent not in user_agents:
+                    user_agents.append(agent)
+
+        return ApiResponse(
+            data={
+                'total_rules': total_rules,
+                'allow_count': allow_count,
+                'disallow_count': disallow_count,
+                'sitemap_count': sitemap_count,
+                'user_agents': user_agents,
+                'user_agents_count':len(user_agents),
+                'last_updated': last_updated
+            },
+            message="获取成功"
+        )

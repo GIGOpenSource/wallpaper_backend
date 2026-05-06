@@ -846,3 +846,35 @@ class BacklinkManagement(models.Model):
 
     def __str__(self):
         return f"{self.source_page} -> {self.target_page} ({self.anchor_text or '无锚文本'})"
+
+
+class DomainAnalysis(models.Model):
+    """
+    域名分析表：存储域名的安全评分、外链数等信息
+    """
+    STATUS_CHOICES = [
+        ('safe', '安全'),
+        ('danger', '危险'),
+    ]
+    
+    domain = models.CharField(max_length=255, unique=True, verbose_name="域名")
+    safety_score = models.IntegerField(default=0, verbose_name="安全评分（0-100）")
+    backlink_count = models.IntegerField(default=0, verbose_name="外链数")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='safe', verbose_name="状态")
+    analyzed_at = models.DateTimeField(auto_now=True, verbose_name="分析时间")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    remark = models.TextField(blank=True, null=True, verbose_name="备注")
+
+    class Meta:
+        db_table = 't_domain_analysis'
+        verbose_name = '域名分析'
+        verbose_name_plural = '域名分析'
+        ordering = ['-analyzed_at']
+        indexes = [
+            models.Index(fields=['domain']),
+            models.Index(fields=['status']),
+            models.Index(fields=['-analyzed_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.domain} (评分: {self.safety_score}, 状态: {self.get_status_display()})"

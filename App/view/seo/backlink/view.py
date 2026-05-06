@@ -10,6 +10,7 @@ from models.models import BacklinkManagement
 from tool.base_views import BaseViewSet
 from tool.permissions import IsAdmin
 from tool.utils import ApiResponse, CustomPagination
+from App.view.seo.backlink.tools import scan_backlink_info
 
 
 class BacklinkManagementSerializer(serializers.ModelSerializer):
@@ -250,4 +251,78 @@ class BacklinkManagementViewSet(BaseViewSet):
                 'toxic_count': toxic_count
             },
             message="统计信息获取成功"
+        )
+
+    @extend_schema(
+        summary="扫描外链",
+        description="通过输入目标URL，自动调用SEO API获取DA评分、质量评分、属性等信息，并创建外链记录",
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "target_page": {"type": "string", "description": "目标页面URL"},
+                    "anchor_text": {"type": "string", "description": "锚文本（可选）"},
+                    "source_page": {"type": "string", "description": "来源页面（可选，不填则自动提取）"}
+                },
+                "required": ["target_page"]
+            }
+        },
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "integer", "example": 201},
+                    "data": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "integer"},
+                            "source_page": {"type": "string"},
+                            "target_page": {"type": "string"},
+                            "anchor_text": {"type": "string"},
+                            "da_score": {"type": "integer"},
+                            "quality_score": {"type": "integer"},
+                            "attribute": {"type": "string"},
+                            "status": {"type": "string"}
+                        }
+                    },
+                    "message": {"type": "string"}
+                }
+            }
+        }
+    )
+    @action(detail=False, methods=['post'], url_path='scan')
+    def scan_backlink(self, request):
+        """
+        扫描外链
+        1. 接收目标页面URL
+        2. 调用SEO API获取DA评分、质量评分、属性等信息
+        3. 创建外链记录并存入数据库
+        """
+        target_page = request.data.get('target_page')
+        if not target_page:
+            return ApiResponse(code=400, message="请提供 target_page 参数")
+        
+        # 调用工具类扫描外链信息
+        scan_result = scan_backlink_info(target_page)
+        
+        # 如果用户提供了自定义值，则覆盖
+        anchor_text = request.data.get('anchor_text', scan_result['anchor_text'])
+        source_page = request.data.get('source_page', scan_result['source_page'])
+        
+        # 创建外链记录
+        backlink = BacklinkManagement.objects.create(
+            source_page=source_page,
+            target_page=target_page,
+            anchor_text=anchor_text,
+            da_score=scan_result['da_score'],
+            quality_score=scan_result['quality_score'],
+            attribute=scan_result['attribute'],
+            status=scan_result['status']
+        )
+        
+        result_serializer = BacklinkManagementSerializer(backlink)
+        return ApiResponse(
+            data=result_serializer.data,
+            message="外链扫描并创建成功",
+            code=201
         )
