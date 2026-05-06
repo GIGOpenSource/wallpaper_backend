@@ -901,9 +901,16 @@ class DetectionLog(models.Model):
         ('manual', '手动检测'),
     ]
     
+    STATUS_CHOICES = [
+        ('success', '成功'),
+        ('failed', '失败'),
+        ('warning', '警告'),
+    ]
+    
     check_time = models.DateTimeField(auto_now_add=True, verbose_name="检测时间")
     content = models.TextField(verbose_name="检测内容")
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, verbose_name="类别")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='success', verbose_name="状态")
     result_summary = models.CharField(max_length=500, blank=True, null=True, verbose_name="结果摘要")
     operator = models.CharField(max_length=100, blank=True, null=True, verbose_name="操作人")
     
@@ -954,6 +961,12 @@ class PageSpeed(models.Model):
     load_time = models.FloatField(default=0.0, verbose_name="加载时间（秒）")
     page_size = models.FloatField(default=0.0, verbose_name="页面大小（KB）")
     issue_count = models.IntegerField(default=0, verbose_name="问题数")
+    
+    # 资源分析相关字段
+    resource_count = models.IntegerField(default=0, verbose_name="资源数量")
+    loading_timeline = models.JSONField(blank=True, null=True, verbose_name="加载时间线")
+    optimization_suggestions = models.JSONField(blank=True, null=True, verbose_name="优化建议")
+    
     tested_at = models.DateTimeField(auto_now=True, verbose_name="测试时间")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
     remark = models.TextField(blank=True, null=True, verbose_name="备注")

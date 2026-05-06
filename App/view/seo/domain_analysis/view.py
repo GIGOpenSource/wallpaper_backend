@@ -287,10 +287,19 @@ class DomainAnalysisViewSet(BaseViewSet):
         
         result_summary = "，".join(summary_parts) if summary_parts else "检测结果正常"
         
+        # 确定日志状态
+        if failed_count == total_count:
+            log_status = 'failed'  # 全部失败
+        elif failed_count > 0 or invalid_count > 0:
+            log_status = 'warning'  # 有部分失败或失效
+        else:
+            log_status = 'success'  # 全部成功
+        
         # 创建日志记录
         DetectionLog.objects.create(
             content=log_content,
             category=log_category,
+            status=log_status,
             result_summary=result_summary,
             operator=request.user.username if hasattr(request, 'user') and request.user else '系统'
         )
@@ -357,12 +366,13 @@ class DomainAnalysisViewSet(BaseViewSet):
 class DetectionLogSerializer(serializers.ModelSerializer):
     """检测日志序列化器"""
     category_display = serializers.CharField(source='get_category_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
 
     class Meta:
         model = DetectionLog
         fields = [
             'id', 'check_time', 'content', 'category', 'category_display',
-            'result_summary', 'operator'
+            'status', 'status_display', 'result_summary', 'operator'
         ]
         read_only_fields = ['id', 'check_time']
 
@@ -374,6 +384,12 @@ class DetectionLogCreateSerializer(serializers.Serializer):
         choices=DetectionLog.CATEGORY_CHOICES,
         required=True,
         help_text="类别"
+    )
+    status = serializers.ChoiceField(
+        choices=DetectionLog.STATUS_CHOICES,
+        required=False,
+        default='success',
+        help_text="状态：success/failed/warning"
     )
     result_summary = serializers.CharField(max_length=500, required=False, allow_blank=True, help_text="结果摘要")
     operator = serializers.CharField(max_length=100, required=False, allow_blank=True, help_text="操作人")
@@ -473,6 +489,7 @@ class DetectionLogViewSet(BaseViewSet):
         log = DetectionLog.objects.create(
             content=validated_data['content'],
             category=validated_data['category'],
+            status=validated_data.get('status', 'success'),
             result_summary=validated_data.get('result_summary'),
             operator=validated_data.get('operator')
         )

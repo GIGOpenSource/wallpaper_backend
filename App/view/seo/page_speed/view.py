@@ -10,7 +10,7 @@ from models.models import PageSpeed
 from tool.base_views import BaseViewSet
 from tool.permissions import IsAdmin
 from tool.utils import ApiResponse, CustomPagination
-from App.view.seo.page_speed.tools import test_page_speed, get_site_prefix
+from App.view.seo.page_speed.tools import test_page_speed, get_site_prefix, analyze_page_resources, generate_optimization_suggestions
 
 
 class PageSpeedSerializer(serializers.ModelSerializer):
@@ -23,7 +23,8 @@ class PageSpeedSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'page_path', 'platform', 'platform_display', 'full_url', 'overall_score',
             'mobile_friendly', 'mobile_friendly_display',
-            'fcp','lcp', 'fid', 'cls', 'load_time', 'page_size',
+            'fcp','lcp', 'fid', 'inp', 'cls', 'ttfb', 'load_time', 'page_size',
+            'resource_count', 'loading_timeline', 'optimization_suggestions',
             'issue_count', 'tested_at', 'created_at', 'remark'
         ]
         read_only_fields = ['id', 'full_url', 'tested_at', 'created_at']
@@ -206,7 +207,9 @@ class PageSpeedViewSet(BaseViewSet):
                 'lcp': test_result['lcp'],
                 'fcp': test_result.get('fcp', 0.0),
                 'fid': test_result['fid'],
+                'inp': test_result.get('inp', 0.0),
                 'cls': test_result['cls'],
+                'ttfb': test_result.get('ttfb', 0.0),
                 'load_time': test_result['load_time'],
                 'page_size': test_result['page_size'],
                 'issue_count': test_result['issue_count'],
@@ -254,6 +257,131 @@ class PageSpeedViewSet(BaseViewSet):
         instance = self.get_object()
         instance.delete()
         return ApiResponse(message="删除成功")
+
+    @extend_schema(
+        summary="获取资源分析",
+        description="根据ID获取页面的资源分析数据，包括页面大小、资源数量、加载时间线等",
+        parameters=[
+            OpenApiParameter(name="id", type=int, required=True, location=OpenApiParameter.PATH, description="记录ID"),
+        ],
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "integer", "example": 200},
+                    "data": {
+                        "type": "object",
+                        "properties": {
+                            "page_size": {"type": "number", "description": "页面大小（KB）"},
+                            "resource_count": {"type": "integer", "description": "资源数量"},
+                            "ttfb": {"type": "number", "description": "TTFB（秒）"},
+                            "loading_timeline": {
+                                "type": "object",
+                                "properties": {
+                                    "ttfb": {"type": "number", "description": "TTFB（秒）"},
+                                    "fcp": {"type": "number", "description": "FCP（秒）"},
+                                    "lcp": {"type": "number", "description": "LCP（秒）"},
+                                    "full_load": {"type": "number", "description": "完全加载（秒）"}
+                                }
+                            }
+                        }
+                    },
+                    "message": {"type": "string"}
+                }
+            }
+        }
+    )
+    @action(detail=False, methods=['get'], url_path='resource-analysis/')
+    def resource_analysis(self, request):
+        """
+        获取资源分析
+        - 传入 id 参数
+        - 返回页面大小、资源数量、TTFB、加载时间线
+        """
+        record_id = request.query_params.get('id')
+        
+        if not record_id:
+            return ApiResponse(code=400, message="请提供 id 参数")
+        
+        try:
+            page_speed = PageSpeed.objects.get(id=record_id)
+        except PageSpeed.DoesNotExist:
+            return ApiResponse(code=404, message="记录不存在")
+        
+        # 调用工具类分析资源
+        resource_data = analyze_page_resources(page_speed)
+        
+        # 更新数据库
+        page_speed.resource_count = resource_data['resource_count']
+        page_speed.loading_timeline = resource_data['loading_timeline']
+        page_speed.save()
+        
+        return ApiResponse(
+            data={
+                'page_size': page_speed.page_size,
+                'resource_count': resource_data['resource_count'],
+                'ttfb': page_speed.ttfb,
+                'loading_timeline': resource_data['loading_timeline']
+            },
+            message="资源分析成功"
+        )
+
+    @extend_schema(
+        summary="获取优化建议",
+        description="根据ID获取页面的优化建议，返回JSON数组",
+        parameters=[
+            OpenApiParameter(name="id", type=int, required=True, location=OpenApiParameter.PATH, description="记录ID"),
+        ],
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "integer", "example": 200},
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "type": {"type": "string", "description": "建议类型"},
+                                "title": {"type": "string", "description": "建议标题"},
+                                "description": {"type": "string", "description": "详细描述"},
+                                "savings": {"type": "number", "description": "可节省的值（毫秒或字节）"}
+                            }
+                        }
+                    },
+                    "message": {"type": "string"}
+                }
+            }
+        }
+    )
+    @action(detail=False, methods=['get'], url_path='optimization-suggestions/')
+    def optimization_suggestions(self, request):
+        """
+        获取优化建议
+        - 传入 id 参数
+        - 返回 JSON 数组，包含图片未压缩、未使用JavaScript等建议
+        """
+        record_id = request.query_params.get('id')
+        
+        if not record_id:
+            return ApiResponse(code=400, message="请提供 id 参数")
+        
+        try:
+            page_speed = PageSpeed.objects.get(id=record_id)
+        except PageSpeed.DoesNotExist:
+            return ApiResponse(code=404, message="记录不存在")
+        
+        # 调用工具类生成优化建议
+        suggestions = generate_optimization_suggestions(page_speed)
+        
+        # 更新数据库
+        page_speed.optimization_suggestions = suggestions
+        page_speed.save()
+        
+        return ApiResponse(
+            data=suggestions,
+            message="优化建议获取成功"
+        )
 
     @extend_schema(
         summary="获取页面速度统计信息",

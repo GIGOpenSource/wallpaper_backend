@@ -323,3 +323,304 @@ def _mock_scan(page_path, platform='page'):
         'mobile_friendly': mobile_friendly
     }
 
+
+def analyze_page_resources(page_speed_obj):
+    """
+    分析页面资源
+    :param page_speed_obj: PageSpeed 对象
+    :return: dict containing resource_count, loading_timeline
+    """
+    try:
+        # 拼接完整URL
+        site_prefix = get_site_prefix()
+        page_path = page_speed_obj.page_path
+        if not page_path.startswith('/'):
+            page_path = '/' + page_path
+        full_url = f"{site_prefix}{page_path}"
+        
+        platform = page_speed_obj.platform
+        
+        # 调用 API 获取详细数据
+        api_key = getattr(settings, 'PAGESPEED_API_KEY', '')
+        
+        if not api_key:
+            logger.warning("未配置 PAGESPEED_API_KEY，使用模拟数据")
+            return _mock_resource_analysis(page_speed_obj)
+        
+        api_url = "https://pagespeedonline.googleapis.com/pagespeedonline/v5/runPagespeed"
+        
+        # 根据平台选择测试策略
+        if platform in ['phone', 'pad']:
+            strategy = 'mobile'
+        else:
+            strategy = 'desktop'
+        
+        params = {
+            'url': full_url,
+            'key': api_key,
+            'category': 'PERFORMANCE',
+            'strategy': strategy
+        }
+        
+        response = requests.get(api_url, params=params, timeout=30)
+        
+        if response.status_code == 200:
+            data = response.json()
+            return _parse_resource_data(data)
+        else:
+            logger.error(f"PageSpeed API 请求失败: {response.status_code}")
+            return _mock_resource_analysis(page_speed_obj)
+            
+    except Exception as e:
+        logger.error(f"资源分析失败: {e}")
+        return _mock_resource_analysis(page_speed_obj)
+
+
+def _parse_resource_data(data):
+    """解析资源数据"""
+    result = {
+        'resource_count': 0,
+        'loading_timeline': {}
+    }
+    
+    try:
+        audits = data.get('lighthouseResult', {}).get('audits', {})
+        
+        # 获取网络请求数据
+        network_data = audits.get('network-requests', {})
+        resources = network_data.get('details', {}).get('items', [])
+        
+        # 资源数量
+        result['resource_count'] = len(resources)
+        
+        # 加载时间线
+        metrics = data.get('lighthouseResult', {}).get('audits', {})
+        
+        # TTFB
+        ttfb_audit = metrics.get('server-response-time', {})
+        ttfb_value = ttfb_audit.get('numericValue', 0.0) / 1000.0
+        
+        # FCP
+        fcp_audit = metrics.get('first-contentful-paint', {})
+        fcp_value = fcp_audit.get('numericValue', 0.0) / 1000.0
+        
+        # LCP
+        lcp_audit = metrics.get('largest-contentful-paint', {})
+        lcp_value = lcp_audit.get('numericValue', 0.0) / 1000.0
+        
+        # 完全加载时间（使用 speed-index）
+        load_audit = metrics.get('speed-index', {})
+        full_load_value = load_audit.get('numericValue', 0.0) / 1000.0
+        
+        result['loading_timeline'] = {
+            'ttfb': round(ttfb_value, 2),
+            'fcp': round(fcp_value, 2),
+            'lcp': round(lcp_value, 2),
+            'full_load': round(full_load_value, 2)
+        }
+        
+    except Exception as e:
+        logger.error(f"解析资源数据失败: {e}")
+    
+    return result
+
+
+def generate_optimization_suggestions(page_speed_obj):
+    """
+    生成优化建议
+    :param page_speed_obj: PageSpeed 对象
+    :return: list of optimization suggestions
+    """
+    try:
+        # 拼接完整URL
+        site_prefix = get_site_prefix()
+        page_path = page_speed_obj.page_path
+        if not page_path.startswith('/'):
+            page_path = '/' + page_path
+        full_url = f"{site_prefix}{page_path}"
+        
+        platform = page_speed_obj.platform
+        
+        # 调用 API 获取详细数据
+        api_key = getattr(settings, 'PAGESPEED_API_KEY', '')
+        
+        if not api_key:
+            logger.warning("未配置 PAGESPEED_API_KEY，使用模拟数据")
+            return _mock_optimization_suggestions(page_speed_obj)
+        
+        api_url = "https://pagespeedonline.googleapis.com/pagespeedonline/v5/runPagespeed"
+        
+        if platform in ['phone', 'pad']:
+            strategy = 'mobile'
+        else:
+            strategy = 'desktop'
+        
+        params = {
+            'url': full_url,
+            'key': api_key,
+            'category': 'PERFORMANCE',
+            'strategy': strategy
+        }
+        
+        response = requests.get(api_url, params=params, timeout=30)
+        
+        if response.status_code == 200:
+            data = response.json()
+            return _parse_optimization_suggestions(data)
+        else:
+            logger.error(f"PageSpeed API 请求失败: {response.status_code}")
+            return _mock_optimization_suggestions(page_speed_obj)
+            
+    except Exception as e:
+        logger.error(f"生成优化建议失败: {e}")
+        return _mock_optimization_suggestions(page_speed_obj)
+
+
+def _parse_optimization_suggestions(data):
+    """解析优化建议"""
+    suggestions = []
+    
+    try:
+        audits = data.get('lighthouseResult', {}).get('audits', {})
+        opportunities = data.get('lighthouseResult', {}).get('audits', {}).get('opportunities', {})
+        
+        # 检查图片优化
+        if 'uses-optimized-images' in audits:
+            audit = audits['uses-optimized-images']
+            if audit.get('score', 1) < 1:
+                suggestions.append({
+                    'type': 'image_optimization',
+                    'title': '图片未压缩',
+                    'description': audit.get('description', '建议使用 WebP 格式并压缩图片'),
+                    'savings': audit.get('details', {}).get('overallSavingsMs', 0)
+                })
+        
+        # 检查 JavaScript 优化
+        if 'unused-javascript' in audits:
+            audit = audits['unused-javascript']
+            if audit.get('score', 1) < 1:
+                suggestions.append({
+                    'type': 'javascript_optimization',
+                    'title': '未使用的 JavaScript',
+                    'description': audit.get('description', '移除未使用的 JavaScript 代码'),
+                    'savings': audit.get('details', {}).get('overallSavingsBytes', 0)
+                })
+        
+        # 检查 CSS 优化
+        if 'unused-css-rules' in audits:
+            audit = audits['unused-css-rules']
+            if audit.get('score', 1) < 1:
+                suggestions.append({
+                    'type': 'css_optimization',
+                    'title': '未使用的 CSS',
+                    'description': audit.get('description', '移除未使用的 CSS 规则'),
+                    'savings': audit.get('details', {}).get('overallSavingsBytes', 0)
+                })
+        
+        # 检查缓存策略
+        if 'uses-long-cache-ttl' in audits:
+            audit = audits['uses-long-cache-ttl']
+            if audit.get('score', 1) < 1:
+                suggestions.append({
+                    'type': 'cache_optimization',
+                    'title': '缓存策略不佳',
+                    'description': audit.get('description', '为静态资源设置更长的缓存时间'),
+                    'savings': 0
+                })
+        
+        # 检查渲染阻塞资源
+        if 'render-blocking-resources' in audits:
+            audit = audits['render-blocking-resources']
+            if audit.get('score', 1) < 1:
+                suggestions.append({
+                    'type': 'render_blocking',
+                    'title': '渲染阻塞资源',
+                    'description': audit.get('description', '消除渲染阻塞的 JavaScript 和 CSS'),
+                    'savings': audit.get('details', {}).get('overallSavingsMs', 0)
+                })
+        
+        # 如果没有发现问题，返回空列表
+        if not suggestions:
+            suggestions.append({
+                'type': 'info',
+                'title': '页面性能良好',
+                'description': '当前页面性能表现良好，暂无优化建议',
+                'savings': 0
+            })
+        
+    except Exception as e:
+        logger.error(f"解析优化建议失败: {e}")
+        suggestions.append({
+            'type': 'error',
+            'title': '分析失败',
+            'description': '无法获取优化建议',
+            'savings': 0
+        })
+    
+    return suggestions
+
+
+def _mock_resource_analysis(page_speed_obj):
+    """模拟资源分析"""
+    import hashlib
+    
+    hash_input = f"{page_speed_obj.page_path}_{page_speed_obj.platform}_resource"
+    hash_value = int(hashlib.md5(hash_input.encode()).hexdigest(), 16)
+    
+    resource_count = 20 + (hash_value % 80)  # 20-100 个资源
+    
+    return {
+        'resource_count': resource_count,
+        'loading_timeline': {
+            'ttfb': round(0.1 + (hash_value % 50) / 100.0, 2),
+            'fcp': round(0.5 + (hash_value % 150) / 100.0, 2),
+            'lcp': round(1.0 + (hash_value % 200) / 100.0, 2),
+            'full_load': round(1.5 + (hash_value % 300) / 100.0, 2)
+        }
+    }
+
+
+def _mock_optimization_suggestions(page_speed_obj):
+    """模拟优化建议"""
+    import hashlib
+    
+    hash_input = f"{page_speed_obj.page_path}_{page_speed_obj.platform}_opt"
+    hash_value = int(hashlib.md5(hash_input.encode()).hexdigest(), 16)
+    
+    suggestions = []
+    
+    # 根据哈希值生成不同的建议
+    if hash_value % 3 == 0:
+        suggestions.append({
+            'type': 'image_optimization',
+            'title': '图片未压缩',
+            'description': '建议将图片转换为 WebP 格式并压缩，可减少约 30% 的文件大小',
+            'savings': 500
+        })
+    
+    if hash_value % 2 == 0:
+        suggestions.append({
+            'type': 'javascript_optimization',
+            'title': '未使用的 JavaScript',
+            'description': '检测到未使用的 JavaScript 代码，建议进行代码分割和懒加载',
+            'savings': 15000
+        })
+    
+    if hash_value % 4 == 0:
+        suggestions.append({
+            'type': 'cache_optimization',
+            'title': '缓存策略不佳',
+            'description': '为静态资源设置更长的缓存时间（至少 1 年）',
+            'savings': 0
+        })
+    
+    if not suggestions:
+        suggestions.append({
+            'type': 'info',
+            'title': '页面性能良好',
+            'description': '当前页面性能表现良好，暂无优化建议',
+            'savings': 0
+        })
+    
+    return suggestions
+

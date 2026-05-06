@@ -158,7 +158,7 @@ class ContentOptimizationViewSet(BaseViewSet):
             }
         }
     )
-    @action(detail=False, methods=['post'], url_path='analyze/')
+    @action(detail=False, methods=['post'], url_path='analyze')
     def analyze_page(self, request):
         """
         分析新页面内容
@@ -311,7 +311,7 @@ class ContentOptimizationViewSet(BaseViewSet):
             }
         }
     )
-    @action(detail=False, methods=['get'], url_path='dashboard/')
+    @action(detail=False, methods=['get'], url_path='dashboard')
     def dashboard(self, request):
         """
         内容优化建议看板
