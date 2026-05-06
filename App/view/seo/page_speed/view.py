@@ -66,6 +66,7 @@ class PageSpeedCreateUpdateSerializer(serializers.Serializer):
             OpenApiParameter(name="min_issues", type=int, required=False, description="最小问题数"),
             OpenApiParameter(name="max_issues", type=int, required=False, description="最大问题数"),
             OpenApiParameter(name="page_path", type=str, required=False, description="页面路径模糊匹配"),
+            OpenApiParameter(name="platform", type=str, required=False, description="平台名phone\pad\page"),
         ],
     ),
     retrieve=extend_schema(
@@ -110,12 +111,10 @@ class PageSpeedViewSet(BaseViewSet):
     def list(self, request, *args, **kwargs):
         """获取页面速度列表，支持多种筛选条件"""
         queryset = PageSpeed.objects.all()
-        
         # 按平台筛选
         platform = request.query_params.get('platform')
         if platform:
             queryset = queryset.filter(platform=platform)
-        
         # 按综合评分范围筛选
         min_score = request.query_params.get('min_score')
         if min_score:
@@ -359,10 +358,8 @@ class PageSpeedViewSet(BaseViewSet):
         page_path = request.data.get('page_path')
         if not page_path:
             return ApiResponse(code=400, message="请提供 page_path 参数")
-        
         # 获取平台类型，默认为 page
         platform = request.data.get('platform', 'page')
-        
         # 拼接完整URL
         site_prefix = get_site_prefix()
         if not page_path.startswith('/'):
