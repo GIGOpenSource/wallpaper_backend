@@ -929,6 +929,7 @@ class PageSpeed(models.Model):
         ('page', '桌面端'),
         ('phone', '手机'),
         ('pad', '平板'),
+        ('optimization', '内容优化'),
     ]
     
     MOBILE_FRIENDLY_CHOICES = [

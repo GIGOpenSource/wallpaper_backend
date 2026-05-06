@@ -25,18 +25,12 @@ class ContentOptimizationSerializer(serializers.ModelSerializer):
             'page_title', 'content_score', 'word_count', 'issue_count',
             'optimization_suggestions', 'last_optimized_at', 'created_at'
         ]
-        read_only_fields = ['id', 'full_url', 'last_optimized_at', 'created_at']
+        read_only_fields = ['id', 'full_url', 'platform', 'last_optimized_at', 'created_at']
 
 
 class ContentOptimizationCreateSerializer(serializers.Serializer):
     """内容优化创建序列化器"""
     page_path = serializers.CharField(max_length=500, required=True, help_text="页面路径，如 /markwallpapers/search")
-    platform = serializers.ChoiceField(
-        choices=['page', 'phone', 'pad'],
-        required=False,
-        default='page',
-        help_text="平台类型：page(桌面端)/phone(手机)/pad(平板)"
-    )
 
 
 @extend_schema(tags=["内容优化建议"])
@@ -73,19 +67,15 @@ class ContentOptimizationViewSet(BaseViewSet):
     permission_classes = [IsAdmin]
 
     def get_queryset(self):
-        """只返回有内容优化数据的记录"""
+        """只返回内容优化的记录"""
         return PageSpeed.objects.filter(
+            platform='optimization',
             content_score__gt=0
         ).order_by('-last_optimized_at')
 
     def list(self, request, *args, **kwargs):
         """获取内容优化列表，支持多种筛选条件"""
         queryset = self.get_queryset()
-        
-        # 按平台筛选
-        platform = request.query_params.get('platform')
-        if platform:
-            queryset = queryset.filter(platform=platform)
         
         # 按内容评分范围筛选
         min_score = request.query_params.get('min_score')
@@ -133,13 +123,12 @@ class ContentOptimizationViewSet(BaseViewSet):
 
     @extend_schema(
         summary="分析新页面内容",
-        description="传入页面路径进行内容分析，创建或更新记录",
+        description="传入页面路径进行内容分析，创建或更新记录（platform默认为optimization）",
         request={
             "application/json": {
                 "type": "object",
                 "properties": {
-                    "page_path": {"type": "string", "description": "页面路径，如 /markwallpapers/search"},
-                    "platform": {"type": "string", "description": "平台类型：page(桌面端)/phone(手机)/pad(平板)，默认page"}
+                    "page_path": {"type": "string", "description": "页面路径，如 /markwallpapers/search"}
                 },
                 "required": ["page_path"]
             }
@@ -169,11 +158,12 @@ class ContentOptimizationViewSet(BaseViewSet):
             }
         }
     )
-    @action(detail=False, methods=['post'], url_path='analyze')
+    @action(detail=False, methods=['post'], url_path='analyze/')
     def analyze_page(self, request):
         """
         分析新页面内容
         - 传入page_path进行内容分析
+        - platform默认为optimization
         - 创建或更新记录
         """
         serializer = ContentOptimizationCreateSerializer(data=request.data)
@@ -181,7 +171,7 @@ class ContentOptimizationViewSet(BaseViewSet):
         validated_data = serializer.validated_data
         
         page_path = validated_data['page_path']
-        platform = validated_data.get('platform', 'page')
+        platform = 'optimization'  # 固定为内容优化
         
         # 拼接完整URL
         site_prefix = get_site_prefix()
@@ -204,6 +194,7 @@ class ContentOptimizationViewSet(BaseViewSet):
                 'page_title': analysis_result['page_title'],
                 'content_score': analysis_result['content_score'],
                 'word_count': analysis_result['word_count'],
+                'issue_count': analysis_result.get('issue_count', 0),
                 'optimization_suggestions': analysis_result['optimization_suggestions'],
                 'last_optimized_at': datetime.now()
             }
@@ -300,10 +291,7 @@ class ContentOptimizationViewSet(BaseViewSet):
 
     @extend_schema(
         summary="获取内容优化统计信息（看板）",
-        description="获取已分析页面数量、平均内容评分、待修复问题个数、优化建议个数",
-        parameters=[
-            OpenApiParameter(name="platform", type=str, required=False, description="平台类型：page/phone/pad"),
-        ],
+        description="获取已分析页面数量、平均内容评分、待修复问题个数、优化建议个数（默认platform=optimization）",
         responses={
             200: {
                 "type": "object",
@@ -323,7 +311,7 @@ class ContentOptimizationViewSet(BaseViewSet):
             }
         }
     )
-    @action(detail=False, methods=['get'], url_path='dashboard')
+    @action(detail=False, methods=['get'], url_path='dashboard/')
     def dashboard(self, request):
         """
         内容优化建议看板
@@ -331,15 +319,15 @@ class ContentOptimizationViewSet(BaseViewSet):
         - 平均内容评分
         - 待修复问题个数
         - 优化建议个数
+        - 默认platform=optimization
         """
-        from django.db.models import Avg, Count
+        from django.db.models import Avg, Sum
         
-        queryset = PageSpeed.objects.filter(content_score__gt=0)
-        
-        # 按平台筛选
-        platform = request.query_params.get('platform')
-        if platform:
-            queryset = queryset.filter(platform=platform)
+        # 固定查询内容优化的数据
+        queryset = PageSpeed.objects.filter(
+            platform='optimization',
+            content_score__gt=0
+        )
         
         # 已分析页面数量
         analyzed_pages_count = queryset.count()
@@ -348,9 +336,6 @@ class ContentOptimizationViewSet(BaseViewSet):
         avg_content_score = queryset.aggregate(avg=Avg('content_score'))['avg'] or 0
         
         # 待修复问题总数
-        total_issues = queryset.aggregate(total=Count('issue_count'))['total'] or 0
-        # 实际上应该求和问题数，而不是计数
-        from django.db.models import Sum
         total_issues = queryset.aggregate(total=Sum('issue_count'))['total'] or 0
         
         # 优化建议总数（统计有优化建议的记录数）

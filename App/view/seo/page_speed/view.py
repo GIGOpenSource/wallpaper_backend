@@ -39,7 +39,7 @@ class PageSpeedMobileSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'page_path', 'platform', 'platform_display',
             'mobile_friendly', 'mobile_friendly_display',
-            'overall_score', 'load_time'
+            'overall_score', 'load_time', 'issue_count', 'tested_at'
         ]
 
 
@@ -157,7 +157,7 @@ class PageSpeedViewSet(BaseViewSet):
         
         # 按测试时间倒序排序
         queryset = queryset.order_by('-tested_at')
-        
+
         # 分页
         page = self.paginate_queryset(queryset)
         if page is not None:
