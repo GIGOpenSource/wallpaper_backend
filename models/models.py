@@ -821,6 +821,11 @@ class BacklinkManagement(models.Model):
         ('sponsored', 'Sponsored'),
     ]
     
+    BUILD_STATUS_CHOICES = [
+        ('pending', '待建设'),
+        ('completed', '已建设'),
+    ]
+    
     source_page = models.URLField(max_length=500, verbose_name="来源页面")
     target_page = models.URLField(max_length=500, verbose_name="目标页面")
     anchor_text = models.CharField(max_length=200, blank=True, null=True, verbose_name="锚文本")
@@ -828,6 +833,7 @@ class BacklinkManagement(models.Model):
     quality_score = models.IntegerField(default=0, verbose_name="质量评分（0-100）")
     attribute = models.CharField(max_length=20, choices=ATTRIBUTE_CHOICES, default='dofollow', verbose_name="属性")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', verbose_name="状态")
+    build_status = models.CharField(max_length=20, choices=BUILD_STATUS_CHOICES, default='completed', verbose_name="建设状态")
     relevance = models.CharField(max_length=50, blank=True, null=True, verbose_name="相关性")
     contact_info = models.JSONField(blank=True, null=True, verbose_name="联系方式")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="发现时间")
@@ -935,16 +941,28 @@ class PageSpeed(models.Model):
     full_url = models.URLField(max_length=1000, verbose_name="完整URL")
     overall_score = models.IntegerField(default=0, verbose_name="综合评分（0-100）")
     mobile_friendly = models.CharField(max_length=20, choices=MOBILE_FRIENDLY_CHOICES, blank=True, null=True, verbose_name="移动友好性")
+    
+    # 核心Web指标
     fcp = models.FloatField(default=0.0, verbose_name="FCP（首次内容绘制，秒）")
     lcp = models.FloatField(default=0.0, verbose_name="LCP（最大内容绘制，秒）")
     fid = models.FloatField(default=0.0, verbose_name="FID（首次输入延迟，毫秒）")
+    inp = models.FloatField(default=0.0, verbose_name="INP（交互到下一次绘制，毫秒）")
     cls = models.FloatField(default=0.0, verbose_name="CLS（累积布局偏移）")
+    ttfb = models.FloatField(default=0.0, verbose_name="TTFB（首字节时间，秒）")
+    
     load_time = models.FloatField(default=0.0, verbose_name="加载时间（秒）")
     page_size = models.FloatField(default=0.0, verbose_name="页面大小（KB）")
     issue_count = models.IntegerField(default=0, verbose_name="问题数")
     tested_at = models.DateTimeField(auto_now=True, verbose_name="测试时间")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
     remark = models.TextField(blank=True, null=True, verbose_name="备注")
+    
+    # 内容优化相关字段
+    page_title = models.CharField(max_length=500, blank=True, null=True, verbose_name="页面标题")
+    content_score = models.IntegerField(default=0, verbose_name="内容评分（0-100）")
+    word_count = models.IntegerField(default=0, verbose_name="字数")
+    optimization_suggestions = models.TextField(blank=True, null=True, verbose_name="优化建议")
+    last_optimized_at = models.DateTimeField(blank=True, null=True, verbose_name="最后优化时间")
 
     class Meta:
         db_table = 't_page_speed'
