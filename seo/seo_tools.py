@@ -649,26 +649,164 @@ class GoogleSearchConsoleTool:
     def get_index_coverage_summary(self, site_url):
         """
         获取索引覆盖率摘要
-        
+            
         Args:
             site_url: 网站 URL
-            
+                
         Returns:
             索引覆盖数据
         """
         if not self.service:
             return {}
-        
+            
         try:
             # 注意：Index Coverage API 在 GSC API v1 中不可用
             # 这里返回模拟数据结构，实际需要使用 Search Console UI 或其他工具
             return {
                 'note': 'Index Coverage API 需要通过 Search Console UI 查看',
-                'recommendation': '建议定期在 GSC 中检查“索引”报告'
+                'recommendation': '建议定期在 GSC 中检查"索引"报告'
             }
         except Exception as e:
             print(f"❌ 获取索引覆盖率失败: {e}")
             return {}
+    
+    def get_inclusion_trend(self, site_url, start_date, end_date):
+        """
+        获取 Google 收录趋势数据（按天统计点击和曝光）
+            
+        Args:
+            site_url: 网站 URL
+            start_date: 开始日期 (YYYY-MM-DD)
+            end_date: 结束日期 (YYYY-MM-DD)
+                
+        Returns:
+            时间序列数据列表，包含每天的点击数和曝光数
+        """
+        rows = self.get_search_analytics(
+            site_url,
+            start_date,
+            end_date,
+            dimensions=['date']
+        )
+            
+        if not rows:
+            return []
+            
+        # 按日期排序
+        sorted_rows = sorted(rows, key=lambda x: x['keys'][0])
+            
+        return [
+            {
+                'date': row['keys'][0],
+                'clicks': round(row['clicks'], 2),
+                'impressions': round(row['impressions'], 2),
+                'ctr': round(row['ctr'] * 100, 2),
+                'position': round(row['position'], 2)
+            }
+            for row in sorted_rows
+        ]
+    
+    def get_keyword_rankings(self, site_url, start_date, end_date, limit=50):
+        """
+        获取关键词排名数据
+            
+        Args:
+            site_url: 网站 URL
+            start_date: 开始日期 (YYYY-MM-DD)
+            end_date: 结束日期 (YYYY-MM-DD)
+            limit: 返回数量限制
+                
+        Returns:
+            关键词排名列表
+        """
+        # 获取当前时间段的关键词数据
+        current_rows = self.get_search_analytics(
+            site_url,
+            start_date,
+            end_date,
+            dimensions=['query', 'page']
+        )
+            
+        if not current_rows:
+            return []
+            
+        # 计算上一个时间段用于对比排名变化
+        from datetime import datetime, timedelta
+        start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+        end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+        days_diff = (end_dt - start_dt).days + 1
+            
+        prev_end_dt = start_dt - timedelta(days=1)
+        prev_start_dt = prev_end_dt - timedelta(days=days_diff - 1)
+            
+        previous_rows = self.get_search_analytics(
+            site_url,
+            prev_start_dt.strftime('%Y-%m-%d'),
+            prev_end_dt.strftime('%Y-%m-%d'),
+            dimensions=['query', 'page']
+        )
+            
+        # 构建上一个时间段的排名字典
+        prev_rankings = {}
+        for row in previous_rows:
+            query = row['keys'][0]
+            prev_rankings[query] = row['position']
+            
+        # 处理当前数据
+        keyword_data = {}
+        for row in current_rows:
+            query = row['keys'][0]
+            page = row['keys'][1] if len(row['keys']) > 1 else ''
+                
+            if query not in keyword_data:
+                keyword_data[query] = {
+                    'query': query,
+                    'search_engine': 'Google',
+                    'current_position': round(row['position'], 2),
+                    'landing_page': page,
+                    'clicks': round(row['clicks'], 2),
+                    'impressions': round(row['impressions'], 2),
+                    'ctr': round(row['ctr'] * 100, 2),
+                    'total_clicks': row['clicks'],
+                    'total_impressions': row['impressions'],
+                    'count': 1
+                }
+            else:
+                # 累加同一关键词的数据
+                keyword_data[query]['total_clicks'] += row['clicks']
+                keyword_data[query]['total_impressions'] += row['impressions']
+                keyword_data[query]['count'] += 1
+            
+        # 计算平均值和排名变化
+        result = []
+        for query, data in keyword_data.items():
+            avg_position = data['current_position']  # 已经是加权平均
+            prev_position = prev_rankings.get(query, None)
+                
+            # 计算排名变化
+            if prev_position:
+                position_change = round(prev_position - avg_position, 2)  # 正数表示排名上升
+            else:
+                position_change = None
+                
+            # 估算搜索量（基于曝光数）
+            estimated_volume = int(data['total_impressions'] / days_diff * 30) if days_diff > 0 else 0
+                
+            result.append({
+                'keyword': query,
+                'search_engine': 'Google',
+                'current_position': avg_position,
+                'position_change': position_change,
+                'estimated_volume': estimated_volume,
+                'landing_page': data['landing_page'],
+                'clicks': round(data['total_clicks'] / data['count'], 2),
+                'impressions': round(data['total_impressions'] / data['count'], 2),
+                'ctr': round(data['total_clicks'] / data['total_impressions'] * 100, 2) if data['total_impressions'] > 0 else 0
+            })
+            
+        # 按点击数排序并限制数量
+        result.sort(key=lambda x: x['clicks'], reverse=True)
+        return result[:limit]
 
     def submit_sitemap(self, site_url, sitemap_url):
         """
