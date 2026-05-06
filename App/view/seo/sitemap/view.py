@@ -35,7 +35,7 @@ class SitemapURLSerializer(serializers.ModelSerializer):
 
     def get_priority_display(self, obj):
         """将 0-100 转换为 0.1-1.0"""
-        return round(obj.priority / 100, 1) if obj.priority else 0.1
+        return round(obj.priority / 10, 1) if obj.priority else 0.1
 
 class SitemapSerializer(serializers.ModelSerializer):
     """Sitemap 记录序列化器"""
@@ -614,7 +614,7 @@ class SitemapURLViewSet(BaseViewSet):
         for item in queryset:
             url = item.content
             item_changefreq = item.config_value.get('changefreq', changefreq)
-            priority_value = item.priority / 100 if item.priority else priority / 100
+            priority_value = item.priority / 10 if item.priority else priority / 10
             xml_content += '  <url>\n'
             xml_content += f'    <loc>{url}</loc>\n'
             xml_content += f'    <changefreq>{item_changefreq}</changefreq>\n'

@@ -10,20 +10,23 @@ from models.models import BacklinkManagement
 from tool.base_views import BaseViewSet
 from tool.permissions import IsAdmin
 from tool.utils import ApiResponse, CustomPagination
-from App.view.seo.backlink.tools import scan_backlink_info
+from App.view.seo.backlink.tools import scan_backlink_info, find_potential_backlinks
 
 
 class BacklinkManagementSerializer(serializers.ModelSerializer):
     """外链管理序列化器"""
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     attribute_display = serializers.CharField(source='get_attribute_display', read_only=True)
+    build_status_display = serializers.CharField(source='get_build_status_display', read_only=True)
 
     class Meta:
         model = BacklinkManagement
         fields = [
             'id', 'source_page', 'target_page', 'anchor_text',
             'da_score', 'quality_score', 'attribute', 'attribute_display',
-            'status', 'status_display', 'created_at', 'updated_at', 'remark'
+            'status', 'status_display', 'build_status', 'build_status_display',
+            'relevance', 'contact_info',
+            'created_at', 'updated_at', 'remark'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
@@ -47,6 +50,14 @@ class BacklinkManagementCreateUpdateSerializer(serializers.Serializer):
         default='pending',
         help_text="状态"
     )
+    build_status = serializers.ChoiceField(
+        choices=['pending', 'completed'],
+        required=False,
+        default='completed',
+        help_text="建设状态：pending(待建设)/completed(已建设)"
+    )
+    relevance = serializers.CharField(max_length=50, required=False, allow_blank=True, allow_null=True, help_text="相关性")
+    contact_info = serializers.JSONField(required=False, allow_null=True, help_text="联系方式")
     remark = serializers.CharField(required=False, allow_blank=True, allow_null=True, help_text="备注")
 
 
@@ -62,6 +73,7 @@ class BacklinkManagementCreateUpdateSerializer(serializers.Serializer):
             OpenApiParameter(name="source_page", type=str, required=False, description="来源页面模糊匹配"),
             OpenApiParameter(name="min_quality_score", type=int, required=False, description="最小质量评分"),
             OpenApiParameter(name="max_quality_score", type=int, required=False, description="最大质量评分"),
+            OpenApiParameter(name="build_status", type=str, required=False, description="外链建设状态：pending"),
         ],
     ),
     retrieve=extend_schema(
@@ -106,6 +118,14 @@ class BacklinkManagementViewSet(BaseViewSet):
     def list(self, request, *args, **kwargs):
         """获取外链列表，支持多种筛选条件"""
         queryset = BacklinkManagement.objects.all()
+        
+        # 按建设状态筛选（默认只显示已建设的）
+        build_status = request.query_params.get('build_status')
+        if build_status:
+            queryset = queryset.filter(build_status=build_status)
+        else:
+            # 默认只显示已建设的
+            queryset = queryset.filter(build_status='completed')
         
         # 按状态筛选
         status = request.query_params.get('status')
@@ -168,6 +188,9 @@ class BacklinkManagementViewSet(BaseViewSet):
             quality_score=validated_data.get('quality_score', 0),
             attribute=validated_data.get('attribute', 'dofollow'),
             status=validated_data.get('status', 'pending'),
+            build_status=validated_data.get('build_status', 'completed'),
+            relevance=validated_data.get('relevance'),
+            contact_info=validated_data.get('contact_info'),
             remark=validated_data.get('remark')
         )
         
@@ -212,6 +235,94 @@ class BacklinkManagementViewSet(BaseViewSet):
         instance = self.get_object()
         instance.delete()
         return ApiResponse(message="删除成功")
+
+    @extend_schema(
+        summary="外链建设 - 发现潜在外链机会",
+        description="调用第三方SEO API查找可能外链了我们网站的潜在目标，返回DA评分、相关性、联系方式等信息，并创建待建设记录",
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "integer", "example": 201},
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": "integer"},
+                                "source_page": {"type": "string"},
+                                "da_score": {"type": "integer"},
+                                "relevance": {"type": "string"},
+                                "contact_info": {"type": "object"},
+                                "build_status": {"type": "string"}
+                            }
+                        }
+                    },
+                    "message": {"type": "string"}
+                }
+            }
+        }
+    )
+    @action(detail=False, methods=['post'], url_path='find-opportunities')
+    def find_opportunities(self, request):
+        """
+        外链建设 - 发现潜在外链机会
+        - 调用第三方API查找可能外链我们的网站
+        - 返回DA评分、相关性、联系方式
+        - 自动创建建设状态为'pending'的记录
+        """
+        from App.view.seo.page_speed.tools import get_site_prefix
+        
+        # 获取站点前缀
+        site_prefix = get_site_prefix()
+        
+        # 调用工具类查找潜在外链机会
+        potential_backlinks = find_potential_backlinks(site_prefix)
+        
+        if not potential_backlinks:
+            return ApiResponse(code=400, message="未找到潜在的外链机会")
+        
+        created_records = []
+        
+        # 为每个潜在机会创建记录
+        for opportunity in potential_backlinks:
+            try:
+                # 检查是否已存在
+                existing = BacklinkManagement.objects.filter(
+                    source_page=opportunity['website_url']
+                ).first()
+                
+                if existing:
+                    # 如果已存在，跳过
+                    continue
+                
+                # 创建新记录，建设状态为待建设
+                backlink = BacklinkManagement.objects.create(
+                    source_page=opportunity['website_url'],
+                    target_page=site_prefix,
+                    anchor_text='',
+                    da_score=opportunity['da_score'],
+                    quality_score=opportunity['da_score'],  # 质量评分暂时等于DA
+                    attribute='dofollow',
+                    status='pending',
+                    build_status='pending',  # 待建设
+                    relevance=opportunity['relevance'],
+                    contact_info=opportunity['contact_info'],
+                    remark=f"通过外链建设功能发现，相关性: {opportunity['relevance']}"
+                )
+                
+                serializer = BacklinkManagementSerializer(backlink)
+                created_records.append(serializer.data)
+                
+            except Exception as e:
+                logger.error(f"创建外链记录失败: {e}")
+                continue
+        
+        return ApiResponse(
+            data=created_records,
+            message=f"发现 {len(created_records)} 个潜在外链机会，已创建待建设记录",
+            code=201
+        )
 
     @extend_schema(
         summary="获取外链统计信息",

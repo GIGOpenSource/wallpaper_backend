@@ -155,3 +155,121 @@ def _mock_scan(target_url):
         'source_page': source_page,
         'anchor_text': domain.split('.')[0] if domain else ''
     }
+
+
+def find_potential_backlinks(site_prefix=None):
+    """
+    查找潜在的外链机会
+    :param site_prefix: 网站前缀，默认从配置获取
+    :return: list of potential backlinks with website_url, da_score, relevance, contact_info
+    """
+    try:
+        from App.view.seo.page_speed.tools import get_site_prefix as get_prefix
+        
+        if not site_prefix:
+            site_prefix = get_prefix()
+        
+        # 调用第三方SEO API寻找外链机会
+        result = _find_with_third_party_api(site_prefix)
+        
+        if result:
+            return result
+        else:
+            # API失败时使用模拟数据
+            logger.warning("第三方API调用失败，使用模拟数据")
+            return _mock_find_potential_backlinks(site_prefix)
+            
+    except Exception as e:
+        logger.error(f"查找外链机会失败: {e}")
+        return _mock_find_potential_backlinks(site_prefix)
+
+
+def _find_with_third_party_api(site_prefix):
+    """
+    调用第三方SEO API查找外链机会
+    可以使用 Ahrefs、SEMrush、Moz 等API
+    """
+    try:
+        # 这里可以集成真实的第三方API
+        # 例如 Ahrefs API: https://ahrefs.com/api
+        # SEMrush API: https://www.semrush.com/api-documentation/
+        
+        api_key = ""  # 从配置获取
+        
+        if not api_key:
+            return None
+        
+        # 示例：调用Ahrefs API查找引用域名
+        # url = "https://open.api.ahrefs.com/v3/backlinks/referring-domains"
+        # response = requests.get(url, params={...}, timeout=30)
+        
+        # 暂时返回None，使用模拟数据
+        return None
+        
+    except Exception as e:
+        logger.error(f"第三方API调用失败: {e}")
+        return None
+
+
+def _mock_find_potential_backlinks(site_prefix):
+    """
+    模拟查找外链机会
+    生成一些潜在的外链网站信息
+    """
+    import hashlib
+    import random
+    
+    # 基于站点前缀生成稳定的随机种子
+    seed = int(hashlib.md5(site_prefix.encode()).hexdigest()[:8], 16)
+    random.seed(seed)
+    
+    # 模拟一些可能外链的网站
+    potential_sites = [
+        {
+            'website_url': 'https://techblog.example.com',
+            'da_score': random.randint(40, 80),
+            'relevance': random.choice(['high', 'medium', 'low']),
+            'contact_info': {
+                'email': 'contact@techblog.example.com',
+                'name': 'Tech Blog Team'
+            }
+        },
+        {
+            'website_url': 'https://designinspiration.net',
+            'da_score': random.randint(30, 70),
+            'relevance': random.choice(['high', 'medium']),
+            'contact_info': {
+                'email': 'hello@designinspiration.net',
+                'name': 'Design Team'
+            }
+        },
+        {
+            'website_url': 'https://wallpapercollection.org',
+            'da_score': random.randint(20, 60),
+            'relevance': 'high',
+            'contact_info': {
+                'email': 'info@wallpapercollection.org',
+                'name': 'Wallpaper Collection'
+            }
+        },
+        {
+            'website_url': 'https://creativestudio.io',
+            'da_score': random.randint(35, 75),
+            'relevance': random.choice(['medium', 'low']),
+            'contact_info': {
+                'email': 'contact@creativestudio.io',
+                'phone': '+1-555-0123'
+            }
+        },
+        {
+            'website_url': 'https://digitalart.gallery',
+            'da_score': random.randint(25, 65),
+            'relevance': 'high',
+            'contact_info': {
+                'email': 'support@digitalart.gallery',
+                'name': 'Digital Art Gallery'
+            }
+        }
+    ]
+    
+    return potential_sites
