@@ -828,6 +828,8 @@ class BacklinkManagement(models.Model):
     quality_score = models.IntegerField(default=0, verbose_name="质量评分（0-100）")
     attribute = models.CharField(max_length=20, choices=ATTRIBUTE_CHOICES, default='dofollow', verbose_name="属性")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', verbose_name="状态")
+    relevance = models.CharField(max_length=50, blank=True, null=True, verbose_name="相关性")
+    contact_info = models.JSONField(blank=True, null=True, verbose_name="联系方式")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="发现时间")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="最后更新时间")
     remark = models.TextField(blank=True, null=True, verbose_name="备注")
@@ -864,7 +866,7 @@ class DomainAnalysis(models.Model):
     analyzed_at = models.DateTimeField(auto_now=True, verbose_name="分析时间")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
     remark = models.TextField(blank=True, null=True, verbose_name="备注")
-
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="最后更新时间")
     class Meta:
         db_table = 't_domain_analysis'
         verbose_name = '域名分析'
@@ -878,3 +880,68 @@ class DomainAnalysis(models.Model):
 
     def __str__(self):
         return f"{self.domain} (评分: {self.safety_score}, 状态: {self.get_status_display()})"
+
+
+class DetectionLog(models.Model):
+    """
+    检测日志表：记录外链和域名的检测日志
+    """
+    CATEGORY_CHOICES = [
+        ('health_check', '健康度检查'),
+        ('invalid_check', '失效检测'),
+        ('new_discovery', '新外链发现'),
+        ('domain_check', '域名检测'),
+        ('full_scan', '全站扫描'),
+        ('manual', '手动检测'),
+    ]
+    
+    check_time = models.DateTimeField(auto_now_add=True, verbose_name="检测时间")
+    content = models.TextField(verbose_name="检测内容")
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, verbose_name="类别")
+    result_summary = models.CharField(max_length=500, blank=True, null=True, verbose_name="结果摘要")
+    operator = models.CharField(max_length=100, blank=True, null=True, verbose_name="操作人")
+    
+    class Meta:
+        db_table = 't_detection_log'
+        verbose_name = '检测日志'
+        verbose_name_plural = '检测日志'
+        ordering = ['-check_time']
+        indexes = [
+            models.Index(fields=['category']),
+            models.Index(fields=['-check_time']),
+        ]
+
+    def __str__(self):
+        return f"[{self.get_category_display()}] {self.content[:50]}..."
+
+
+class PageSpeed(models.Model):
+    """
+    页面速度表：存储页面性能指标数据
+    """
+    page_path = models.CharField(max_length=500, unique=True, verbose_name="页面路径")
+    full_url = models.URLField(max_length=1000, verbose_name="完整URL")
+    overall_score = models.IntegerField(default=0, verbose_name="综合评分（0-100）")
+    lcp = models.FloatField(default=0.0, verbose_name="LCP（最大内容绘制，秒）")
+    fid = models.FloatField(default=0.0, verbose_name="FID（首次输入延迟，毫秒）")
+    cls = models.FloatField(default=0.0, verbose_name="CLS（累积布局偏移）")
+    load_time = models.FloatField(default=0.0, verbose_name="加载时间（秒）")
+    page_size = models.FloatField(default=0.0, verbose_name="页面大小（KB）")
+    issue_count = models.IntegerField(default=0, verbose_name="问题数")
+    tested_at = models.DateTimeField(auto_now=True, verbose_name="测试时间")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    remark = models.TextField(blank=True, null=True, verbose_name="备注")
+
+    class Meta:
+        db_table = 't_page_speed'
+        verbose_name = '页面速度'
+        verbose_name_plural = '页面速度'
+        ordering = ['-tested_at']
+        indexes = [
+            models.Index(fields=['page_path']),
+            models.Index(fields=['-overall_score']),
+            models.Index(fields=['-tested_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.page_path} (评分: {self.overall_score})"

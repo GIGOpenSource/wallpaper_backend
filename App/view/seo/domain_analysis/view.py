@@ -5,7 +5,7 @@
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
 from rest_framework import serializers
 from rest_framework.decorators import action
-from models.models import DomainAnalysis, BacklinkManagement
+from models.models import DomainAnalysis, BacklinkManagement, DetectionLog
 from tool.base_views import BaseViewSet
 from tool.permissions import IsAdmin
 from tool.utils import ApiResponse, CustomPagination
@@ -96,100 +96,8 @@ class DomainAnalysisViewSet(BaseViewSet):
         return ApiResponse(message="删除成功")
 
     @extend_schema(
-        summary="开始域名分析",
-        description="从外链列表中获取所有source_page，提取域名并调用第三方API进行分析，如果域名已存在则覆盖更新",
-        responses={
-            200: {
-                "type": "object",
-                "properties": {
-                    "code": {"type": "integer", "example": 200},
-                    "data": {
-                        "type": "object",
-                        "properties": {
-                            "total_domains": {"type": "integer", "description": "分析的域名总数"},
-                            "success_count": {"type": "integer", "description": "成功分析数"},
-                            "failed_count": {"type": "integer", "description": "失败数"},
-                            "new_count": {"type": "integer", "description": "新增记录数"},
-                            "updated_count": {"type": "integer", "description": "更新记录数"}
-                        }
-                    },
-                    "message": {"type": "string"}
-                }
-            }
-        }
-    )
-    @action(detail=False, methods=['post'], url_path='start-analysis')
-    def start_analysis(self, request):
-        """
-        开始域名分析
-        1. 从外链列表获取所有 source_page
-        2. 提取域名
-        3. 调用第三方API获取安全评分、外链数、状态
-        4. 保存或更新到域名分析表
-        """
-        from django.db import transaction
-        
-        # 获取所有外链记录的 source_page
-        backlinks = BacklinkManagement.objects.values_list('source_page', flat=True).distinct()
-        
-        if not backlinks:
-            return ApiResponse(code=400, message="外链列表为空，无法进行分析")
-        
-        total_domains = 0
-        success_count = 0
-        failed_count = 0
-        new_count = 0
-        updated_count = 0
-        
-        for source_url in backlinks:
-            try:
-                # 提取域名
-                domain = extract_domain(source_url)
-                if not domain:
-                    failed_count += 1
-                    continue
-                
-                total_domains += 1
-                
-                # 调用第三方API分析域名
-                analysis_result = analyze_domain_safety(domain)
-                
-                # 保存或更新到数据库
-                with transaction.atomic():
-                    domain_obj, created = DomainAnalysis.objects.update_or_create(
-                        domain=domain,
-                        defaults={
-                            'safety_score': analysis_result['safety_score'],
-                            'backlink_count': analysis_result['backlink_count'],
-                            'status': analysis_result['status'],
-                        }
-                    )
-                    
-                    if created:
-                        new_count += 1
-                    else:
-                        updated_count += 1
-                    
-                    success_count += 1
-                    
-            except Exception as e:
-                failed_count += 1
-                continue
-        
-        return ApiResponse(
-            data={
-                'total_domains': total_domains,
-                'success_count': success_count,
-                'failed_count': failed_count,
-                'new_count': new_count,
-                'updated_count': updated_count
-            },
-            message=f"域名分析完成，共分析 {total_domains} 个域名，成功 {success_count} 个，失败 {failed_count} 个"
-        )
-
-    @extend_schema(
-        summary="重新分析指定域名",
-        description="传入域名分析记录ID（单个或数组），重新调用API分析并更新数据",
+        summary="重新分析域名",
+        description="传入域名分析记录ID（单个或数组），重新调用API分析并更新数据。如果ids为空，则进行全站检测",
         request={
             "application/json": {
                 "type": "object",
@@ -200,10 +108,9 @@ class DomainAnalysisViewSet(BaseViewSet):
                             {"type": "string", "description": "逗号分隔的ID字符串，如: 1,2,3"},
                             {"type": "array", "items": {"type": "integer"}, "description": "ID数组"}
                         ],
-                        "description": "域名分析记录ID"
+                        "description": "域名分析记录ID（可选，不传则全站检测）"
                     }
-                },
-                "required": ["ids"]
+                }
             }
         },
         responses={
@@ -239,40 +146,77 @@ class DomainAnalysisViewSet(BaseViewSet):
     @action(detail=False, methods=['post'], url_path='re-analyze')
     def re_analyze(self, request):
         """
-        重新分析指定域名
-        支持传入单个ID、ID数组或逗号分隔的ID字符串
+        重新分析域名
+        - 如果传入ids：分析指定的域名
+        - 如果ids为空：全站检测（从外链列表获取所有域名）
+        - 自动创建检测日志
         """
         from django.db import transaction
         
         ids_param = request.data.get('ids')
-        if not ids_param:
-            return ApiResponse(code=400, message="请提供 ids 参数")
         
-        # 解析ID列表
-        id_list = []
-        if isinstance(ids_param, int):
-            id_list = [ids_param]
-        elif isinstance(ids_param, str):
-            # 逗号分隔的字符串
-            id_list = [int(id_str.strip()) for id_str in ids_param.split(',') if id_str.strip()]
-        elif isinstance(ids_param, list):
-            id_list = [int(id_val) for id_val in ids_param]
+        # 判断是全站检测还是指定ID检测
+        is_full_scan = not ids_param
+        
+        if is_full_scan:
+            # 全站检测：从外链列表获取所有 source_page
+            backlinks = BacklinkManagement.objects.values_list('source_page', flat=True).distinct()
+            
+            if not backlinks:
+                return ApiResponse(code=400, message="外链列表为空，无法进行检测")
+            
+            # 提取所有域名
+            domain_set = set()
+            for source_url in backlinks:
+                domain = extract_domain(source_url)
+                if domain:
+                    domain_set.add(domain)
+            
+            if not domain_set:
+                return ApiResponse(code=400, message="未提取到有效域名")
+            
+            # 获取或创建域名分析记录
+            id_list = []
+            for domain in domain_set:
+                domain_obj, created = DomainAnalysis.objects.get_or_create(
+                    domain=domain,
+                    defaults={
+                        'safety_score': 0,
+                        'backlink_count': 0,
+                        'status': 'safe'
+                    }
+                )
+                id_list.append(domain_obj.id)
         else:
-            return ApiResponse(code=400, message="ids 参数格式错误")
-        
-        if not id_list:
-            return ApiResponse(code=400, message="ID列表为空")
+            # 解析ID列表
+            id_list = []
+            if isinstance(ids_param, int):
+                id_list = [ids_param]
+            elif isinstance(ids_param, str):
+                # 逗号分隔的字符串
+                id_list = [int(id_str.strip()) for id_str in ids_param.split(',') if id_str.strip()]
+            elif isinstance(ids_param, list):
+                id_list = [int(id_val) for id_val in ids_param]
+            else:
+                return ApiResponse(code=400, message="ids 参数格式错误")
+            
+            if not id_list:
+                return ApiResponse(code=400, message="ID列表为空")
         
         total_count = len(id_list)
         success_count = 0
         failed_count = 0
         results = []
+        invalid_count = 0  # 失效数量
+        suspicious_count = 0  # 可疑数量
+        new_discovery_count = 0  # 新发现数量
         
         for domain_id in id_list:
             try:
                 # 获取域名分析记录
                 domain_obj = DomainAnalysis.objects.get(id=domain_id)
                 domain = domain_obj.domain
+                old_status = domain_obj.status
                 
                 # 调用第三方API重新分析
                 analysis_result = analyze_domain_safety(domain)
@@ -285,6 +229,19 @@ class DomainAnalysisViewSet(BaseViewSet):
                     domain_obj.save()
                 
                 success_count += 1
+                
+                # 统计异常情况
+                if analysis_result['status'] == 'danger':
+                    if old_status == 'safe':
+                        invalid_count += 1  # 从安全变为危险，视为失效
+                elif analysis_result['safety_score'] < 60:
+                    suspicious_count += 1  # 安全评分低于60，视为可疑
+                
+                # 如果是新创建的记录
+                if (domain_obj.created_at and 
+                    (domain_obj.updated_at - domain_obj.created_at).total_seconds() < 5):
+                    new_discovery_count += 1
+                
                 results.append({
                     'id': domain_obj.id,
                     'domain': domain_obj.domain,
@@ -309,14 +266,46 @@ class DomainAnalysisViewSet(BaseViewSet):
                     'message': str(e)
                 })
         
+        # 创建检测日志
+        if is_full_scan:
+            log_content = f"全站域名检测完成，共检测 {total_count} 个域名"
+            log_category = 'full_scan'
+        else:
+            log_content = f"手动检测 {total_count} 个域名"
+            log_category = 'manual'
+        
+        # 构建结果摘要
+        summary_parts = []
+        if invalid_count > 0:
+            summary_parts.append(f"发现{invalid_count}个失效域名")
+        if suspicious_count > 0:
+            summary_parts.append(f"发现{suspicious_count}个可疑域名")
+        if new_discovery_count > 0:
+            summary_parts.append(f"发现{new_discovery_count}个新域名")
+        if failed_count > 0:
+            summary_parts.append(f"{failed_count}个检测失败")
+        
+        result_summary = "，".join(summary_parts) if summary_parts else "检测结果正常"
+        
+        # 创建日志记录
+        DetectionLog.objects.create(
+            content=log_content,
+            category=log_category,
+            result_summary=result_summary,
+            operator=request.user.username if hasattr(request, 'user') and request.user else '系统'
+        )
+        
         return ApiResponse(
             data={
                 'total_count': total_count,
                 'success_count': success_count,
                 'failed_count': failed_count,
+                'invalid_count': invalid_count,
+                'suspicious_count': suspicious_count,
+                'new_discovery_count': new_discovery_count,
                 'results': results
             },
-            message=f"重新分析完成，共处理 {total_count} 个，成功 {success_count} 个，失败 {failed_count} 个"
+            message=f"检测完成，共处理 {total_count} 个，成功 {success_count} 个，失败 {failed_count} 个"
         )
 
     @extend_schema(
@@ -363,3 +352,136 @@ class DomainAnalysisViewSet(BaseViewSet):
             },
             message="统计信息获取成功"
         )
+
+
+class DetectionLogSerializer(serializers.ModelSerializer):
+    """检测日志序列化器"""
+    category_display = serializers.CharField(source='get_category_display', read_only=True)
+
+    class Meta:
+        model = DetectionLog
+        fields = [
+            'id', 'check_time', 'content', 'category', 'category_display',
+            'result_summary', 'operator'
+        ]
+        read_only_fields = ['id', 'check_time']
+
+
+class DetectionLogCreateSerializer(serializers.Serializer):
+    """检测日志创建序列化器"""
+    content = serializers.CharField(required=True, help_text="检测内容")
+    category = serializers.ChoiceField(
+        choices=DetectionLog.CATEGORY_CHOICES,
+        required=True,
+        help_text="类别"
+    )
+    result_summary = serializers.CharField(max_length=500, required=False, allow_blank=True, help_text="结果摘要")
+    operator = serializers.CharField(max_length=100, required=False, allow_blank=True, help_text="操作人")
+
+
+@extend_schema(tags=["检测日志"])
+@extend_schema_view(
+    list=extend_schema(
+        summary="获取检测日志列表",
+        description="获取检测日志列表，支持按类别、时间范围筛选",
+        parameters=[
+            OpenApiParameter(name="category", type=str, required=False, description="类别：health_check/invalid_check/new_discovery/domain_check/full_scan/manual"),
+            OpenApiParameter(name="start_date", type=str, required=False, description="开始日期（YYYY-MM-DD）"),
+            OpenApiParameter(name="end_date", type=str, required=False, description="结束日期（YYYY-MM-DD）"),
+        ],
+    ),
+    retrieve=extend_schema(
+        summary="获取检测日志详情",
+        description="根据ID获取检测日志详细信息",
+    ),
+    create=extend_schema(
+        summary="创建检测日志",
+        description="手动创建检测日志记录",
+        request=DetectionLogCreateSerializer,
+    ),
+    destroy=extend_schema(
+        summary="删除检测日志",
+        description="删除指定的检测日志记录",
+    ),
+)
+class DetectionLogViewSet(BaseViewSet):
+    """
+    检测日志 ViewSet
+    提供检测日志的增删改查功能
+    """
+    queryset = DetectionLog.objects.all()
+    serializer_class = DetectionLogSerializer
+    pagination_class = CustomPagination
+    permission_classes = [IsAdmin]
+
+    # def get_serializer_class(self):
+    #     if self.action in ['create']:
+    #         return DetectionLogCreateSerializer
+    #     return DetectionLogSerializer
+
+    def list(self, request, *args, **kwargs):
+        """获取检测日志列表，支持筛选"""
+        queryset = DetectionLog.objects.all()
+        
+        # 按类别筛选
+        category = request.query_params.get('category')
+        if category:
+            queryset = queryset.filter(category=category)
+        
+        # 按时间范围筛选
+        start_date = request.query_params.get('start_date')
+        if start_date:
+            try:
+                from django.utils import timezone
+                from datetime import datetime
+                start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+                queryset = queryset.filter(check_time__gte=start_dt)
+            except (TypeError, ValueError):
+                pass
+        
+        end_date = request.query_params.get('end_date')
+        if end_date:
+            try:
+                from django.utils import timezone
+                from datetime import datetime
+                end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+                # 包含整天
+                from datetime import timedelta
+                end_dt = end_dt + timedelta(days=1)
+                queryset = queryset.filter(check_time__lt=end_dt)
+            except (TypeError, ValueError):
+                pass
+        
+        # 按检测时间倒序排序
+        queryset = queryset.order_by('-check_time')
+        
+        # 分页
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        
+        serializer = self.get_serializer(queryset, many=True)
+        return ApiResponse(data=serializer.data, message="列表获取成功")
+
+    def create(self, request, *args, **kwargs):
+        """创建检测日志"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        validated_data = serializer.validated_data
+        
+        log = DetectionLog.objects.create(
+            content=validated_data['content'],
+            category=validated_data['category'],
+            result_summary=validated_data.get('result_summary'),
+            operator=validated_data.get('operator')
+        )
+        
+        result_serializer = DetectionLogSerializer(log)
+        return ApiResponse(data=result_serializer.data, message="创建成功", code=201)
+
+    def destroy(self, request, *args, **kwargs):
+        """删除检测日志"""
+        instance = self.get_object()
+        instance.delete()
+        return ApiResponse(message="删除成功")

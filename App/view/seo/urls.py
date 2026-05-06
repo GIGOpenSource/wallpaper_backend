@@ -15,6 +15,7 @@ from App.view.seo.sitemap import urls as sitemap_urls
 from App.view.seo.tdk import urls as tdk_urls
 from App.view.seo.backlink import urls as backlink_urls
 from App.view.seo.domain_analysis import urls as domain_analysis_urls
+from App.view.seo.page_speed import urls as page_speed_urls
 router = DefaultRouter()
 router.register(r'seo_view', SEOViewSet, basename='seo_view')
 
@@ -23,5 +24,6 @@ urlpatterns = [
     path('sitemap_urls/', include(sitemap_urls)),
     path('tdk/', include(tdk_urls)),
     path('backlink/', include(backlink_urls)),
-    path('domain_analysis/', include(domain_analysis_urls))
+    path('domain_analysis/', include(domain_analysis_urls)),
+    path('page_speed/', include(page_speed_urls))
 ]
