@@ -10,6 +10,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
+from App.view.seo.domain_analysis.view import DetectionLogViewSet
 from App.view.seo.view import SEOViewSet
 from App.view.seo.sitemap import urls as sitemap_urls
 from App.view.seo.tdk import urls as tdk_urls
@@ -18,6 +19,7 @@ from App.view.seo.domain_analysis import urls as domain_analysis_urls
 from App.view.seo.page_speed import urls as page_speed_urls
 router = DefaultRouter()
 router.register(r'seo_view', SEOViewSet, basename='seo_view')
+router.register(r'detection-log', DetectionLogViewSet, basename='detection_log')
 
 urlpatterns = [
     path('', include(router.urls)),
