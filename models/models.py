@@ -975,7 +975,6 @@ class PageSpeed(models.Model):
     page_title = models.CharField(max_length=500, blank=True, null=True, verbose_name="页面标题")
     content_score = models.IntegerField(default=0, verbose_name="内容评分（0-100）")
     word_count = models.IntegerField(default=0, verbose_name="字数")
-    optimization_suggestions = models.TextField(blank=True, null=True, verbose_name="优化建议")
     last_optimized_at = models.DateTimeField(blank=True, null=True, verbose_name="最后优化时间")
 
     class Meta:
@@ -1029,3 +1028,96 @@ class SEODashboardStats(models.Model):
     
     def __str__(self):
         return f"{self.site_url} - {self.stat_date} SEO统计数据"
+
+
+class SEOInspection(models.Model):
+    """
+    SEO日常巡查表：存储各项SEO检查指标的结果
+    支持分类：搜索与抓取、页面质量、安全巡查
+    """
+    CATEGORY_CHOICES = [
+        ('search_crawl', '搜索与抓取'),
+        ('page_quality', '页面质量'),
+        ('security', '安全巡查'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('normal', '正常'),
+        ('warning', '警告'),
+        ('error', '异常'),
+    ]
+    
+    # 固定的检查项（创建后不再修改）
+    INSPECTION_ITEM_CHOICES = [
+        # 搜索与抓取类
+        ('indexed_pages', 'Indexed Pages'),
+        ('discovered_pages', 'Discovered Pages'),
+        ('googlebot_crawls_per_day', 'Googlebot Crawls/Day'),
+        ('avg_response_time', 'Avg Response Time'),
+        ('sitemap_status', 'Sitemap Status'),
+        ('google_penalties', 'Google Penalties'),
+        # 页面质量类（预留）
+        # 安全巡查类（预留）
+    ]
+    
+    site_url = models.CharField(max_length=500, verbose_name="网站URL")
+    inspection_item = models.CharField(max_length=50, choices=INSPECTION_ITEM_CHOICES, verbose_name="检查项")
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, verbose_name="应用分类")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='normal', verbose_name="状态")
+    current_value = models.CharField(max_length=500, blank=True, null=True, verbose_name="当前值")
+    threshold = models.CharField(max_length=500, blank=True, null=True, verbose_name="阈值")
+    suggestion = models.TextField(blank=True, null=True, verbose_name="处理建议")
+    inspected_at = models.DateTimeField(auto_now_add=True, verbose_name="检查时间")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+    
+    class Meta:
+        db_table = 't_seo_inspection'
+        verbose_name = 'SEO日常巡查'
+        verbose_name_plural = 'SEO日常巡查'
+        ordering = ['-inspected_at']
+        indexes = [
+            models.Index(fields=['site_url', 'category']),
+            models.Index(fields=['site_url', 'inspection_item']),
+            models.Index(fields=['-inspected_at']),
+        ]
+        # 同一网站+检查项+分类的唯一约束
+        unique_together = ('site_url', 'inspection_item', 'category')
+    
+    def __str__(self):
+        return f"{self.site_url} - {self.get_inspection_item_display()} [{self.get_category_display()}]"
+
+
+class Competitor(models.Model):
+    """
+    竞争对手表：存储竞争对手网站的SEO数据
+    """
+    name = models.CharField(max_length=200, verbose_name="网站名称")
+    url = models.URLField(max_length=500, unique=True, verbose_name="网站URL")
+    domain_authority = models.IntegerField(default=0, verbose_name="域名权重（DA）")
+    monthly_traffic = models.BigIntegerField(default=0, verbose_name="月流量")
+    keyword_count = models.IntegerField(default=0, verbose_name="关键词数")
+    backlink_count = models.IntegerField(default=0, verbose_name="外链数")
+    growth_trend = models.CharField(
+        max_length=20,
+        choices=[('up', '上升'), ('stable', '稳定'), ('down', '下降')],
+        default='stable',
+        verbose_name="增长趋势"
+    )
+    last_synced_at = models.DateTimeField(blank=True, null=True, verbose_name="最后同步时间")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+    
+    class Meta:
+        db_table = 't_competitor'
+        verbose_name = '竞争对手'
+        verbose_name_plural = '竞争对手'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['url']),
+            models.Index(fields=['-domain_authority']),
+            models.Index(fields=['-monthly_traffic']),
+        ]
+    
+    def __str__(self):
+        return f"{self.name} ({self.url})"
