@@ -144,6 +144,9 @@ class SEODashboardStatsViewSet(ViewSet):
                     for item in country_data
                 ]
                 
+                # 获取流量来源数据
+                traffic_sources = gsc_tool.get_traffic_sources(site_url, start_date, end_date)
+                
                 # 从GSC数据中提取核心指标（简化估算）
                 total_clicks = sum(item['clicks'] for item in inclusion_trend) if inclusion_trend else 0
                 total_impressions = sum(item['impressions'] for item in inclusion_trend) if inclusion_trend else 0
@@ -187,6 +190,7 @@ class SEODashboardStatsViewSet(ViewSet):
             keyword_rankings = []
             landing_page_analysis = []
             country_data_simplified = []
+            traffic_sources = []
             
             cache_status = "cached"
         
@@ -215,6 +219,7 @@ class SEODashboardStatsViewSet(ViewSet):
             'keyword_rankings': keyword_rankings,
             'landing_page_analysis': landing_page_analysis,
             'country_data': country_data_simplified,
+            'traffic_sources': traffic_sources if should_call_gsc else [],
             'dashboard_stats': {
                 'stat_date': str(db_record.stat_date) if db_record else None,
                 'total_indexed': db_record.total_indexed if db_record else 0,
