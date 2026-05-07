@@ -100,21 +100,52 @@ class SEOInspectionViewSet(BaseViewSet):
     def run_inspection(self, request):
         """
         执行SEO巡查
-        请求体: {"site_url": "https://example.com"}
+        请求体: {
+            "site_url": "https://example.com",
+            "start_timestamp": 1712361600,  // 可选，开始时间戳（秒）
+            "end_timestamp": 1714953600     // 可选，结束时间戳（秒）
+        }
         """
         site_url = request.data.get('site_url')
         if not site_url:
             return ApiResponse(code=400, message="请提供网站URL")
         
+        # 验证URL格式
+        if site_url == 'string' or not site_url.startswith(('http://', 'https://')):
+            return ApiResponse(code=400, message="请提供有效的网站URL（以http://或https://开头）")
+        
+        # 确保URL格式正确（末尾加/）
+        if not site_url.endswith('/'):
+            site_url += '/'
+        
+        # 处理时间戳参数
+        start_timestamp = request.data.get('start_timestamp')
+        end_timestamp = request.data.get('end_timestamp')
+        
+        if start_timestamp and end_timestamp:
+            try:
+                start_timestamp = int(start_timestamp)
+                end_timestamp = int(end_timestamp)
+                start_date = datetime.fromtimestamp(start_timestamp).strftime('%Y-%m-%d')
+                end_date = datetime.fromtimestamp(end_timestamp).strftime('%Y-%m-%d')
+            except (ValueError, TypeError, OSError) as e:
+                return ApiResponse(code=400, message=f"时间戳格式错误: {str(e)}")
+        else:
+            # 默认使用最近30天
+            end_date = datetime.now().strftime('%Y-%m-%d')
+            start_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+        
         try:
             gsc_tool = GoogleSearchConsoleTool()
             
             # 执行搜索与抓取类检查
-            results = self._run_search_crawl_inspection(site_url, gsc_tool)
+            results = self._run_search_crawl_inspection(site_url, gsc_tool, start_date, end_date)
             
             return ApiResponse(
                 data={
                     'site_url': site_url,
+                    'start_date': start_date,
+                    'end_date': end_date,
                     'inspection_count': len(results),
                     'results': results
                 },
@@ -123,20 +154,26 @@ class SEOInspectionViewSet(BaseViewSet):
         except Exception as e:
             return ApiResponse(code=500, message=f"巡查执行失败: {str(e)}")
     
-    def _run_search_crawl_inspection(self, site_url, gsc_tool):
+    def _run_search_crawl_inspection(self, site_url, gsc_tool, start_date=None, end_date=None):
         """执行搜索与抓取类检查"""
+        # 如果未提供日期，使用默认值
+        if not start_date:
+            start_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+        if not end_date:
+            end_date = datetime.now().strftime('%Y-%m-%d')
+        
         results = []
         
         # 1. Indexed Pages - 通过Sitemap URL间接判断
-        indexed_result = self._check_indexed_pages(site_url, gsc_tool)
+        indexed_result = self._check_indexed_pages(site_url, gsc_tool, start_date, end_date)
         results.append(indexed_result)
         
         # 2. Discovered Pages - 通过GSC索引覆盖率估算
-        discovered_result = self._check_discovered_pages(site_url, gsc_tool)
+        discovered_result = self._check_discovered_pages(site_url, gsc_tool, start_date, end_date)
         results.append(discovered_result)
         
         # 3. Googlebot Crawls/Day - 通过GSC API获取
-        crawls_result = self._check_googlebot_crawls(site_url, gsc_tool)
+        crawls_result = self._check_googlebot_crawls(site_url, gsc_tool, start_date, end_date)
         results.append(crawls_result)
         
         # 4. Avg Response Time - Mock数据（需要其他工具）
@@ -148,7 +185,7 @@ class SEOInspectionViewSet(BaseViewSet):
         results.append(sitemap_result)
         
         # 6. Google Penalties - Mock数据（无法直接API获取）
-        penalties_result = self._check_google_penalties(site_url)
+        penalties_result = self._check_google_penalties(site_url, start_date, end_date)
         results.append(penalties_result)
         
         return results
@@ -223,22 +260,14 @@ class SEOInspectionViewSet(BaseViewSet):
             # GSC API不直接提供此数据，需要从索引覆盖率报告中获取
             # 这里使用估算方法
             
-            # 获取总页面数（从sitemap）
+            # 获取总页面数（从sitemap配置，不实际请求sitemap文件）
             sitemap_configs = SiteConfig.objects.filter(
                 config_type='sitemap_url',
                 is_active=True
             ).values_list('content', flat=True)
             
-            total_pages = 0
-            for sitemap_url in sitemap_configs:
-                try:
-                    import requests
-                    resp = requests.get(sitemap_url, timeout=10)
-                    if resp.status_code == 200:
-                        # 简单计算URL数量（实际应该解析XML）
-                        total_pages += resp.text.count('<loc>')
-                except:
-                    pass
+            # 估算总页面数（基于配置的sitemap数量）
+            total_pages = len(sitemap_configs) * 100 if sitemap_configs else 0  # 每个sitemap估算100页
             
             # 获取已收录页面数
             end_date = datetime.now().strftime('%Y-%m-%d')
@@ -340,11 +369,11 @@ class SEOInspectionViewSet(BaseViewSet):
             import requests
             import time
             
-            # 测量3次响应时间取平均
+            # 测量2次响应时间取平均（减少等待时间）
             times = []
-            for _ in range(3):
+            for _ in range(2):
                 start = time.time()
-                resp = requests.get(site_url, timeout=10)
+                resp = requests.get(site_url, timeout=5)  # 超时改为5秒
                 end = time.time()
                 times.append((end - start) * 1000)  # 转换为毫秒
             

@@ -82,11 +82,27 @@ def _call_content_analysis_api(url, platform='page'):
             data = response.json()
             
             # 解析返回结果（根据实际API返回格式调整）
+            optimization_suggestions = data.get('optimization_suggestions', [])
+            
+            # 如果是字符串，尝试转换为JSON数组
+            if isinstance(optimization_suggestions, str):
+                import json
+                try:
+                    optimization_suggestions = json.loads(optimization_suggestions)
+                except:
+                    # 如果转换失败，将字符串包装为单个建议
+                    optimization_suggestions = [{
+                        "type": "general",
+                        "title": "优化建议",
+                        "savings": 0,
+                        "description": optimization_suggestions
+                    }]
+            
             return {
                 'page_title': data.get('page_title', ''),
                 'content_score': data.get('content_score', 0),
                 'word_count': data.get('word_count', 0),
-                'optimization_suggestions': data.get('optimization_suggestions', '')
+                'optimization_suggestions': optimization_suggestions
             }
         else:
             logger.error(f"内容分析API请求失败: {response.status_code}")
@@ -127,36 +143,89 @@ def _mock_content_analysis(page_path, platform='page'):
     # 字数 (200-2000字)
     word_count = 200 + (hash_value % 1800)
     
-    # 优化建议（根据评分生成不同的建议）
+    # 优化建议（结构化JSON格式）
     suggestions = []
     
     if content_score < 70:
-        suggestions.append("增加页面内容长度，建议至少500字以上")
-        suggestions.append("优化页面标题，使其更具吸引力且包含关键词")
-        suggestions.append("添加相关的内部链接，提升页面关联性")
+        suggestions.append({
+            "type": "content_length",
+            "title": "内容长度不足",
+            "savings": 0,
+            "description": "增加页面内容长度，建议至少500字以上，有助于提升SEO排名"
+        })
+        suggestions.append({
+            "type": "title_optimization",
+            "title": "标题优化",
+            "savings": 0,
+            "description": "优化页面标题，使其更具吸引力且包含关键词"
+        })
+        suggestions.append({
+            "type": "internal_links",
+            "title": "内部链接缺失",
+            "savings": 0,
+            "description": "添加相关的内部链接，提升页面关联性和用户停留时间"
+        })
     
     if content_score < 80:
-        suggestions.append("优化图片ALT标签，提高可访问性")
-        suggestions.append("改善段落结构，使用小标题分隔内容")
+        suggestions.append({
+            "type": "image_alt",
+            "title": "图片ALT标签缺失",
+            "savings": 0,
+            "description": "优化图片ALT标签，提高可访问性和SEO友好度"
+        })
+        suggestions.append({
+            "type": "content_structure",
+            "title": "段落结构不佳",
+            "savings": 0,
+            "description": "改善段落结构，使用小标题分隔内容，提升可读性"
+        })
     
     if content_score < 90:
-        suggestions.append("增加多媒体内容（视频、图表等）提升用户体验")
-        suggestions.append("优化关键词密度，保持在2%-5%之间")
+        suggestions.append({
+            "type": "multimedia",
+            "title": "缺少多媒体内容",
+            "savings": 0,
+            "description": "增加多媒体内容（视频、图表等）提升用户体验和页面停留时间"
+        })
+        suggestions.append({
+            "type": "keyword_density",
+            "title": "关键词密度优化",
+            "savings": 0,
+            "description": "优化关键词密度，保持在2%-5%之间，避免过度优化"
+        })
     
     if content_score >= 90:
-        suggestions.append("内容质量优秀，保持当前水平")
-        suggestions.append("可以考虑增加更多深度内容")
+        suggestions.append({
+            "type": "content_quality",
+            "title": "内容质量优秀",
+            "savings": 0,
+            "description": "内容质量优秀，保持当前水平，持续产出高质量内容"
+        })
+        suggestions.append({
+            "type": "deep_content",
+            "title": "深度内容扩展",
+            "savings": 0,
+            "description": "可以考虑增加更多深度内容，建立行业权威地位"
+        })
     
     # 添加平台特定建议
     if platform in ['phone', 'pad']:
-        suggestions.append("确保内容在移动设备上易于阅读")
-        suggestions.append("优化触摸交互元素的大小和间距")
-    
-    optimization_suggestions = "；".join(suggestions)
+        suggestions.append({
+            "type": "mobile_readability",
+            "title": "移动端阅读体验",
+            "savings": 0,
+            "description": "确保内容在移动设备上易于阅读，字体大小适中"
+        })
+        suggestions.append({
+            "type": "touch_interaction",
+            "title": "触摸交互优化",
+            "savings": 0,
+            "description": "优化触摸交互元素的大小和间距，提升移动端用户体验"
+        })
     
     return {
         'page_title': page_title,
         'content_score': content_score,
         'word_count': word_count,
-        'optimization_suggestions': optimization_suggestions
+        'optimization_suggestions': suggestions  # 返回JSON数组格式
     }

@@ -149,7 +149,18 @@ class ContentOptimizationViewSet(BaseViewSet):
                             "content_score": {"type": "integer"},
                             "word_count": {"type": "integer"},
                             "issue_count": {"type": "integer"},
-                            "optimization_suggestions": {"type": "string"},
+                            "optimization_suggestions": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "type": {"type": "string", "description": "建议类型"},
+                                        "title": {"type": "string", "description": "建议标题"},
+                                        "savings": {"type": "integer", "description": "节省大小（KB）"},
+                                        "description": {"type": "string", "description": "详细描述"}
+                                    }
+                                }
+                            },
                             "last_optimized_at": {"type": "string", "format": "date-time"}
                         }
                     },
@@ -232,7 +243,18 @@ class ContentOptimizationViewSet(BaseViewSet):
                             "page_title": {"type": "string"},
                             "content_score": {"type": "integer"},
                             "word_count": {"type": "integer"},
-                            "optimization_suggestions": {"type": "string"},
+                            "optimization_suggestions": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "type": {"type": "string"},
+                                        "title": {"type": "string"},
+                                        "savings": {"type": "integer"},
+                                        "description": {"type": "string"}
+                                    }
+                                }
+                            },
                             "last_optimized_at": {"type": "string", "format": "date-time"}
                         }
                     },
