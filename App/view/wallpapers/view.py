@@ -660,14 +660,42 @@ class WallpapersViewSet(BaseViewSet):
 
     def _list_for_customer(self, request, customer_id):
         """普通用户列表逻辑：轻量级字段、支持策略排序、点赞/收藏状态"""
-        queryset = self.filter_queryset(self.get_queryset())
-        # ---- 筛选条件 ----
+        # ---- 获取分页参数 ----
+        page_num = int(request.query_params.get("currentPage", 1))
+        page_size = int(request.query_params.get("pageSize", 10))
+        order = request.query_params.get("order", "").lower()
         platform = request.query_params.get("platform", "").upper()
+        
+        # ---- 先应用平台筛选（策略和普通数据都需要）----
+        base_queryset = self.filter_queryset(self.get_queryset())
         if platform == 'PC':
-            queryset = queryset.filter(category__id=1).distinct()
+            base_queryset = base_queryset.filter(category__id=1).distinct()
         elif platform == 'PHONE':
-            queryset = queryset.filter(category__id=2).distinct()
-
+            base_queryset = base_queryset.filter(category__id=2).distinct()
+        
+        # ---- 尝试获取策略 ----
+        strategy_ids = []
+        if order in ['hot', 'home']:
+            strategy_ids = self._get_strategy_wallpaper_ids(order, platform)
+        
+        strategy_count = len(strategy_ids)
+        strategy_end_page = (strategy_count + page_size - 1) // page_size  # 策略覆盖的最后一页
+        
+        # ---- 判断当前页是否在策略范围内 ----
+        if page_num <= strategy_end_page and strategy_ids:
+            # 当前页在策略范围内，直接返回策略数据（不应用其他筛选）
+            return self._return_strategy_page(
+                strategy_ids, page_num, page_size, customer_id, request
+            )
+        
+        # ---- 超过策略范围，使用筛选条件查询普通数据 ----
+        queryset = base_queryset
+        
+        # 排除策略中已展示的壁纸（避免重复）
+        if strategy_ids:
+            queryset = queryset.exclude(id__in=strategy_ids)
+        
+        # ---- 应用其他筛选条件 ----
         tag_name = request.query_params.get("tag_name", "").strip()
         if tag_name:
             tag_ids = list(WallpaperTag.objects.filter(name__icontains=tag_name).values_list('id', flat=True))
@@ -679,11 +707,13 @@ class WallpapersViewSet(BaseViewSet):
             ids = [int(t) for t in tag_ids_param.split(',') if t.strip().isdigit()]
             if ids:
                 queryset = queryset.filter(tags__id__in=ids).distinct()
+                
         media_live = request.query_params.get("media_live", "").lower()
         if media_live == 'true':
             queryset = queryset.filter(category__id=4).distinct()
         elif media_live == 'false':
             queryset = queryset.filter(category__id=3).distinct()
+            
         resolution = request.query_params.get("resolution", "")
         if resolution:
             from django.db.models import Q
@@ -697,6 +727,7 @@ class WallpapersViewSet(BaseViewSet):
                         pass
             if q:
                 queryset = queryset.filter(q).distinct()
+                
         # ---- 名称/标签映射筛选 ----
         user_input = request.query_params.get("name", "").strip()
         if user_input:
@@ -710,17 +741,27 @@ class WallpapersViewSet(BaseViewSet):
                 queryset = queryset.filter(tags__id=tag_id).distinct()
             else:
                 queryset = queryset.filter(name__icontains=user_input)
-        # ---- 排序（支持策略）----
-        order = request.query_params.get("order", "").lower()
-        page_num = int(request.query_params.get("currentPage", 1))
-        page_size = int(request.query_params.get("pageSize", 10))
-        queryset = self._apply_strategy_sorting(queryset, order, platform, page_num, page_size)
+        
+        # ---- 计算偏移后的页码（减去策略占用的页数）----
+        adjusted_page_num = page_num - strategy_end_page
+        if adjusted_page_num < 1:
+            adjusted_page_num = 1
+        
+        # ---- 按策略类型排序普通数据 ----
+        if order == 'hot':
+            queryset = queryset.order_by('-hot_score', '-created_at')
+        elif order == 'home':
+            queryset = queryset.order_by('-created_at')
+        else:
+            queryset = queryset.order_by('-updated_at', '-created_at', '-hot_score')
+        
         # ---- 预加载轻量级数据 ----
         queryset = queryset.prefetch_related('tags').only(
             'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
             'has_watermark', 'is_live', 'is_hd', 'hot_score', 'like_count',
             'collect_count', 'download_count', 'view_count', 'created_at', 'audit_status'
         )
+        
         # ---- 用户互动信息 ----
         liked_ids = collected_ids = set()
         if customer_id:
@@ -728,16 +769,115 @@ class WallpapersViewSet(BaseViewSet):
                 WallpaperLike.objects.filter(customer_id=customer_id).values_list('wallpaper_id', flat=True))
             collected_ids = set(
                 WallpaperCollection.objects.filter(user_id=customer_id).values_list('wallpaper_id', flat=True))
-        # ---- 分页与序列化 ----
-        page = self.paginate_queryset(queryset)
+        
+        # ---- 手动分页（因为调整了页码）----
+        start_idx = (adjusted_page_num - 1) * page_size
+        end_idx = start_idx + page_size
+        page_data = queryset[start_idx:end_idx]
+        total_count = queryset.count()
+        
+        # ---- 序列化 ----
         context = self.get_serializer_context()
         context['liked_wallpaper_ids'] = liked_ids
         context['collected_wallpaper_ids'] = collected_ids
-        if page:
-            serializer = WallpapersListSerializer(page, many=True, context=context)
-            return self.get_paginated_response(serializer.data)
-        serializer = WallpapersListSerializer(queryset, many=True, context=context)
-        return ApiResponse(serializer.data)
+        serializer = WallpapersListSerializer(page_data, many=True, context=context)
+        
+        # ---- 构造分页响应 ----
+        from tool.utils import ApiResponse
+        return ApiResponse(
+            data={
+                'results': serializer.data,
+                'count': total_count,
+                'currentPage': page_num,
+                'pageSize': page_size,
+                'totalPages': (total_count + page_size - 1) // page_size + strategy_end_page
+            },
+            message="列表获取成功"
+        )
+    
+    def _get_strategy_wallpaper_ids(self, order, platform):
+        """获取策略关联的壁纸ID列表"""
+        from django.utils import timezone
+        from models.models import RecommendStrategy, StrategyWallpaperRelation
+        
+        now = timezone.now()
+        matched_strategy = None
+        platforms = [platform.lower()] if platform in ['PC', 'PHONE'] else ['all']
+        platforms.append('all')
+        
+        for p in set(platforms):
+            strategies = RecommendStrategy.objects.filter(
+                platform=p, strategy_type=order, status='active'
+            ).order_by('-priority', '-created_at')
+            for s in strategies:
+                if s.start_time and now < s.start_time:
+                    continue
+                if s.end_time and now > s.end_time:
+                    continue
+                matched_strategy = s
+                break
+            if matched_strategy:
+                break
+        
+        if not matched_strategy:
+            return []
+        
+        strategy_ids = list(
+            StrategyWallpaperRelation.objects.filter(strategy=matched_strategy)
+            .order_by('sort_order', '-created_at')
+            .values_list('wallpaper_id', flat=True)
+        )
+        if matched_strategy.content_limit and matched_strategy.content_limit > 0:
+            strategy_ids = strategy_ids[:matched_strategy.content_limit]
+        
+        return strategy_ids
+    
+    def _return_strategy_page(self, strategy_ids, page_num, page_size, customer_id, request):
+        """返回策略页面的数据"""
+        # 计算策略数据的分页
+        start_idx = (page_num - 1) * page_size
+        end_idx = start_idx + page_size
+        page_strategy_ids = strategy_ids[start_idx:end_idx]
+        
+        # 获取策略壁纸数据
+        strategy_qs = Wallpapers.objects.filter(id__in=page_strategy_ids).prefetch_related('tags').only(
+            'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
+            'has_watermark', 'is_live', 'is_hd', 'hot_score', 'like_count',
+            'collect_count', 'download_count', 'view_count', 'created_at', 'audit_status'
+        )
+        
+        # # 保持策略中的顺序
+        # preserved_order = Case(*[When(id=pk, then=pos) for pos, pk in enumerate(page_strategy_ids)])
+        # strategy_qs = strategy_qs.order_by(preserved_order)
+        
+        # 用户互动信息
+        liked_ids = collected_ids = set()
+        if customer_id:
+            liked_ids = set(
+                WallpaperLike.objects.filter(customer_id=customer_id).values_list('wallpaper_id', flat=True))
+            collected_ids = set(
+                WallpaperCollection.objects.filter(user_id=customer_id).values_list('wallpaper_id', flat=True))
+        
+        # 序列化
+        context = self.get_serializer_context()
+        context['liked_wallpaper_ids'] = liked_ids
+        context['collected_wallpaper_ids'] = collected_ids
+        serializer = WallpapersListSerializer(strategy_qs, many=True, context=context)
+        
+        # 获取策略总数
+        total_strategy_count = len(strategy_ids)
+        
+        return ApiResponse(
+            data={
+                'results': serializer.data,
+                'count': total_strategy_count,
+                'currentPage': page_num,
+                'pageSize': page_size,
+                'totalPages': (total_strategy_count + page_size - 1) // page_size,
+                'isStrategyPage': True
+            },
+            message="列表获取成功"
+        )
 
 
     def destroy(self, request, *args, **kwargs):
