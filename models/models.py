@@ -996,3 +996,36 @@ class PageSpeed(models.Model):
 
     def __str__(self):
         return f"{self.page_path} [{self.get_platform_display()}] (评分: {self.overall_score})"
+
+
+class SEODashboardStats(models.Model):
+    """
+    SEO数据分析仪表统计表：存储每日SEO核心指标快照
+    用于对比前一天/一周的数据变化趋势
+    支持智能缓存：每10次请求调用一次GSC接口
+    """
+    site_url = models.CharField(max_length=500, verbose_name="网站URL")
+    stat_date = models.DateField(verbose_name="统计日期")
+    total_indexed = models.IntegerField(default=0, verbose_name="总收录量")
+    seo_traffic = models.IntegerField(default=0, verbose_name="SEO流量")
+    avg_ranking = models.FloatField(default=0.0, verbose_name="平均排名")
+    backlink_count = models.IntegerField(default=0, verbose_name="外链数量")
+    request_count = models.IntegerField(default=0, verbose_name="请求计数（用于控制GSC调用频率）")
+    last_gsc_update = models.DateTimeField(blank=True, null=True, verbose_name="最后一次GSC更新时间")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+    
+    class Meta:
+        db_table = 't_seo_dashboard_stats'
+        verbose_name = 'SEO数据分析仪表'
+        verbose_name_plural = 'SEO数据分析仪表'
+        ordering = ['-stat_date']
+        indexes = [
+            models.Index(fields=['site_url', '-stat_date']),
+            models.Index(fields=['-stat_date']),
+        ]
+        # 联合唯一索引：同一网站+日期只能有一条记录
+        unique_together = ('site_url', 'stat_date')
+    
+    def __str__(self):
+        return f"{self.site_url} - {self.stat_date} SEO统计数据"
