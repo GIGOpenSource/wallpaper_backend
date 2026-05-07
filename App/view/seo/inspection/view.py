@@ -190,9 +190,15 @@ class SEOInspectionViewSet(BaseViewSet):
         
         return results
     
-    def _check_indexed_pages(self, site_url, gsc_tool):
+    def _check_indexed_pages(self, site_url, gsc_tool, start_date=None, end_date=None):
         """检查已收录页面数量"""
         try:
+            # 如果未提供日期，使用默认值
+            if not start_date:
+                start_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+            if not end_date:
+                end_date = datetime.now().strftime('%Y-%m-%d')
+            
             # 从SiteConfig表获取sitemap URL
             sitemap_configs = SiteConfig.objects.filter(
                 config_type='sitemap_url',
@@ -211,9 +217,6 @@ class SEOInspectionViewSet(BaseViewSet):
                 )
             
             # 尝试通过GSC API获取搜索分析数据来估算收录情况
-            end_date = datetime.now().strftime('%Y-%m-%d')
-            start_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
-            
             rows = gsc_tool.get_search_analytics(site_url, start_date, end_date, dimensions=['page'])
             
             if rows:
@@ -254,9 +257,15 @@ class SEOInspectionViewSet(BaseViewSet):
                 suggestion=f'检查失败: {str(e)}'
             )
     
-    def _check_discovered_pages(self, site_url, gsc_tool):
+    def _check_discovered_pages(self, site_url, gsc_tool, start_date=None, end_date=None):
         """检查已发现但未收录的页面"""
         try:
+            # 如果未提供日期，使用默认值
+            if not start_date:
+                start_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+            if not end_date:
+                end_date = datetime.now().strftime('%Y-%m-%d')
+            
             # GSC API不直接提供此数据，需要从索引覆盖率报告中获取
             # 这里使用估算方法
             
@@ -270,8 +279,6 @@ class SEOInspectionViewSet(BaseViewSet):
             total_pages = len(sitemap_configs) * 100 if sitemap_configs else 0  # 每个sitemap估算100页
             
             # 获取已收录页面数
-            end_date = datetime.now().strftime('%Y-%m-%d')
-            start_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
             rows = gsc_tool.get_search_analytics(site_url, start_date, end_date, dimensions=['page'])
             indexed_count = len(rows) if rows else 0
             
@@ -307,14 +314,17 @@ class SEOInspectionViewSet(BaseViewSet):
                 suggestion=f'检查失败: {str(e)}'
             )
     
-    def _check_googlebot_crawls(self, site_url, gsc_tool):
+    def _check_googlebot_crawls(self, site_url, gsc_tool, start_date=None, end_date=None):
         """检查Googlebot每日爬取次数"""
         try:
+            # 如果未提供日期，使用默认值
+            if not start_date:
+                start_date = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
+            if not end_date:
+                end_date = datetime.now().strftime('%Y-%m-%d')
+            
             # GSC API不直接提供爬取次数，需要通过其他方式估算
             # 这里使用过去7天的点击和曝光数据来估算活跃度
-            
-            end_date = datetime.now().strftime('%Y-%m-%d')
-            start_date = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
             
             rows = gsc_tool.get_search_analytics(site_url, start_date, end_date)
             
@@ -479,15 +489,22 @@ class SEOInspectionViewSet(BaseViewSet):
                 suggestion=f'检查失败: {str(e)}'
             )
     
-    def _check_google_penalties(self, site_url):
+    def _check_google_penalties(self, site_url, start_date=None, end_date=None):
         """检查Google惩罚"""
         try:
+            # 如果未提供日期，使用默认值
+            if not start_date:
+                start_date_30 = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+            else:
+                start_date_30 = start_date
+                
+            if not end_date:
+                end_date = datetime.now().strftime('%Y-%m-%d')
+            
             # Google不提供直接的惩罚检测API
             # 这里通过一些指标间接判断
             
-            end_date = datetime.now().strftime('%Y-%m-%d')
-            start_date_30 = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
-            start_date_60 = (datetime.now() - timedelta(days=60)).strftime('%Y-%m-%d')
+            start_date_60 = (datetime.strptime(start_date_30, '%Y-%m-%d') - timedelta(days=30)).strftime('%Y-%m-%d')
             
             # 比较最近30天和前30天的流量变化
             recent_rows = GoogleSearchConsoleTool().get_search_analytics(
@@ -541,6 +558,7 @@ class SEOInspectionViewSet(BaseViewSet):
                                    status, current_value, threshold, suggestion):
         """保存或更新巡查结果"""
         try:
+            from django.utils import timezone
             inspection, created = SEOInspection.objects.update_or_create(
                 site_url=site_url,
                 inspection_item=inspection_item,
@@ -550,7 +568,7 @@ class SEOInspectionViewSet(BaseViewSet):
                     'current_value': current_value,
                     'threshold': threshold,
                     'suggestion': suggestion,
-                    'inspected_at': datetime.now()
+                    'inspected_at': timezone.now()
                 }
             )
             

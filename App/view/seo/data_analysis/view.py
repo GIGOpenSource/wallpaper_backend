@@ -31,7 +31,7 @@ class SEODashboardStatsViewSet(ViewSet):
     """
     permission_classes = [IsAdmin]
     
-    GSC_CALL_THRESHOLD = 1  # GSC调用阈值：每10次请求调用一次
+    GSC_CALL_THRESHOLD = 3  # GSC调用阈值：每10次请求调用一次
 
     @extend_schema(
         summary="SEO数据分析（智能缓存）",
