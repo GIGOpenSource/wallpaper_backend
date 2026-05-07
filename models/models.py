@@ -965,7 +965,7 @@ class PageSpeed(models.Model):
     # 资源分析相关字段
     resource_count = models.IntegerField(default=0, verbose_name="资源数量")
     loading_timeline = models.JSONField(blank=True, null=True, verbose_name="加载时间线")
-    optimization_suggestions = models.JSONField(blank=True, null=True, verbose_name="优化建议")
+    optimization_suggestions = models.JSONField(blank=True, null=True, verbose_name="优化建议（兼容旧数据）")
     
     tested_at = models.DateTimeField(auto_now=True, verbose_name="测试时间")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
@@ -975,6 +975,8 @@ class PageSpeed(models.Model):
     page_title = models.CharField(max_length=500, blank=True, null=True, verbose_name="页面标题")
     content_score = models.IntegerField(default=0, verbose_name="内容评分（0-100）")
     word_count = models.IntegerField(default=0, verbose_name="字数")
+    issues = models.JSONField(blank=True, null=True, verbose_name="问题检测")
+    suggestions = models.JSONField(blank=True, null=True, verbose_name="优化建议")
     last_optimized_at = models.DateTimeField(blank=True, null=True, verbose_name="最后优化时间")
 
     class Meta:

@@ -16,13 +16,14 @@ def analyze_page_content(page_path, platform='page'):
     分析页面内容
     :param page_path: 页面路径，如 /markwallpapers/search
     :param platform: 平台类型，page(桌面端)/phone(手机)/pad(平板)
-    :return: dict containing page_title, content_score, word_count, optimization_suggestions
+    :return: dict containing page_title, content_score, word_count, issues, suggestions
     """
     result = {
         'page_title': '',
         'content_score': 0,
         'word_count': 0,
-        'optimization_suggestions': ''
+        'issues': [],  # 问题检测
+        'suggestions': []  # 优化建议
     }
     
     try:
@@ -90,19 +91,25 @@ def _call_content_analysis_api(url, platform='page'):
                 try:
                     optimization_suggestions = json.loads(optimization_suggestions)
                 except:
-                    # 如果转换失败，将字符串包装为单个建议
-                    optimization_suggestions = [{
-                        "type": "general",
-                        "title": "优化建议",
-                        "savings": 0,
-                        "description": optimization_suggestions
-                    }]
+                    optimization_suggestions = []
+            
+            # 将建议分为问题和优化建议两类
+            issues = []
+            suggestions = []
+            
+            for item in optimization_suggestions:
+                # 如果有severity字段，归类为问题；否则归类为建议
+                if 'severity' in item:
+                    issues.append(item)
+                else:
+                    suggestions.append(item)
             
             return {
                 'page_title': data.get('page_title', ''),
                 'content_score': data.get('content_score', 0),
                 'word_count': data.get('word_count', 0),
-                'optimization_suggestions': optimization_suggestions
+                'issues': issues,
+                'suggestions': suggestions
             }
         else:
             logger.error(f"内容分析API请求失败: {response.status_code}")
@@ -143,89 +150,93 @@ def _mock_content_analysis(page_path, platform='page'):
     # 字数 (200-2000字)
     word_count = 200 + (hash_value % 1800)
     
-    # 优化建议（结构化JSON格式）
-    suggestions = []
+    # 问题检测（issues）- 带有severity字段
+    issues = []
     
     if content_score < 70:
-        suggestions.append({
+        issues.append({
             "type": "content_length",
             "title": "内容长度不足",
-            "savings": 0,
-            "description": "增加页面内容长度，建议至少500字以上，有助于提升SEO排名"
+            "severity": "high",
+            "description": "页面内容少于500字，建议增加内容长度以提升SEO排名"
         })
-        suggestions.append({
+        issues.append({
             "type": "title_optimization",
-            "title": "标题优化",
-            "savings": 0,
-            "description": "优化页面标题，使其更具吸引力且包含关键词"
+            "title": "标题需要优化",
+            "severity": "medium",
+            "description": "页面标题不够吸引人或缺少关键词"
         })
-        suggestions.append({
+        issues.append({
             "type": "internal_links",
             "title": "内部链接缺失",
-            "savings": 0,
-            "description": "添加相关的内部链接，提升页面关联性和用户停留时间"
+            "severity": "medium",
+            "description": "缺少相关内部链接，影响页面关联性"
         })
     
     if content_score < 80:
-        suggestions.append({
+        issues.append({
             "type": "image_alt",
             "title": "图片ALT标签缺失",
-            "savings": 0,
-            "description": "优化图片ALT标签，提高可访问性和SEO友好度"
+            "severity": "low",
+            "description": "部分图片缺少ALT标签，影响可访问性"
         })
-        suggestions.append({
+        issues.append({
             "type": "content_structure",
             "title": "段落结构不佳",
-            "savings": 0,
-            "description": "改善段落结构，使用小标题分隔内容，提升可读性"
+            "severity": "low",
+            "description": "内容缺少小标题，可读性较差"
         })
+    
+    # 优化建议（suggestions）- 带有priority字段
+    suggestions = []
     
     if content_score < 90:
         suggestions.append({
             "type": "multimedia",
-            "title": "缺少多媒体内容",
-            "savings": 0,
-            "description": "增加多媒体内容（视频、图表等）提升用户体验和页面停留时间"
+            "title": "添加多媒体内容",
+            "priority": "medium",
+            "description": "增加视频、图表等多媒体内容，提升用户体验和页面停留时间"
         })
         suggestions.append({
             "type": "keyword_density",
-            "title": "关键词密度优化",
-            "savings": 0,
-            "description": "优化关键词密度，保持在2%-5%之间，避免过度优化"
+            "title": "优化关键词密度",
+            "priority": "medium",
+            "description": "调整关键词密度至2%-5%之间，避免过度优化"
         })
     
     if content_score >= 90:
         suggestions.append({
             "type": "content_quality",
-            "title": "内容质量优秀",
-            "savings": 0,
-            "description": "内容质量优秀，保持当前水平，持续产出高质量内容"
+            "title": "保持内容质量",
+            "priority": "low",
+            "description": "当前内容质量优秀，建议持续产出高质量内容"
         })
         suggestions.append({
             "type": "deep_content",
-            "title": "深度内容扩展",
-            "savings": 0,
-            "description": "可以考虑增加更多深度内容，建立行业权威地位"
+            "title": "扩展深度内容",
+            "priority": "low",
+            "description": "可以增加更多深度内容，建立行业权威地位"
         })
     
     # 添加平台特定建议
     if platform in ['phone', 'pad']:
         suggestions.append({
             "type": "mobile_readability",
-            "title": "移动端阅读体验",
-            "savings": 0,
-            "description": "确保内容在移动设备上易于阅读，字体大小适中"
+            "title": "优化移动端阅读体验",
+            "priority": "high",
+            "description": "确保内容在移动设备上易于阅读，调整字体大小和行间距"
         })
         suggestions.append({
             "type": "touch_interaction",
-            "title": "触摸交互优化",
-            "savings": 0,
-            "description": "优化触摸交互元素的大小和间距，提升移动端用户体验"
+            "title": "优化触摸交互",
+            "priority": "medium",
+            "description": "调整触摸交互元素的大小和间距，提升移动端用户体验"
         })
     
     return {
         'page_title': page_title,
         'content_score': content_score,
         'word_count': word_count,
-        'optimization_suggestions': suggestions  # 返回JSON数组格式
+        'issues': issues,  # 问题检测
+        'suggestions': suggestions  # 优化建议
     }

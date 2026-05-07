@@ -23,7 +23,7 @@ class ContentOptimizationSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'page_path', 'platform', 'platform_display', 'full_url',
             'page_title', 'content_score', 'word_count', 'issue_count',
-            'optimization_suggestions', 'last_optimized_at', 'created_at'
+            'issues', 'suggestions', 'last_optimized_at', 'created_at'
         ]
         read_only_fields = ['id', 'full_url', 'platform', 'last_optimized_at', 'created_at']
 
@@ -205,8 +205,9 @@ class ContentOptimizationViewSet(BaseViewSet):
                 'page_title': analysis_result['page_title'],
                 'content_score': analysis_result['content_score'],
                 'word_count': analysis_result['word_count'],
-                'issue_count': analysis_result.get('issue_count', 0),
-                'optimization_suggestions': analysis_result['optimization_suggestions'],
+                'issue_count': len(analysis_result.get('issues', [])),
+                'issues': analysis_result.get('issues', []),
+                'suggestions': analysis_result.get('suggestions', []),
                 'last_optimized_at': datetime.now()
             }
         )
@@ -299,7 +300,9 @@ class ContentOptimizationViewSet(BaseViewSet):
         page_speed.page_title = analysis_result['page_title']
         page_speed.content_score = analysis_result['content_score']
         page_speed.word_count = analysis_result['word_count']
-        page_speed.optimization_suggestions = analysis_result['optimization_suggestions']
+        page_speed.issue_count = len(analysis_result.get('issues', []))
+        page_speed.issues = analysis_result.get('issues', [])
+        page_speed.suggestions = analysis_result.get('suggestions', [])
         page_speed.last_optimized_at = datetime.now()
         page_speed.full_url = full_url
         page_speed.save()
@@ -309,6 +312,170 @@ class ContentOptimizationViewSet(BaseViewSet):
             data=result_serializer.data,
             message="重新分析成功",
             code=200
+        )
+
+    @extend_schema(
+        summary="获取问题检测结果",
+        description="根据ID获取页面问题检测数据",
+        parameters=[
+            OpenApiParameter(name="id", type=int, required=True, description="记录ID")
+        ],
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "integer", "example": 200},
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "type": {"type": "string", "description": "问题类型"},
+                                "title": {"type": "string", "description": "问题标题"},
+                                "severity": {"type": "string", "description": "严重程度：high/medium/low"},
+                                "description": {"type": "string", "description": "详细描述"}
+                            }
+                        }
+                    },
+                    "message": {"type": "string"}
+                }
+            }
+        }
+    )
+    @action(detail=False, methods=['get'], url_path='issues')
+    def get_issues(self, request):
+        """
+        获取问题检测结果
+        - 传入id参数
+        - 返回该记录的问题检测数据
+        """
+        record_id = request.query_params.get('id')
+        
+        if not record_id:
+            return ApiResponse(code=400, message="请提供 id 参数")
+        
+        try:
+            page_speed = PageSpeed.objects.get(id=record_id)
+        except PageSpeed.DoesNotExist:
+            return ApiResponse(code=404, message="记录不存在")
+        
+        return ApiResponse(
+            data=page_speed.issues or [],
+            message="问题检测数据获取成功"
+        )
+
+    @extend_schema(
+        summary="获取优化建议",
+        description="根据ID获取页面优化建议数据",
+        parameters=[
+            OpenApiParameter(name="id", type=int, required=True, description="记录ID")
+        ],
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "integer", "example": 200},
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "type": {"type": "string", "description": "建议类型"},
+                                "title": {"type": "string", "description": "建议标题"},
+                                "priority": {"type": "string", "description": "优先级：high/medium/low"},
+                                "description": {"type": "string", "description": "详细描述"}
+                            }
+                        }
+                    },
+                    "message": {"type": "string"}
+                }
+            }
+        }
+    )
+    @action(detail=False, methods=['get'], url_path='suggestions')
+    def get_suggestions(self, request):
+        """
+        获取优化建议
+        - 传入id参数
+        - 返回该记录的优化建议数据
+        """
+        record_id = request.query_params.get('id')
+        
+        if not record_id:
+            return ApiResponse(code=400, message="请提供 id 参数")
+        
+        try:
+            page_speed = PageSpeed.objects.get(id=record_id)
+        except PageSpeed.DoesNotExist:
+            return ApiResponse(code=404, message="记录不存在")
+        
+        return ApiResponse(
+            data=page_speed.suggestions or [],
+            message="优化建议获取成功"
+        )
+
+    @extend_schema(
+        summary="获取内容分析概览",
+        description="根据ID获取页面内容分析概览（字数统计、内容评分、问题数量、优化检查清单）",
+        parameters=[
+            OpenApiParameter(name="id", type=int, required=True, description="记录ID")
+        ],
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "integer", "example": 200},
+                    "data": {
+                        "type": "object",
+                        "properties": {
+                            "word_count": {"type": "integer", "description": "字数统计"},
+                            "content_score": {"type": "integer", "description": "内容评分"},
+                            "issue_count": {"type": "integer", "description": "问题数量"},
+                            "optimization_checklist": {
+                                "type": "array",
+                                "description": "优化检查清单（即优化建议）",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "type": {"type": "string"},
+                                        "title": {"type": "string"},
+                                        "priority": {"type": "string"},
+                                        "description": {"type": "string"}
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "message": {"type": "string"}
+                }
+            }
+        }
+    )
+    @action(detail=False, methods=['get'], url_path='analysis-overview')
+    def get_analysis_overview(self, request):
+        """
+        获取内容分析概览
+        - 传入id参数
+        - 返回：字数统计、内容评分、问题数量、优化检查清单
+        """
+        record_id = request.query_params.get('id')
+        
+        if not record_id:
+            return ApiResponse(code=400, message="请提供 id 参数")
+        
+        try:
+            page_speed = PageSpeed.objects.get(id=record_id)
+        except PageSpeed.DoesNotExist:
+            return ApiResponse(code=404, message="记录不存在")
+        
+        return ApiResponse(
+            data={
+                'word_count': page_speed.word_count,
+                'content_score': page_speed.content_score,
+                'issue_count': page_speed.issue_count,
+                'optimization_checklist': page_speed.suggestions or []
+            },
+            message="内容分析概览获取成功"
         )
 
     @extend_schema(
@@ -362,9 +529,9 @@ class ContentOptimizationViewSet(BaseViewSet):
         
         # 优化建议总数（统计有优化建议的记录数）
         total_suggestions = queryset.filter(
-            optimization_suggestions__isnull=False
+            suggestions__isnull=False
         ).exclude(
-            optimization_suggestions=''
+            suggestions=[]
         ).count()
         
         return ApiResponse(
