@@ -214,5 +214,9 @@ LOGGING = {
             'handlers': ['console', ],
             'level': 'INFO',
         }
-    },
+    }
 }
+
+# Google PageSpeed Insights API Key
+# 获取地址: https://developers.google.com/speed/docs/insights/v5/get-started
+PAGESPEED_API_KEY = os.getenv('PAGESPEED_API_KEY', 'AIzaSyDDeQ4EI9_isZT63Zp_8m8ZQ7LiUMg-qTw')

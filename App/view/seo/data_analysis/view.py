@@ -31,7 +31,7 @@ class SEODashboardStatsViewSet(ViewSet):
     """
     permission_classes = [IsAdmin]
     
-    GSC_CALL_THRESHOLD = 3  # GSC调用阈值：每10次请求调用一次
+    GSC_CALL_THRESHOLD = 15  # GSC调用阈值：每10次请求调用一次
 
     @extend_schema(
         summary="SEO数据分析（智能缓存）",
@@ -102,9 +102,20 @@ class SEODashboardStatsViewSet(ViewSet):
         elif db_record.request_count >= self.GSC_CALL_THRESHOLD:
             # 达到阈值，需要调用GSC并重置计数
             should_call_gsc = True
+        elif db_record.gsc_data_cache:
+            # 检查缓存的时间范围是否匹配
+            cached_start_date = db_record.gsc_data_cache.get('start_date')
+            cached_end_date = db_record.gsc_data_cache.get('end_date')
+            
+            # 如果时间范围发生变化，需要重新调用GSC
+            if cached_start_date != start_date or cached_end_date != end_date:
+                should_call_gsc = True
+            else:
+                # 使用缓存数据
+                should_call_gsc = False
         else:
-            # 使用缓存数据
-            should_call_gsc = False
+            # 没有缓存数据，需要调用GSC
+            should_call_gsc = True
         
         # 4. 如果需要调用GSC，获取最新数据
         if should_call_gsc:
@@ -152,6 +163,17 @@ class SEODashboardStatsViewSet(ViewSet):
                 total_impressions = sum(item['impressions'] for item in inclusion_trend) if inclusion_trend else 0
                 avg_position = sum(item['position'] for item in inclusion_trend) / len(inclusion_trend) if inclusion_trend else 0
                 
+                # 构建GSC数据缓存对象
+                gsc_cache_data = {
+                    'inclusion_trend': inclusion_trend,
+                    'keyword_rankings': keyword_rankings,
+                    'landing_page_analysis': landing_page_analysis,
+                    'country_data': country_data_simplified,
+                    'traffic_sources': traffic_sources,
+                    'start_date': start_date,
+                    'end_date': end_date
+                }
+                
                 # 创建或更新数据库记录
                 if db_record:
                     # 更新现有记录，重置计数为1
@@ -160,6 +182,7 @@ class SEODashboardStatsViewSet(ViewSet):
                     db_record.avg_ranking = round(avg_position, 2)
                     db_record.request_count = 1
                     db_record.last_gsc_update = timezone.now()
+                    db_record.gsc_data_cache = gsc_cache_data  # 缓存GSC数据
                     db_record.save()
                 else:
                     # 创建新记录
@@ -171,7 +194,8 @@ class SEODashboardStatsViewSet(ViewSet):
                         avg_ranking=round(avg_position, 2),
                         backlink_count=0,  # 外链数量需要从其他API获取，这里默认为0
                         request_count=1,
-                        last_gsc_update=timezone.now()
+                        last_gsc_update=timezone.now(),
+                        gsc_data_cache=gsc_cache_data  # 缓存GSC数据
                     )
                 
                 cache_status = "fresh"
@@ -185,12 +209,20 @@ class SEODashboardStatsViewSet(ViewSet):
             db_record.request_count += 1
             db_record.save()
             
-            # 从数据库构建返回数据（简化版）
-            inclusion_trend = []
-            keyword_rankings = []
-            landing_page_analysis = []
-            country_data_simplified = []
-            traffic_sources = []
+            # 从缓存字段中读取GSC数据
+            if db_record.gsc_data_cache:
+                inclusion_trend = db_record.gsc_data_cache.get('inclusion_trend', [])
+                keyword_rankings = db_record.gsc_data_cache.get('keyword_rankings', [])
+                landing_page_analysis = db_record.gsc_data_cache.get('landing_page_analysis', [])
+                country_data_simplified = db_record.gsc_data_cache.get('country_data', [])
+                traffic_sources = db_record.gsc_data_cache.get('traffic_sources', [])
+            else:
+                # 没有缓存数据
+                inclusion_trend = []
+                keyword_rankings = []
+                landing_page_analysis = []
+                country_data_simplified = []
+                traffic_sources = []
             
             cache_status = "cached"
         
@@ -219,7 +251,7 @@ class SEODashboardStatsViewSet(ViewSet):
             'keyword_rankings': keyword_rankings,
             'landing_page_analysis': landing_page_analysis,
             'country_data': country_data_simplified,
-            'traffic_sources': traffic_sources if should_call_gsc else [],
+            'traffic_sources': traffic_sources,
             'dashboard_stats': {
                 'stat_date': str(db_record.stat_date) if db_record else None,
                 'total_indexed': db_record.total_indexed if db_record else 0,

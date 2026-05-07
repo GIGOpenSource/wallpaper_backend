@@ -928,6 +928,54 @@ class DetectionLog(models.Model):
         return f"[{self.get_category_display()}] {self.content[:50]}..."
 
 
+class InspectionLog(models.Model):
+    """
+    SEO巡查日志表：记录SEO日常巡查的执行日志
+    """
+    CATEGORY_CHOICES = [
+        ('search_crawl', '搜索与抓取'),
+        ('page_quality', '页面质量'),
+        ('security', '安全巡查'),
+        ('performance', '性能巡查'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('success', '成功'),
+        ('failed', '失败'),
+        ('partial', '部分完成'),
+    ]
+    
+    site_url = models.CharField(max_length=500, verbose_name="网站URL")
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, verbose_name="巡查分类")
+    start_date = models.DateField(blank=True, null=True, verbose_name="开始日期")
+    end_date = models.DateField(blank=True, null=True, verbose_name="结束日期")
+    inspected_at = models.DateTimeField(auto_now_add=True, verbose_name="巡查时间")
+    duration = models.IntegerField(null=True, blank=True, verbose_name="耗时(秒)")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='success', verbose_name="状态")
+    inspection_count = models.IntegerField(default=0, verbose_name="检查项数量")
+    error_count = models.IntegerField(default=0, verbose_name="错误数量")
+    warning_count = models.IntegerField(default=0, verbose_name="警告数量")
+    normal_count = models.IntegerField(default=0, verbose_name="正常数量")
+    result_summary = models.TextField(blank=True, null=True, verbose_name="结果摘要")
+    error_message = models.TextField(blank=True, null=True, verbose_name="错误信息")
+    operator = models.CharField(max_length=100, blank=True, null=True, verbose_name="操作人")
+    
+    class Meta:
+        db_table = 't_inspection_log'
+        verbose_name = 'SEO巡查日志'
+        verbose_name_plural = 'SEO巡查日志'
+        ordering = ['-inspected_at']
+        indexes = [
+            models.Index(fields=['site_url']),
+            models.Index(fields=['category']),
+            models.Index(fields=['-inspected_at']),
+            models.Index(fields=['status']),
+        ]
+
+    def __str__(self):
+        return f"[{self.get_category_display()}] {self.site_url} - {self.get_status_display()}"
+
+
 class PageSpeed(models.Model):
     """
     页面速度表：存储页面性能指标数据
@@ -1013,6 +1061,7 @@ class SEODashboardStats(models.Model):
     backlink_count = models.IntegerField(default=0, verbose_name="外链数量")
     request_count = models.IntegerField(default=0, verbose_name="请求计数（用于控制GSC调用频率）")
     last_gsc_update = models.DateTimeField(blank=True, null=True, verbose_name="最后一次GSC更新时间")
+    gsc_data_cache = models.JSONField(blank=True, null=True, verbose_name="GSC数据缓存（关键词排名、着落页、流量来源、收录趋势）")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
     
@@ -1064,8 +1113,16 @@ class SEOInspection(models.Model):
         ('tdk_check', 'TDK完整性检查'),
         ('nofollow_external_links', 'Nofollow外链检测'),
         ('h_tag_structure', 'H标签结构检查'),
-        # 安全巡查类（预留）
-        # 性能巡查类（预留）
+        # 安全巡查类
+        ('dangerous_domain_refs', '危险域名引用检测'),
+        ('low_quality_internal_links', '低质内链检测'),
+        ('page_tampering', '页面篡改检测'),
+        ('malicious_code', '恶意代码检测'),
+        # 性能巡查类
+        ('first_screen_render_blocking', '首屏渲染阻塞检测'),
+        ('first_screen_image_loading', '首屏图片加载检测'),
+        ('avg_response_time', '平均响应时间'),
+        ('fid_first_input_delay', 'FID首次输入延迟'),
     ]
     
     site_url = models.CharField(max_length=500, verbose_name="网站URL")
@@ -1076,6 +1133,8 @@ class SEOInspection(models.Model):
     threshold = models.CharField(max_length=500, blank=True, null=True, verbose_name="阈值")
     suggestion = models.TextField(blank=True, null=True, verbose_name="处理建议")
     problem_urls = models.JSONField(blank=True, null=True, verbose_name="问题URL列表")
+    start_date = models.DateField(blank=True, null=True, verbose_name="开始日期")
+    end_date = models.DateField(blank=True, null=True, verbose_name="结束日期")
     inspected_at = models.DateTimeField(auto_now_add=True, verbose_name="检查时间")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")

@@ -101,7 +101,20 @@ def _scan_with_pagespeed_api(url, platform='page'):
             'strategy': strategy
         }
         
-        response = requests.get(api_url, params=params, timeout=30)
+        # 配置代理（PageSpeed API 需要代理才能访问）
+        import os
+        use_proxy = os.getenv('USE_PROXY', 'false').lower() == 'true'
+        proxies = None
+        if use_proxy:
+            proxies = {
+                'http': os.getenv('HTTP_PROXY', 'http://127.0.0.1:7890'),
+                'https': os.getenv('HTTPS_PROXY', 'http://127.0.0.1:7890')
+            }
+            logger.info(f"PageSpeed API 使用代理: {proxies['http']}")
+        else:
+            logger.info("PageSpeed API 不使用代理")
+        
+        response = requests.get(api_url, params=params, timeout=30, proxies=proxies)
         
         if response.status_code == 200:
             data = response.json()
