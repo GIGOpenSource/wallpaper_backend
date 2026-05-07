@@ -349,7 +349,7 @@ class BacklinkManagementViewSet(BaseViewSet):
     @action(detail=False, methods=['get'], url_path='statistics')
     def statistics(self, request):
         """获取外链统计信息"""
-        total_count = BacklinkManagement.objects.count()
+        total_count = BacklinkManagement.objects.filter(build_status='completed').count()
         active_count = BacklinkManagement.objects.filter(status='active').count()
         inactive_count = BacklinkManagement.objects.filter(status='inactive').count()
         toxic_count = BacklinkManagement.objects.filter(status='toxic').count()
