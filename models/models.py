@@ -1035,12 +1035,13 @@ class SEODashboardStats(models.Model):
 class SEOInspection(models.Model):
     """
     SEO日常巡查表：存储各项SEO检查指标的结果
-    支持分类：搜索与抓取、页面质量、安全巡查
+    支持分类：搜索与抓取、页面质量、安全巡查、性能巡查
     """
     CATEGORY_CHOICES = [
         ('search_crawl', '搜索与抓取'),
         ('page_quality', '页面质量'),
         ('security', '安全巡查'),
+        ('performance', '性能巡查'),
     ]
     
     STATUS_CHOICES = [
@@ -1058,8 +1059,13 @@ class SEOInspection(models.Model):
         ('avg_response_time', 'Avg Response Time'),
         ('sitemap_status', 'Sitemap Status'),
         ('google_penalties', 'Google Penalties'),
-        # 页面质量类（预留）
+        # 页面质量类
+        ('http_status_code', 'HTTP状态码检测'),
+        ('tdk_check', 'TDK完整性检查'),
+        ('nofollow_external_links', 'Nofollow外链检测'),
+        ('h_tag_structure', 'H标签结构检查'),
         # 安全巡查类（预留）
+        # 性能巡查类（预留）
     ]
     
     site_url = models.CharField(max_length=500, verbose_name="网站URL")
@@ -1069,6 +1075,7 @@ class SEOInspection(models.Model):
     current_value = models.CharField(max_length=500, blank=True, null=True, verbose_name="当前值")
     threshold = models.CharField(max_length=500, blank=True, null=True, verbose_name="阈值")
     suggestion = models.TextField(blank=True, null=True, verbose_name="处理建议")
+    problem_urls = models.JSONField(blank=True, null=True, verbose_name="问题URL列表")
     inspected_at = models.DateTimeField(auto_now_add=True, verbose_name="检查时间")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")

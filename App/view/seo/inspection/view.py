@@ -102,6 +102,7 @@ class SEOInspectionViewSet(BaseViewSet):
         执行SEO巡查
         请求体: {
             "site_url": "https://example.com",
+            "category": "search_crawl",  // 可选，分类：search_crawl/page_quality/security/performance
             "start_timestamp": 1712361600,  // 可选，开始时间戳（秒）
             "end_timestamp": 1714953600     // 可选，结束时间戳（秒）
         }
@@ -117,6 +118,9 @@ class SEOInspectionViewSet(BaseViewSet):
         # 确保URL格式正确（末尾加/）
         if not site_url.endswith('/'):
             site_url += '/'
+        
+        # 获取分类参数
+        category = request.data.get('category', 'search_crawl')
         
         # 处理时间戳参数
         start_timestamp = request.data.get('start_timestamp')
@@ -138,12 +142,18 @@ class SEOInspectionViewSet(BaseViewSet):
         try:
             gsc_tool = GoogleSearchConsoleTool()
             
-            # 执行搜索与抓取类检查
-            results = self._run_search_crawl_inspection(site_url, gsc_tool, start_date, end_date)
+            # 根据分类执行不同的检查
+            if category == 'page_quality':
+                results = self._run_page_quality_inspection(site_url, start_date, end_date)
+            elif category == 'search_crawl':
+                results = self._run_search_crawl_inspection(site_url, gsc_tool, start_date, end_date)
+            else:
+                return ApiResponse(code=400, message=f"暂不支持的分类: {category}")
             
             return ApiResponse(
                 data={
                     'site_url': site_url,
+                    'category': category,
                     'start_date': start_date,
                     'end_date': end_date,
                     'inspection_count': len(results),
@@ -189,6 +199,225 @@ class SEOInspectionViewSet(BaseViewSet):
         results.append(penalties_result)
         
         return results
+    
+    def _run_page_quality_inspection(self, site_url, start_date=None, end_date=None):
+        """执行页面质量类检查 - 优化版：一次性获取页面内容"""
+        try:
+            from bs4 import BeautifulSoup
+            from urllib.parse import urlparse
+            
+            # 从SiteConfig获取sitemap URL列表
+            sitemap_configs = SiteConfig.objects.filter(
+                config_type='sitemap_url',
+                is_active=True
+            ).values_list('content', flat=True)
+            
+            if not sitemap_configs:
+                # 所有检查项都返回未配置
+                return [
+                    self._save_or_update_inspection(site_url=site_url, inspection_item=item, category='page_quality',
+                        status='warning', current_value='0', threshold='N/A', suggestion='未配置Sitemap URL', problem_urls=[])
+                    for item in ['http_status_code', 'tdk_check', 'nofollow_external_links', 'h_tag_structure']
+                ]
+            
+            # 一次性遍历所有URL，获取页面内容并在内存中分析
+            site_domain = urlparse(site_url).netloc
+            
+            # 存储所有检测结果
+            error_urls = []  # HTTP错误
+            tdk_issues = []  # TDK问题
+            external_link_issues = []  # 外链问题
+            h_tag_issues = []  # H标签问题
+            
+            total_checked = 0
+            error_404_count = 0
+            error_500_count = 0
+            missing_title = 0
+            missing_desc = 0
+            total_external = 0
+            missing_nofollow = 0
+            multiple_h1 = 0
+            skipped_levels = 0
+            
+            for page_url in sitemap_configs:
+                try:
+                    # 每个URL只请求一次
+                    resp = requests.get(page_url, timeout=10, allow_redirects=True)
+                    total_checked += 1
+                    
+                    # 1. HTTP状态码检测
+                    if resp.status_code == 404:
+                        error_404_count += 1
+                        error_urls.append({'url': page_url, 'status': 404, 'type': '404 Not Found'})
+                    elif resp.status_code >= 500:
+                        error_500_count += 1
+                        error_urls.append({'url': page_url, 'status': resp.status_code, 'type': f'{resp.status_code} Server Error'})
+                    
+                    # 如果状态码正常，继续分析页面内容
+                    if resp.status_code == 200:
+                        soup = BeautifulSoup(resp.text, 'html.parser')
+                        
+                        # 2. TDK检测
+                        title = soup.find('title')
+                        if not title or not title.string or len(title.string.strip()) == 0:
+                            missing_title += 1
+                            tdk_issues.append({'url': page_url, 'issue': 'Missing Title'})
+                        
+                        meta_desc = soup.find('meta', attrs={'name': 'description'})
+                        if not meta_desc or not meta_desc.get('content') or len(meta_desc.get('content', '').strip()) == 0:
+                            missing_desc += 1
+                            tdk_issues.append({'url': page_url, 'issue': 'Missing Description'})
+                        
+                        # 3. Nofollow外链检测
+                        links = soup.find_all('a', href=True)
+                        for link in links:
+                            href = link['href']
+                            if href.startswith(('http://', 'https://')):
+                                link_domain = urlparse(href).netloc
+                                if link_domain and link_domain != site_domain:
+                                    total_external += 1
+                                    rel_attr = link.get('rel', [])
+                                    if isinstance(rel_attr, list):
+                                        rel_str = ' '.join(rel_attr)
+                                    else:
+                                        rel_str = str(rel_attr)
+                                    
+                                    if 'nofollow' not in rel_str.lower():
+                                        missing_nofollow += 1
+                                        external_link_issues.append({
+                                            'url': page_url,
+                                            'external_link': href,
+                                            'issue': 'External link without nofollow'
+                                        })
+                        
+                        # 4. H标签结构检测
+                        h_tags = []
+                        for i in range(1, 7):
+                            tags = soup.find_all(f'h{i}')
+                            for tag in tags:
+                                h_tags.append((i, tag.get_text().strip()))
+                        
+                        h1_count = sum(1 for level, _ in h_tags if level == 1)
+                        if h1_count > 1:
+                            multiple_h1 += 1
+                            h_tag_issues.append({
+                                'url': page_url,
+                                'issue': f'Multiple H1 tags ({h1_count} found)'
+                            })
+                        
+                        if h_tags:
+                            prev_level = 0
+                            for level, text in h_tags:
+                                if level > prev_level + 1 and prev_level > 0:
+                                    skipped_levels += 1
+                                    h_tag_issues.append({
+                                        'url': page_url,
+                                        'issue': f'Skipped heading level: H{prev_level} to H{level}'
+                                    })
+                                    break
+                                prev_level = level
+                                
+                except Exception as e:
+                    error_urls.append({'url': page_url, 'status': 0, 'type': f'Connection Error: {str(e)}'})
+            
+            # 保存4个检查结果
+            results = []
+            
+            # 1. HTTP状态码结果
+            total_errors = error_404_count + error_500_count
+            if total_errors > 0:
+                http_status = 'error'
+                http_suggestion = f'发现{total_errors}个错误页面（404: {error_404_count}, 500+: {error_500_count}）。建议修复或删除这些页面'
+            else:
+                http_status = 'normal'
+                http_suggestion = f'检查了{total_checked}个页面，未发现404或500错误'
+            
+            results.append(self._save_or_update_inspection(
+                site_url=site_url,
+                inspection_item='http_status_code',
+                category='page_quality',
+                status=http_status,
+                current_value=f'{total_errors} errors / {total_checked} pages',
+                threshold='No errors',
+                suggestion=http_suggestion,
+                problem_urls=error_urls[:50]
+            ))
+            
+            # 2. TDK结果
+            total_tdk_issues = missing_title + missing_desc
+            if total_tdk_issues > 0:
+                tdk_status = 'error'
+                tdk_suggestion = f'发现{total_tdk_issues}个TDK问题（缺失Title: {missing_title}, 缺失Description: {missing_desc}）。建议补充完整的TDK信息'
+            else:
+                tdk_status = 'normal'
+                tdk_suggestion = f'检查了{total_checked}个页面，TDK完整'
+            
+            results.append(self._save_or_update_inspection(
+                site_url=site_url,
+                inspection_item='tdk_check',
+                category='page_quality',
+                status=tdk_status,
+                current_value=f'{total_tdk_issues} issues / {total_checked} pages',
+                threshold='Complete TDK',
+                suggestion=tdk_suggestion,
+                problem_urls=tdk_issues[:50]
+            ))
+            
+            # 3. Nofollow外链结果
+            if missing_nofollow > 0:
+                nofollow_status = 'warning'
+                nofollow_suggestion = f'发现{missing_nofollow}个外链未添加nofollow属性（共{total_external}个外链）。建议为所有外链添加rel="nofollow"'
+            else:
+                nofollow_status = 'normal'
+                nofollow_suggestion = f'检查了{total_checked}个页面的{total_external}个外链，均已添加nofollow属性'
+            
+            results.append(self._save_or_update_inspection(
+                site_url=site_url,
+                inspection_item='nofollow_external_links',
+                category='page_quality',
+                status=nofollow_status,
+                current_value=f'{missing_nofollow} issues / {total_external} external links',
+                threshold='All external links have nofollow',
+                suggestion=nofollow_suggestion,
+                problem_urls=external_link_issues[:50]
+            ))
+            
+            # 4. H标签结构结果
+            total_h_issues = multiple_h1 + skipped_levels
+            if total_h_issues > 0:
+                h_status = 'warning'
+                h_suggestion = f'发现{total_h_issues}个H标签结构问题（多个H1: {multiple_h1}, 层级跳跃: {skipped_levels}）。建议保持H标签层级结构合理'
+            else:
+                h_status = 'normal'
+                h_suggestion = f'检查了{total_checked}个页面，H标签结构合理'
+            
+            results.append(self._save_or_update_inspection(
+                site_url=site_url,
+                inspection_item='h_tag_structure',
+                category='page_quality',
+                status=h_status,
+                current_value=f'{total_h_issues} issues / {total_checked} pages',
+                threshold='Proper H tag hierarchy',
+                suggestion=h_suggestion,
+                problem_urls=h_tag_issues[:50]
+            ))
+            
+            return results
+            
+        except ImportError:
+            return [
+                self._save_or_update_inspection(site_url=site_url, inspection_item=item, category='page_quality',
+                    status='error', current_value=None, threshold='N/A', 
+                    suggestion='缺少beautifulsoup4库，请安装: pip install beautifulsoup4', problem_urls=[])
+                for item in ['http_status_code', 'tdk_check', 'nofollow_external_links', 'h_tag_structure']
+            ]
+        except Exception as e:
+            return [
+                self._save_or_update_inspection(site_url=site_url, inspection_item=item, category='page_quality',
+                    status='error', current_value=None, threshold='N/A', 
+                    suggestion=f'检查失败: {str(e)}', problem_urls=[])
+                for item in ['http_status_code', 'tdk_check', 'nofollow_external_links', 'h_tag_structure']
+            ]
     
     def _check_indexed_pages(self, site_url, gsc_tool, start_date=None, end_date=None):
         """检查已收录页面数量"""
@@ -555,7 +784,7 @@ class SEOInspectionViewSet(BaseViewSet):
             )
     
     def _save_or_update_inspection(self, site_url, inspection_item, category, 
-                                   status, current_value, threshold, suggestion):
+                                   status, current_value, threshold, suggestion, problem_urls=None):
         """保存或更新巡查结果"""
         try:
             from django.utils import timezone
@@ -568,6 +797,7 @@ class SEOInspectionViewSet(BaseViewSet):
                     'current_value': current_value,
                     'threshold': threshold,
                     'suggestion': suggestion,
+                    'problem_urls': problem_urls,
                     'inspected_at': timezone.now()
                 }
             )
