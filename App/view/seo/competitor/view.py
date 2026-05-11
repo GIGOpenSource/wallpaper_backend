@@ -461,7 +461,7 @@ class CompetitorViewSet(BaseViewSet):
                         keyword_gaps.append({
                             'keyword': keyword,
                             'our_ranking': round(our_ranking, 1) if our_ranking else None,
-                            'competitor_ranking': round(competitor_ranking, 1) if competitor_ranking else None,
+                            'competitor_ranking': round(competitor_ranking, 1) if competitor_ranking else 0,
                             'search_volume': search_volume,
                             'difficulty': difficulty
                         })
@@ -471,11 +471,11 @@ class CompetitorViewSet(BaseViewSet):
                 
                 return ApiResponse(
                     data={
+                        'results': keyword_gaps,
+                        'total': len(keyword_gaps),
                         'our_site': our_url,
                         'competitor_site': competitor_url,
                         'competitor_name': competitor.name,
-                        'keyword_gaps': keyword_gaps,
-                        'total_gaps': len(keyword_gaps),
                         'note': '使用模拟关键词查询排名'
                     },
                     message=f"找到 {len(keyword_gaps)} 个关键词差距"
@@ -525,7 +525,7 @@ class CompetitorViewSet(BaseViewSet):
                         our_ranking = round(our_keywords[keyword]['position'], 1)
                         our_search_volume = int(our_keywords[keyword].get('impressions', 0))
                     
-                    competitor_ranking = None
+                    competitor_ranking = 0
                     competitor_search_volume = 0
                     difficulty = 0
                     
@@ -553,11 +553,11 @@ class CompetitorViewSet(BaseViewSet):
                 
                 return ApiResponse(
                     data={
+                        'results': keyword_gaps,
+                        'total': len(keyword_gaps),
                         'our_site': our_url,
                         'competitor_site': competitor_url,
                         'competitor_name': competitor.name,
-                        'keyword_gaps': keyword_gaps,
-                        'total_gaps': len(keyword_gaps),
                         'note': '仅使用我方GSC数据，竞争对手数据不可用'
                     },
                     message=f"找到 {len(keyword_gaps)} 个关键词"

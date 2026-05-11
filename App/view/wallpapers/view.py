@@ -655,8 +655,15 @@ class WallpapersViewSet(BaseViewSet):
         if page:
             serializer = WallpapersAdminListSerializer(page, many=True, context=self.get_serializer_context())
             return self.get_paginated_response(serializer.data)
+        
+        # 无分页情况，统一返回格式
         serializer = WallpapersAdminListSerializer(queryset, many=True, context=self.get_serializer_context())
-        return ApiResponse(serializer.data)
+        return ApiResponse(
+            data={
+                'results': serializer.data
+            },
+            message="列表获取成功"
+        )
 
     def _list_for_customer(self, request, customer_id):
         """普通用户列表逻辑：轻量级字段、支持策略排序、点赞/收藏状态"""

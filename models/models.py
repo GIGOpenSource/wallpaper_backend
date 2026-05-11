@@ -1189,3 +1189,57 @@ class Competitor(models.Model):
     
     def __str__(self):
         return f"{self.name} ({self.url})"
+
+
+class TrackEvent(models.Model):
+    """
+    埋点事件原始数据表
+    只做数据记录，不做统计和清洗
+    """
+    EVENT_TYPE_CHOICES = [
+        ('page_view', '页面浏览'),
+        ('click', '点击事件'),
+        ('scroll', '滚动事件'),
+        ('form_submit', '表单提交'),
+        ('video_play', '视频播放'),
+        ('download', '下载事件'),
+        ('custom', '自定义事件'),
+    ]
+    
+    # 事件基本信息
+    event_type = models.CharField(max_length=50, choices=EVENT_TYPE_CHOICES, verbose_name="事件类型", db_index=True)
+    event_name = models.CharField(max_length=100, blank=True, null=True, verbose_name="事件名称", db_index=True)
+    event_params = models.JSONField(blank=True, null=True, default=dict, verbose_name="事件扩展参数")
+    
+    # 页面信息
+    page_path = models.CharField(max_length=500, blank=True, null=True, verbose_name="页面路径", db_index=True)
+    page_name = models.CharField(max_length=200, blank=True, null=True, verbose_name="页面名称")
+    page_type = models.CharField(max_length=50, blank=True, null=True, verbose_name="页面分类", db_index=True)
+    referrer = models.CharField(max_length=1000, blank=True, null=True, verbose_name="来源地址")
+    
+    # 用户行为
+    stay_time = models.IntegerField(default=0, verbose_name="停留秒数")
+    is_bounce = models.BooleanField(default=False, verbose_name="是否跳出")
+    unique_id = models.CharField(max_length=100, blank=True, null=True, verbose_name="访客唯一标识", db_index=True)
+    
+    # 客户端信息（后端自动获取）
+    client_ip = models.GenericIPAddressField(blank=True, null=True, verbose_name="访客IP", db_index=True)
+    user_agent = models.CharField(max_length=500, blank=True, null=True, verbose_name="客户端UA")
+    
+    # 时间
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间", db_index=True)
+    
+    class Meta:
+        db_table = 't_track_event'
+        verbose_name = '埋点事件'
+        verbose_name_plural = '埋点事件'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['event_type', 'created_at']),
+            models.Index(fields=['page_path', 'created_at']),
+            models.Index(fields=['unique_id', 'created_at']),
+            models.Index(fields=['-created_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.event_type} - {self.page_path or 'N/A'} - {self.created_at}"
