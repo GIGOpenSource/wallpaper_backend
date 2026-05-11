@@ -425,11 +425,15 @@ class CompetitorViewSet(BaseViewSet):
                 our_url, start_date, end_date, dimensions=['query']
             )
             
-            # 获取竞争对手网站的关键词数据（通过GSC，如果配置了多个站点）
-            print(f"🔍 获取竞争对手网站的关键词数据: {competitor_url}")
-            competitor_keywords_data = gsc_tool.get_search_analytics(
-                competitor_url, start_date, end_date, dimensions=['query']
-            )
+            # 尝试获取竞争对手网站的关键词数据（通常会因为权限失败）
+            competitor_keywords_data = None
+            try:
+                competitor_keywords_data = gsc_tool.get_search_analytics(
+                    competitor_url, start_date, end_date, dimensions=['query']
+                )
+            except Exception:
+                # 静默处理，不打印日志
+                competitor_keywords_data = None
             
             if not our_keywords_data and not competitor_keywords_data:
                 # 如果没有真实数据，生成模拟关键词并查询排名
@@ -439,7 +443,7 @@ class CompetitorViewSet(BaseViewSet):
                 # 查询我们网站在这些关键词上的排名
                 our_rankings = self._query_keyword_rankings(gsc_tool, our_url, start_date, end_date, mock_keywords)
                 
-                # 查询竞争对手网站在这些关键词上的排名（如果配置了GSC）
+                # 查询竞争对手网站在这些关键词上的排名（会返回空字典）
                 competitor_rankings = self._query_keyword_rankings(gsc_tool, competitor_url, start_date, end_date, mock_keywords)
                 
                 # 构建关键词差距数据
@@ -489,64 +493,75 @@ class CompetitorViewSet(BaseViewSet):
                         }
                 
                 competitor_keywords = {}
-                for row in competitor_keywords_data or []:
-                    query = row.get('keys', [{}])[0] if isinstance(row.get('keys'), list) else row.get('query', '')
-                    if query:
-                        competitor_keywords[query.lower()] = {
-                            'position': row.get('position', 0),
-                            'clicks': row.get('clicks', 0),
-                            'impressions': row.get('impressions', 0)
-                        }
-            
-            # 找出共同关键词（都在两个网站中有关键词数据）
-            common_keywords = set(our_keywords.keys()) & set(competitor_keywords.keys())
-            
-            # 或者找出竞争对手有但我们没有的关键词（真正的差距）
-            competitor_only_keywords = set(competitor_keywords.keys()) - set(our_keywords.keys())
-            
-            # 合并：共同关键词 + 竞争对手独有的关键词
-            all_gap_keywords = common_keywords | competitor_only_keywords
-            
-            # 构建差距分析结果
-            keyword_gaps = []
-            for keyword in list(all_gap_keywords)[:50]:  # 限制返回50个
-                our_ranking = None
-                if keyword in our_keywords:
-                    our_ranking = round(our_keywords[keyword]['position'], 1)
+                if competitor_keywords_data:
+                    for row in competitor_keywords_data:
+                        query = row.get('keys', [{}])[0] if isinstance(row.get('keys'), list) else row.get('query', '')
+                        if query:
+                            competitor_keywords[query.lower()] = {
+                                'position': row.get('position', 0),
+                                'clicks': row.get('clicks', 0),
+                                'impressions': row.get('impressions', 0)
+                            }
                 
-                competitor_ranking = None
-                search_volume = 0
-                difficulty = 0
+                # 找出共同关键词
+                common_keywords = set(our_keywords.keys()) & set(competitor_keywords.keys())
                 
-                if keyword in competitor_keywords:
-                    competitor_ranking = round(competitor_keywords[keyword]['position'], 1)
-                    # 根据展示次数估算搜索量（简化）
-                    search_volume = int(competitor_keywords[keyword].get('impressions', 0))
-                    # 根据排名和点击率估算难度（简化算法）
-                    ctr = competitor_keywords[keyword].get('clicks', 0) / max(search_volume, 1)
-                    difficulty = min(100, int((1 - ctr) * 100))
+                # 找出我们独有的关键词
+                our_only_keywords = set(our_keywords.keys()) - set(competitor_keywords.keys())
                 
-                keyword_gaps.append({
-                    'keyword': keyword,
-                    'our_ranking': our_ranking,
-                    'competitor_ranking': competitor_ranking,
-                    'search_volume': search_volume,
-                    'difficulty': difficulty
-                })
-            
-            # 按搜索量排序
-            keyword_gaps.sort(key=lambda x: x['search_volume'], reverse=True)
-            
-            return ApiResponse(
-                data={
-                    'our_site': our_url,
-                    'competitor_site': competitor_url,
-                    'competitor_name': competitor.name,
-                    'keyword_gaps': keyword_gaps,
-                    'total_gaps': len(keyword_gaps)
-                },
-                message=f"找到 {len(keyword_gaps)} 个关键词差距"
-            )
+                # 找出竞争对手独有的关键词
+                competitor_only_keywords = set(competitor_keywords.keys()) - set(our_keywords.keys())
+                
+                # 合并所有关键词
+                all_gap_keywords = common_keywords | our_only_keywords | competitor_only_keywords
+                
+                # 构建差距分析结果
+                keyword_gaps = []
+                for keyword in list(all_gap_keywords)[:50]:  # 限制返回50个
+                    our_ranking = None
+                    our_search_volume = 0
+                    
+                    if keyword in our_keywords:
+                        our_ranking = round(our_keywords[keyword]['position'], 1)
+                        our_search_volume = int(our_keywords[keyword].get('impressions', 0))
+                    
+                    competitor_ranking = None
+                    competitor_search_volume = 0
+                    difficulty = 0
+                    
+                    if keyword in competitor_keywords:
+                        competitor_ranking = round(competitor_keywords[keyword]['position'], 1)
+                        competitor_search_volume = int(competitor_keywords[keyword].get('impressions', 0))
+                        # 根据排名和点击率估算难度
+                        ctr = competitor_keywords[keyword].get('clicks', 0) / max(competitor_search_volume, 1)
+                        difficulty = min(100, int((1 - ctr) * 100))
+                    elif our_ranking:
+                        # 只有我们有排名，中等难度
+                        difficulty = 50
+                    
+                    keyword_gaps.append({
+                        'keyword': keyword,
+                        'our_ranking': our_ranking,
+                        'competitor_ranking': competitor_ranking,
+                        'our_search_volume': our_search_volume,
+                        'competitor_search_volume': competitor_search_volume,
+                        'difficulty': difficulty
+                    })
+                
+                # 按我们的搜索量排序
+                keyword_gaps.sort(key=lambda x: x['our_search_volume'], reverse=True)
+                
+                return ApiResponse(
+                    data={
+                        'our_site': our_url,
+                        'competitor_site': competitor_url,
+                        'competitor_name': competitor.name,
+                        'keyword_gaps': keyword_gaps,
+                        'total_gaps': len(keyword_gaps),
+                        'note': '仅使用我方GSC数据，竞争对手数据不可用'
+                    },
+                    message=f"找到 {len(keyword_gaps)} 个关键词"
+                )
             
         except Exception as e:
             import traceback
@@ -596,6 +611,7 @@ class CompetitorViewSet(BaseViewSet):
         """
         查询网站在指定关键词上的排名
         返回: {keyword: position}
+        注意：此方法不会抛出异常，失败时返回空字典
         """
         rankings = {}
         
@@ -615,7 +631,8 @@ class CompetitorViewSet(BaseViewSet):
                     rankings[query.lower()] = row.get('position', 0)
         
         except Exception as e:
-            print(f"⚠️ 查询 {site_url} 关键词排名失败: {e}")
+            # 静默处理异常，不打印日志（避免刷屏）
+            pass
         
         return rankings
     
