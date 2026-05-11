@@ -65,8 +65,8 @@ class InspectionLogSerializer(serializers.ModelSerializer):
             OpenApiParameter(name="site_url", type=str, required=False, description="网站URL"),
             OpenApiParameter(name="category", type=str, required=False, description="分类：search_crawl/page_quality/security/performance"),
             OpenApiParameter(name="status", type=str, required=False, description="状态：normal/warning/error"),
-            OpenApiParameter(name="start_date", type=str, required=False, description="开始日期（YYYY-MM-DD）"),
-            OpenApiParameter(name="end_date", type=str, required=False, description="结束日期（YYYY-MM-DD）"),
+            OpenApiParameter(name="start_timestamp", type=int, required=False, description="开始时间戳（秒），如: 1712361600"),
+            OpenApiParameter(name="end_timestamp", type=int, required=False, description="结束时间戳（秒），如: 1714953600"),
         ],
     ),
     retrieve=extend_schema(
@@ -1505,7 +1505,12 @@ class SEOInspectionViewSet(BaseViewSet):
             
             # 获取该分类的最新检查时间
             latest_inspection = queryset.order_by('-inspected_at').first()
-            latest_check_time = latest_inspection.inspected_at.strftime('%Y-%m-%d %H:%M:%S') if latest_inspection else None
+            if latest_inspection:
+                latest_check_time = latest_inspection.inspected_at.strftime('%Y-%m-%d %H:%M:%S')
+            else:
+                # 如果没有巡查记录，返回当前时间
+                from django.utils import timezone
+                latest_check_time = timezone.now().strftime('%Y-%m-%d %H:%M:%S')
             
             # 统计各状态数量
             normal_count = queryset.filter(status='normal').count()
@@ -1522,12 +1527,21 @@ class SEOInspectionViewSet(BaseViewSet):
         
         # 计算总计
         all_queryset = SEOInspection.objects.filter(site_url=site_url)
+        
+        # 获取总体的最新检查时间
+        latest_all = all_queryset.order_by('-inspected_at').first()
+        if latest_all:
+            check_time = latest_all.inspected_at.strftime('%Y-%m-%d %H:%M:%S')
+        else:
+            from django.utils import timezone
+            check_time = timezone.now().strftime('%Y-%m-%d %H:%M:%S')
+        
         dashboard_data['summary'] = {
             'total_normal': all_queryset.filter(status='normal').count(),
             'total_warning': all_queryset.filter(status='warning').count(),
             'total_error': all_queryset.filter(status='error').count(),
             'total_items': all_queryset.count(),
-            'check_time': all_queryset.order_by('-inspected_at').first().inspected_at.strftime('%Y-%m-%d %H:%M:%S')
+            'check_time': check_time
         }
         
         return ApiResponse(data=dashboard_data, message="巡查看板数据获取成功")
@@ -1535,6 +1549,7 @@ class SEOInspectionViewSet(BaseViewSet):
     @action(detail=False, methods=['get'], name='获取巡查日志列表')
     def inspection_logs(self, request):
         """获取巡查日志列表，支持筛选"""
+        from datetime import datetime
         from tool.utils import CustomPagination
         queryset = InspectionLog.objects.all()
         # 按网站URL筛选
@@ -1549,13 +1564,24 @@ class SEOInspectionViewSet(BaseViewSet):
         status = request.query_params.get('status')
         if status:
             queryset = queryset.filter(status=status)
-        # 按时间范围筛选
-        start_date = request.query_params.get('start_date')
-        end_date = request.query_params.get('end_date')
-        if start_date:
-            queryset = queryset.filter(start_date__gte=start_date)
-        if end_date:
-            queryset = queryset.filter(end_date__lte=end_date)
+        # 按时间范围筛选（使用时间戳）
+        start_timestamp = request.query_params.get('start_timestamp')
+        end_timestamp = request.query_params.get('end_timestamp')
+        
+        if start_timestamp:
+            try:
+                start_dt = datetime.fromtimestamp(int(start_timestamp))
+                queryset = queryset.filter(inspected_at__gte=start_dt)
+            except (ValueError, TypeError, OSError):
+                pass
+        
+        if end_timestamp:
+            try:
+                end_dt = datetime.fromtimestamp(int(end_timestamp))
+                queryset = queryset.filter(inspected_at__lte=end_dt)
+            except (ValueError, TypeError, OSError):
+                pass
+        
         queryset = queryset.order_by('-inspected_at')
         page = self.paginate_queryset(queryset)
         if page is not None:
