@@ -214,7 +214,7 @@ class PageTDKViewSet(BaseViewSet):
     
     @extend_schema(
         summary="导出TDK报告",
-        description="导出所有页面TDK配置为Excel/CSV格式，包含：页面URL、页面类型、Title、Description、Keywords、应用次数等",
+        description="生成TDK报告并返回下载链接，支持CSV和Excel格式",
         parameters=[
             OpenApiParameter(name="export_format", type=str, required=False, description="导出格式：csv或excel，默认csv"),
             OpenApiParameter(name="is_active", type=str, required=False, description="是否只导出启用的：true/false，默认全部"),
@@ -224,21 +224,63 @@ class PageTDKViewSet(BaseViewSet):
     def export_tdk_report(self, request):
         """
         导出TDK报告
-        支持CSV和Excel格式
+        返回下载链接
         
         示例：
         GET /api/seo/tdk/export-tdk-report/?export_format=csv&is_active=true
         GET /api/seo/tdk/export-tdk-report/?export_format=excel
         """
+        # 获取参数
+        export_format = request.query_params.get('export_format', 'csv').lower().strip()
+        is_active = request.query_params.get('is_active')
+        
+        # 验证参数
+        if export_format not in ['csv', 'excel']:
+            return ApiResponse(code=400, message="不支持的导出格式，请使用csv或excel")
+        
+        # 构建查询集
+        queryset = PageTDK.objects.all().order_by('-updated_at')
+        
+        if is_active is not None:
+            queryset = queryset.filter(is_active=is_active.lower() == 'true')
+        
+        # 统计数量
+        count = queryset.count()
+        
+        # 生成下载URL（使用当前请求的host）
+        host = request.get_host()
+        scheme = request.scheme
+        download_url = f"{scheme}://{host}/api/seo/tdk/export-tdk-download/?export_format={export_format}"
+        
+        if is_active is not None:
+            download_url += f"&is_active={is_active}"
+        
+        return ApiResponse(
+            data={
+                'download_url': download_url,
+                'format': export_format,
+                'count': count
+            },
+            message=f"成功导出{count}条数据"
+        )
+    
+    @action(detail=False, methods=['get'], url_path='export-tdk-download', name='下载TDK文件', permission_classes=[])
+    def export_tdk_download(self, request):
+        """
+        下载TDK报告文件（无需认证）
+        直接返回文件流
+        
+        示例：
+        GET /api/seo/tdk/export-tdk-download/?export_format=csv
+        GET /api/seo/tdk/export-tdk-download/?export_format=excel
+        """
         import csv
         import io
         from django.http import HttpResponse
         
-        # 获取参数（使用export_format避免与DRF的format冲突）
+        # 获取参数
         export_format = request.query_params.get('export_format', 'csv').lower().strip()
         is_active = request.query_params.get('is_active')
-        
-        print(f"📊 导出TDK报告 - format={export_format}, is_active={is_active}")
         
         # 构建查询集
         queryset = PageTDK.objects.all().order_by('-updated_at')
@@ -269,7 +311,7 @@ class PageTDKViewSet(BaseViewSet):
             for item in tdk_list:
                 writer.writerow([
                     item['id'],
-                    item['page_type'],  # 使用原始值，不转换
+                    item['page_type'],
                     item['title'] or '',
                     item['description'] or '',
                     item['keywords'] or '',
@@ -284,8 +326,6 @@ class PageTDKViewSet(BaseViewSet):
             # 设置响应
             response = HttpResponse(output.getvalue(), content_type='text/csv; charset=utf-8-sig')
             response['Content-Disposition'] = 'attachment; filename="tdk_report.csv"'
-            response['X-Export-Status'] = 'success'
-            response['X-Export-Message'] = f'导出成功，共{len(tdk_list)}条数据'
             
         elif export_format == 'excel':
             # 生成Excel文件（需要openpyxl库）
@@ -356,16 +396,14 @@ class PageTDKViewSet(BaseViewSet):
                     content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
                 )
                 response['Content-Disposition'] = 'attachment; filename="tdk_report.xlsx"'
-                response['X-Export-Status'] = 'success'
-                response['X-Export-Message'] = f'导出成功，共{len(tdk_list)}条数据'
                 
             except ImportError:
-                return ApiResponse(
-                    code=400,
-                    message="Excel导出需要安装openpyxl库：pip install openpyxl"
+                return HttpResponse(
+                    "Excel导出需要安装openpyxl库：pip install openpyxl",
+                    status=400
                 )
         else:
-            return ApiResponse(code=400, message="不支持的导出格式，请使用csv或excel")
+            return HttpResponse("不支持的导出格式", status=400)
         
         return response
     
