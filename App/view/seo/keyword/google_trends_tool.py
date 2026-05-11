@@ -8,9 +8,12 @@
 @description : Google Trends关键词趋势分析工具
 """
 import os
+import json
 import time
+import requests
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
+from urllib.parse import urlencode
 
 
 class GoogleTrendsTool:
@@ -27,7 +30,16 @@ class GoogleTrendsTool:
     def _get_trend_req(self):
         """懒加载获取TrendReq实例"""
         if self.trend_req is None:
-            self._initialize_pytrends()
+            try:
+                self._initialize_pytrends()
+            except Exception as e:
+                # 如果初始化失败，记录错误并重新抛出
+                raise ConnectionError(f"Google Trends连接失败: {str(e)}")
+        
+        # 再次检查是否成功初始化
+        if self.trend_req is None:
+            raise ConnectionError("Google Trends初始化失败，请检查网络连接或代理配置")
+        
         return self.trend_req
     
     def _initialize_pytrends(self):
@@ -122,7 +134,7 @@ class GoogleTrendsTool:
             # 获取兴趣随时间变化的数据
             interest_over_time_df = trend_req.interest_over_time()
             
-            if interest_over_time_df.empty:
+            if interest_over_time_df is None or interest_over_time_df.empty:
                 return {
                     'timeline_data': [],
                     'averages': {},
@@ -155,9 +167,27 @@ class GoogleTrendsTool:
                 'gprop': gprop or 'web'
             }
             
-        except Exception as e:
+        except KeyError as e:
+            # pytrends解析响应时的常见错误
+            return {
+                'error': f"Google Trends数据解析失败: {str(e)}。可能是关键词无数据或网络连接问题。",
+                'timeline_data': [],
+                'averages': {}
+            }
+        except ConnectionError as e:
+            # 连接错误
             return {
                 'error': str(e),
+                'timeline_data': [],
+                'averages': {}
+            }
+        except Exception as e:
+            # 其他错误
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Google Trends请求失败: {str(e)}", exc_info=True)
+            return {
+                'error': f"Google Trends请求失败: {str(e)}",
                 'timeline_data': [],
                 'averages': {}
             }
@@ -236,9 +266,26 @@ class GoogleTrendsTool:
             
             return result
             
-        except Exception as e:
+        except KeyError as e:
+            return {
+                'error': f"Google Trends数据解析失败: {str(e)}",
+                'keyword': keyword,
+                'top': [],
+                'rising': []
+            }
+        except ConnectionError as e:
             return {
                 'error': str(e),
+                'keyword': keyword,
+                'top': [],
+                'rising': []
+            }
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Google Trends相关查询失败: {str(e)}", exc_info=True)
+            return {
+                'error': f"获取相关查询失败: {str(e)}",
                 'keyword': keyword,
                 'top': [],
                 'rising': []

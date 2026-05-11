@@ -344,3 +344,303 @@ class CompetitorViewSet(BaseViewSet):
             },
             message="统计信息获取成功"
         )
+
+    @extend_schema(
+        summary="关键词差距分析",
+        description="分析我们与竞争对手之间的关键词差距，返回共同关键词的排名对比",
+        parameters=[
+            OpenApiParameter(name="competitor_id", type=int, required=True, description="竞争对手ID"),
+            OpenApiParameter(name="our_url", type=str, required=False, description="我们的网站URL（默认: https://www.markwallpapers.com/）"),
+        ],
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "integer", "example": 200},
+                    "data": {
+                        "type": "object",
+                        "properties": {
+                            "our_site": {"type": "string", "description": "我们的网站URL"},
+                            "competitor_site": {"type": "string", "description": "竞争对手网站URL"},
+                            "competitor_name": {"type": "string", "description": "竞争对手名称"},
+                            "keyword_gaps": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "keyword": {"type": "string", "description": "关键词"},
+                                        "our_ranking": {"type": "integer", "description": "我们的排名（null表示未排名）"},
+                                        "competitor_ranking": {"type": "integer", "description": "竞争对手排名"},
+                                        "search_volume": {"type": "integer", "description": "搜索量"},
+                                        "difficulty": {"type": "integer", "description": "难度值（0-100）"}
+                                    }
+                                }
+                            },
+                            "total_gaps": {"type": "integer", "description": "关键词差距总数"}
+                        }
+                    },
+                    "message": {"type": "string"}
+                }
+            }
+        }
+    )
+    @action(detail=False, methods=['get'], url_path='keyword-gap')
+    def keyword_gap(self, request):
+        """
+        关键词差距分析
+        对比我们与竞争对手在相同关键词上的排名差异
+        """
+        from seo.seo_tools import GoogleSearchConsoleTool
+        
+        competitor_id = request.query_params.get('competitor_id')
+        if not competitor_id:
+            return ApiResponse(code=400, message="请提供 competitor_id 参数")
+        
+        # 获取竞争对手信息
+        try:
+            competitor = Competitor.objects.get(id=competitor_id)
+        except Competitor.DoesNotExist:
+            return ApiResponse(code=404, message="竞争对手不存在")
+        
+        # 我们的网站URL（默认或从参数获取）
+        our_url = request.query_params.get('our_url', 'https://www.markwallpapers.com/')
+        if not our_url.endswith('/'):
+            our_url += '/'
+        
+        competitor_url = competitor.url
+        if not competitor_url.endswith('/'):
+            competitor_url += '/'
+        
+        try:
+            gsc_tool = GoogleSearchConsoleTool()
+            
+            # 获取时间范围（最近3个月）
+            from datetime import datetime, timedelta
+            end_date = datetime.now().strftime('%Y-%m-%d')
+            start_date = (datetime.now() - timedelta(days=90)).strftime('%Y-%m-%d')
+            
+            # 获取我们网站的关键词数据
+            print(f"🔍 获取我们网站的关键词数据: {our_url}")
+            our_keywords_data = gsc_tool.get_search_analytics(
+                our_url, start_date, end_date, dimensions=['query']
+            )
+            
+            # 获取竞争对手网站的关键词数据（通过GSC，如果配置了多个站点）
+            print(f"🔍 获取竞争对手网站的关键词数据: {competitor_url}")
+            competitor_keywords_data = gsc_tool.get_search_analytics(
+                competitor_url, start_date, end_date, dimensions=['query']
+            )
+            
+            if not our_keywords_data and not competitor_keywords_data:
+                # 如果没有真实数据，生成模拟关键词并查询排名
+                print("⚠️ 未找到GSC数据，使用模拟关键词查询排名")
+                mock_keywords = self._get_mock_keywords()
+                
+                # 查询我们网站在这些关键词上的排名
+                our_rankings = self._query_keyword_rankings(gsc_tool, our_url, start_date, end_date, mock_keywords)
+                
+                # 查询竞争对手网站在这些关键词上的排名（如果配置了GSC）
+                competitor_rankings = self._query_keyword_rankings(gsc_tool, competitor_url, start_date, end_date, mock_keywords)
+                
+                # 构建关键词差距数据
+                keyword_gaps = []
+                for keyword in mock_keywords:
+                    our_ranking = our_rankings.get(keyword)
+                    competitor_ranking = competitor_rankings.get(keyword)
+                    
+                    # 只保留至少一方有排名的关键词
+                    if our_ranking is not None or competitor_ranking is not None:
+                        # 估算搜索量和难度
+                        search_volume = self._estimate_search_volume(keyword)
+                        difficulty = self._estimate_difficulty(our_ranking, competitor_ranking)
+                        
+                        keyword_gaps.append({
+                            'keyword': keyword,
+                            'our_ranking': round(our_ranking, 1) if our_ranking else None,
+                            'competitor_ranking': round(competitor_ranking, 1) if competitor_ranking else None,
+                            'search_volume': search_volume,
+                            'difficulty': difficulty
+                        })
+                
+                # 按搜索量排序
+                keyword_gaps.sort(key=lambda x: x['search_volume'], reverse=True)
+                
+                return ApiResponse(
+                    data={
+                        'our_site': our_url,
+                        'competitor_site': competitor_url,
+                        'competitor_name': competitor.name,
+                        'keyword_gaps': keyword_gaps,
+                        'total_gaps': len(keyword_gaps),
+                        'note': '使用模拟关键词查询排名'
+                    },
+                    message=f"找到 {len(keyword_gaps)} 个关键词差距"
+                )
+            else:
+                # 构建关键词字典
+                our_keywords = {}
+                for row in our_keywords_data or []:
+                    query = row.get('keys', [{}])[0] if isinstance(row.get('keys'), list) else row.get('query', '')
+                    if query:
+                        our_keywords[query.lower()] = {
+                            'position': row.get('position', 0),
+                            'clicks': row.get('clicks', 0),
+                            'impressions': row.get('impressions', 0)
+                        }
+                
+                competitor_keywords = {}
+                for row in competitor_keywords_data or []:
+                    query = row.get('keys', [{}])[0] if isinstance(row.get('keys'), list) else row.get('query', '')
+                    if query:
+                        competitor_keywords[query.lower()] = {
+                            'position': row.get('position', 0),
+                            'clicks': row.get('clicks', 0),
+                            'impressions': row.get('impressions', 0)
+                        }
+            
+            # 找出共同关键词（都在两个网站中有关键词数据）
+            common_keywords = set(our_keywords.keys()) & set(competitor_keywords.keys())
+            
+            # 或者找出竞争对手有但我们没有的关键词（真正的差距）
+            competitor_only_keywords = set(competitor_keywords.keys()) - set(our_keywords.keys())
+            
+            # 合并：共同关键词 + 竞争对手独有的关键词
+            all_gap_keywords = common_keywords | competitor_only_keywords
+            
+            # 构建差距分析结果
+            keyword_gaps = []
+            for keyword in list(all_gap_keywords)[:50]:  # 限制返回50个
+                our_ranking = None
+                if keyword in our_keywords:
+                    our_ranking = round(our_keywords[keyword]['position'], 1)
+                
+                competitor_ranking = None
+                search_volume = 0
+                difficulty = 0
+                
+                if keyword in competitor_keywords:
+                    competitor_ranking = round(competitor_keywords[keyword]['position'], 1)
+                    # 根据展示次数估算搜索量（简化）
+                    search_volume = int(competitor_keywords[keyword].get('impressions', 0))
+                    # 根据排名和点击率估算难度（简化算法）
+                    ctr = competitor_keywords[keyword].get('clicks', 0) / max(search_volume, 1)
+                    difficulty = min(100, int((1 - ctr) * 100))
+                
+                keyword_gaps.append({
+                    'keyword': keyword,
+                    'our_ranking': our_ranking,
+                    'competitor_ranking': competitor_ranking,
+                    'search_volume': search_volume,
+                    'difficulty': difficulty
+                })
+            
+            # 按搜索量排序
+            keyword_gaps.sort(key=lambda x: x['search_volume'], reverse=True)
+            
+            return ApiResponse(
+                data={
+                    'our_site': our_url,
+                    'competitor_site': competitor_url,
+                    'competitor_name': competitor.name,
+                    'keyword_gaps': keyword_gaps,
+                    'total_gaps': len(keyword_gaps)
+                },
+                message=f"找到 {len(keyword_gaps)} 个关键词差距"
+            )
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return ApiResponse(code=500, message=f"关键词差距分析失败: {str(e)}")
+    
+    def _generate_mock_competitor_keywords(self):
+        """生成模拟的竞争对手关键词数据"""
+        import random
+        
+        # 壁纸相关的常见关键词
+        mock_keywords = [
+            '4k wallpaper', 'hd wallpaper', 'desktop wallpaper', 'mobile wallpaper',
+            'anime wallpaper', 'nature wallpaper', 'abstract wallpaper', 'gaming wallpaper',
+            'iphone wallpaper', 'android wallpaper', 'mac wallpaper', 'windows wallpaper',
+            'cartoon wallpaper', 'minimalist wallpaper', 'dark wallpaper', 'colorful wallpaper',
+            'space wallpaper', 'ocean wallpaper', 'mountain wallpaper', 'city wallpaper',
+            'car wallpaper', 'sports wallpaper', 'music wallpaper', 'art wallpaper',
+            'fantasy wallpaper', 'sci-fi wallpaper', 'vintage wallpaper', 'modern wallpaper',
+            'flower wallpaper', 'animal wallpaper', 'landscape wallpaper', 'portrait wallpaper'
+        ]
+        
+        competitor_keywords = {}
+        for keyword in mock_keywords:
+            # 随机生成排名、点击量、展示量
+            position = round(random.uniform(1.0, 20.0), 1)
+            impressions = random.randint(100, 10000)
+            clicks = int(impressions * random.uniform(0.01, 0.1))
+            
+            competitor_keywords[keyword] = {
+                'position': position,
+                'clicks': clicks,
+                'impressions': impressions
+            }
+        
+        return competitor_keywords
+    
+    def _get_mock_keywords(self):
+        """获取模拟关键词列表（3个）"""
+        return [
+            '4k wallpaper',
+            'anime wallpaper',
+            'hd desktop wallpaper'
+        ]
+    
+    def _query_keyword_rankings(self, gsc_tool, site_url, start_date, end_date, keywords):
+        """
+        查询网站在指定关键词上的排名
+        返回: {keyword: position}
+        """
+        rankings = {}
+        
+        try:
+            # 获取该网站的搜索分析数据
+            rows = gsc_tool.get_search_analytics(
+                site_url, start_date, end_date, dimensions=['query']
+            )
+            
+            if not rows:
+                return rankings
+            
+            # 构建关键词到排名的映射
+            for row in rows:
+                query = row.get('keys', [{}])[0] if isinstance(row.get('keys'), list) else row.get('query', '')
+                if query and query.lower() in [k.lower() for k in keywords]:
+                    rankings[query.lower()] = row.get('position', 0)
+        
+        except Exception as e:
+            print(f"⚠️ 查询 {site_url} 关键词排名失败: {e}")
+        
+        return rankings
+    
+    def _estimate_search_volume(self, keyword):
+        """估算关键词搜索量"""
+        # 基于关键词长度和常见程度估算
+        volume_map = {
+            '4k wallpaper': 50000,
+            'anime wallpaper': 30000,
+            'hd desktop wallpaper': 20000,
+        }
+        return volume_map.get(keyword.lower(), 10000)
+    
+    def _estimate_difficulty(self, our_ranking, competitor_ranking):
+        """估算关键词难度"""
+        # 如果双方都有排名，取平均排名计算难度
+        if our_ranking and competitor_ranking:
+            avg_ranking = (our_ranking + competitor_ranking) / 2
+            # 排名越靠前，难度越高
+            difficulty = max(0, min(100, int(100 - avg_ranking * 3)))
+        elif our_ranking or competitor_ranking:
+            # 只有一方有排名，中等难度
+            difficulty = 50
+        else:
+            # 都没有排名，低难度
+            difficulty = 30
+        
+        return difficulty

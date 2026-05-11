@@ -216,23 +216,29 @@ class PageTDKViewSet(BaseViewSet):
         summary="导出TDK报告",
         description="导出所有页面TDK配置为Excel/CSV格式，包含：页面URL、页面类型、Title、Description、Keywords、应用次数等",
         parameters=[
-            OpenApiParameter(name="format", type=str, required=False, description="导出格式：csv或excel，默认csv"),
+            OpenApiParameter(name="export_format", type=str, required=False, description="导出格式：csv或excel，默认csv"),
             OpenApiParameter(name="is_active", type=str, required=False, description="是否只导出启用的：true/false，默认全部"),
         ],
     )
-    @action(detail=False, methods=['get'], name='导出TDK报告')
+    @action(detail=False, methods=['get'], url_path='export-tdk-report', name='导出TDK报告')
     def export_tdk_report(self, request):
         """
         导出TDK报告
         支持CSV和Excel格式
+        
+        示例：
+        GET /api/seo/tdk/export-tdk-report/?export_format=csv&is_active=true
+        GET /api/seo/tdk/export-tdk-report/?export_format=excel
         """
         import csv
         import io
         from django.http import HttpResponse
         
-        # 获取参数
-        export_format = request.query_params.get('format', 'csv').lower()
+        # 获取参数（使用export_format避免与DRF的format冲突）
+        export_format = request.query_params.get('export_format', 'csv').lower().strip()
         is_active = request.query_params.get('is_active')
+        
+        print(f"📊 导出TDK报告 - format={export_format}, is_active={is_active}")
         
         # 构建查询集
         queryset = PageTDK.objects.all().order_by('-updated_at')
