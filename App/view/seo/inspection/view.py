@@ -1526,7 +1526,8 @@ class SEOInspectionViewSet(BaseViewSet):
             'total_normal': all_queryset.filter(status='normal').count(),
             'total_warning': all_queryset.filter(status='warning').count(),
             'total_error': all_queryset.filter(status='error').count(),
-            'total_items': all_queryset.count()
+            'total_items': all_queryset.count(),
+            'check_time': all_queryset.order_by('-inspected_at').first().inspected_at.strftime('%Y-%m-%d %H:%M:%S')
         }
         
         return ApiResponse(data=dashboard_data, message="巡查看板数据获取成功")
