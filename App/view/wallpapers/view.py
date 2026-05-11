@@ -805,24 +805,72 @@ class WallpapersViewSet(BaseViewSet):
     def _get_strategy_wallpaper_ids(self, order, platform):
         """获取策略关联的壁纸ID列表"""
         from django.utils import timezone
+        from django.utils.translation import get_language
         from models.models import RecommendStrategy, StrategyWallpaperRelation
         
         now = timezone.now()
+        current_language = get_language()
         matched_strategy = None
+        
+        # 确定平台筛选范围：优先匹配指定平台，其次是 all
         platforms = [platform.lower()] if platform in ['PC', 'PHONE'] else ['all']
-        platforms.append('all')
+        if 'all' not in platforms:
+            platforms.append('all')
         
         for p in set(platforms):
-            strategies = RecommendStrategy.objects.filter(
-                platform=p, strategy_type=order, status='active'
+            # 第一步：优先查询有 apply_area 且匹配当前语言的策略
+            strategies_with_area = RecommendStrategy.objects.filter(
+                platform=p, 
+                strategy_type=order, 
+                status='active',
+                apply_area=current_language
             ).order_by('-priority', '-created_at')
-            for s in strategies:
+            
+            for s in strategies_with_area:
                 if s.start_time and now < s.start_time:
                     continue
                 if s.end_time and now > s.end_time:
                     continue
                 matched_strategy = s
                 break
+            
+            if matched_strategy:
+                break
+                
+            # 第二步：如果没有找到，查询 apply_area 为 global 的策略
+            strategies_global = RecommendStrategy.objects.filter(
+                platform=p, 
+                strategy_type=order, 
+                status='active',
+                apply_area='global'
+            ).order_by('-priority', '-created_at')
+            
+            for s in strategies_global:
+                if s.start_time and now < s.start_time:
+                    continue
+                if s.end_time and now > s.end_time:
+                    continue
+                matched_strategy = s
+                break
+                
+            if matched_strategy:
+                break
+
+            # 第三步：如果还没有找到，去掉 apply_area 限制再查（兼容旧数据或通用策略）
+            strategies_any_area = RecommendStrategy.objects.filter(
+                platform=p, 
+                strategy_type=order, 
+                status='active'
+            ).order_by('-priority', '-created_at')
+            
+            for s in strategies_any_area:
+                if s.start_time and now < s.start_time:
+                    continue
+                if s.end_time and now > s.end_time:
+                    continue
+                matched_strategy = s
+                break
+                
             if matched_strategy:
                 break
         
