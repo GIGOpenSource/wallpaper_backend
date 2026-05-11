@@ -284,6 +284,8 @@ class PageTDKViewSet(BaseViewSet):
             # 设置响应
             response = HttpResponse(output.getvalue(), content_type='text/csv; charset=utf-8-sig')
             response['Content-Disposition'] = 'attachment; filename="tdk_report.csv"'
+            response['X-Export-Status'] = 'success'
+            response['X-Export-Message'] = f'导出成功，共{len(tdk_list)}条数据'
             
         elif export_format == 'excel':
             # 生成Excel文件（需要openpyxl库）
@@ -354,6 +356,8 @@ class PageTDKViewSet(BaseViewSet):
                     content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
                 )
                 response['Content-Disposition'] = 'attachment; filename="tdk_report.xlsx"'
+                response['X-Export-Status'] = 'success'
+                response['X-Export-Message'] = f'导出成功，共{len(tdk_list)}条数据'
                 
             except ImportError:
                 return ApiResponse(
