@@ -471,7 +471,7 @@ class CompetitorViewSet(BaseViewSet):
                 
                 return ApiResponse(
                     data={
-                        'results': keyword_gaps,
+                        'keyword_gaps': keyword_gaps,
                         'total': len(keyword_gaps),
                         'our_site': our_url,
                         'competitor_site': competitor_url,
@@ -553,7 +553,7 @@ class CompetitorViewSet(BaseViewSet):
                 
                 return ApiResponse(
                     data={
-                        'results': keyword_gaps,
+                        'keyword_gaps': keyword_gaps,
                         'total': len(keyword_gaps),
                         'our_site': our_url,
                         'competitor_site': competitor_url,
