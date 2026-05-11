@@ -7,6 +7,7 @@
 @Date    ：2026/5/11
 @description : Google Trends关键词趋势分析工具
 """
+import os
 import time
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
@@ -21,16 +22,53 @@ class GoogleTrendsTool:
     
     def __init__(self):
         self.trend_req = None
-        self._initialize_pytrends()
+        # 不在初始化时连接，改为懒加载
+    
+    def _get_trend_req(self):
+        """懒加载获取TrendReq实例"""
+        if self.trend_req is None:
+            self._initialize_pytrends()
+        return self.trend_req
     
     def _initialize_pytrends(self):
         """初始化pytrends连接"""
         try:
             from pytrends.request import TrendReq
+            
+            # 从环境变量读取代理配置
+            proxies = {}
+            http_proxy = os.getenv('GOOGLE_TRENDS_PROXY') or os.getenv('HTTP_PROXY')
+            https_proxy = os.getenv('HTTPS_PROXY')
+            
+            if http_proxy:
+                proxies['http'] = http_proxy
+            if https_proxy:
+                proxies['https'] = https_proxy
+            
             # 设置请求间隔，避免被限制
-            self.trend_req = TrendReq(hl='en-US', tz=360)
+            self.trend_req = TrendReq(
+                hl='en-US', 
+                tz=360, 
+                timeout=(5, 10),
+                proxies=proxies if proxies else None
+            )
         except ImportError:
             raise ImportError("请安装pytrends: pip install pytrends")
+        except Exception as e:
+            # 提供更友好的错误提示
+            error_msg = str(e)
+            if '404' in error_msg or 'Connection' in error_msg or 'timeout' in error_msg.lower():
+                raise ConnectionError(
+                    "无法连接到Google Trends。\n"
+                    "可能原因：\n"
+                    "1. 需要科学上网才能访问Google Trends\n"
+                    "2. 网络连接不稳定\n"
+                    "3. Google Trends暂时不可用\n\n"
+                    "建议：\n"
+                    "- 配置代理：在.env文件中添加 GOOGLE_TRENDS_PROXY=http://127.0.0.1:7890\n"
+                    "- 或检查网络连接"
+                )
+            raise
     
     def get_interest_over_time(
         self,
@@ -72,8 +110,9 @@ class GoogleTrendsTool:
             }
         """
         try:
+            trend_req = self._get_trend_req()
             # 构建payload
-            self.trend_req.build_payload(
+            trend_req.build_payload(
                 kw_list=keywords[:5],  # 最多5个关键词
                 geo=geo,
                 timeframe=timeframe,
@@ -81,7 +120,7 @@ class GoogleTrendsTool:
             )
             
             # 获取兴趣随时间变化的数据
-            interest_over_time_df = self.trend_req.interest_over_time()
+            interest_over_time_df = trend_req.interest_over_time()
             
             if interest_over_time_df.empty:
                 return {
@@ -152,7 +191,8 @@ class GoogleTrendsTool:
             }
         """
         try:
-            self.trend_req.build_payload(
+            trend_req = self._get_trend_req()
+            trend_req.build_payload(
                 kw_list=[keyword],
                 geo=geo,
                 timeframe=timeframe,
@@ -160,7 +200,7 @@ class GoogleTrendsTool:
             )
             
             # 获取相关查询
-            related_queries_dict = self.trend_req.related_queries()
+            related_queries_dict = trend_req.related_queries()
             
             result = {
                 'keyword': keyword,
@@ -227,14 +267,15 @@ class GoogleTrendsTool:
             ]
         """
         try:
-            self.trend_req.build_payload(
+            trend_req = self._get_trend_req()
+            trend_req.build_payload(
                 kw_list=keywords[:5],
                 geo=geo,
                 timeframe=timeframe,
                 gprop=gprop
             )
             
-            interest_by_region_df = self.trend_req.interest_by_region(
+            interest_by_region_df = trend_req.interest_by_region(
                 resolution='REGION' if geo else 'COUNTRY'
             )
             
@@ -329,12 +370,13 @@ class GoogleTrendsTool:
             ]
         """
         try:
+            trend_req = self._get_trend_req()
             from pytrends.exceptions import ResponseError
             
-            self.trend_req.build_payload(kw_list=['test'])
+            trend_req.build_payload(kw_list=['test'])
             
             # 获取每日趋势
-            trending_searches_df = self.trend_req.trending_searches(pn=geo)
+            trending_searches_df = trend_req.trending_searches(pn=geo)
             
             if trending_searches_df.empty:
                 return []

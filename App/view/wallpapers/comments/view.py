@@ -450,12 +450,12 @@ class WallpaperCommentViewSet(BaseViewSet):
         """删除评论"""
         instance = self.get_object()
         # 验证是否是自己的评论
-        customer_id = self.get_serializer_context().get('customer_id')
-        is_owner = customer_id and instance.customer_id == int(customer_id)
+        # customer_id = self.get_serializer_context().get('customer_id')
+        # is_owner = customer_id and instance.customer_id == int(customer_id)
         # 2) 管理员删除（后台权限最高）
-        is_admin = IsAdmin().has_permission(request, self)
-        if not (is_owner or is_admin):
-            return ApiResponse(code=403, message="只能删除自己的评论或由管理员删除")
+        # is_admin = IsAdmin().has_permission(request, self)
+        # if not (is_owner or is_admin):
+        #     return ApiResponse(code=403, message="只能删除自己的评论或由管理员删除")
 
         instance.delete()
         return ApiResponse(message="删除成功")

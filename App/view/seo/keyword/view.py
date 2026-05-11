@@ -119,13 +119,25 @@ class KeywordResearchViewSet(BaseViewSet):
             )
             
             if 'error' in result:
-                return ApiResponse(code=500, message=f"获取数据失败: {result['error']}")
+                error_msg = result['error']
+                # 检查是否是连接错误
+                if '无法连接' in error_msg or '科学上网' in error_msg:
+                    return ApiResponse(
+                        code=503, 
+                        message=f"Google Trends服务不可用: {error_msg}"
+                    )
+                return ApiResponse(code=500, message=f"获取数据失败: {error_msg}")
             
             return ApiResponse(
                 data=result,
                 message="获取兴趣趋势成功"
             )
             
+        except ConnectionError as e:
+            return ApiResponse(
+                code=503,
+                message=str(e)
+            )
         except Exception as e:
             return ApiResponse(code=500, message=f"请求失败: {str(e)}")
     
@@ -154,13 +166,18 @@ class KeywordResearchViewSet(BaseViewSet):
             )
             
             if 'error' in result:
-                return ApiResponse(code=500, message=f"获取数据失败: {result['error']}")
+                error_msg = result['error']
+                if '无法连接' in error_msg or '科学上网' in error_msg:
+                    return ApiResponse(code=503, message=f"Google Trends服务不可用: {error_msg}")
+                return ApiResponse(code=500, message=f"获取数据失败: {error_msg}")
             
             return ApiResponse(
                 data=result,
                 message="获取相关查询成功"
             )
             
+        except ConnectionError as e:
+            return ApiResponse(code=503, message=str(e))
         except Exception as e:
             return ApiResponse(code=500, message=f"请求失败: {str(e)}")
     
