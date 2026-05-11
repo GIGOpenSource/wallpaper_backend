@@ -250,10 +250,16 @@ class SEOInspectionViewSet(BaseViewSet):
                     'category': category,
                     'start_date': start_date,
                     'end_date': end_date,
-                    'inspection_count': len(results),
+                    'statistics': {
+                        'total_items': len(results),
+                        'normal_count': normal_count,
+                        'warning_count': warning_count,
+                        'error_count': error_count,
+                        'duration_seconds': duration
+                    },
                     'results': results
                 },
-                message="巡查执行完成"
+                message=f"巡查执行完成！共检查{len(results)}项，{normal_count}个正常，{warning_count}个警告，{error_count}个错误"
             )
         except Exception as e:
             # 记录错误
