@@ -78,7 +78,7 @@ class TrackViewSet(BaseViewSet):
             if not device_type:
                 device_type, _ = self._parse_ua(user_agent)
             
-            # 处理事件时间
+            # 处理事件时间与跳出逻辑
             event_time_str = data.get('event_time')
             event_time = None
             if event_time_str:
@@ -88,18 +88,36 @@ class TrackViewSet(BaseViewSet):
                 except:
                     pass
 
+            # --- 后端自动判定 is_bounce ---
+            is_bounce = False
+            event_name = data.get('event_name', '')
+            page_stay = int(data.get('page_stay', 0) or 0)
+            unique_id = data.get('unique_id')
+            page_path = data.get('page_path')
+
+            if event_name == 'page_hide':
+                # 判定规则：停留时间 < 10秒 视为跳出
+                if page_stay < 10:
+                    is_bounce = True
+            elif event_name == 'page_launch':
+                # launch 事件通常不直接判定跳出，除非是秒开秒关（由后续的 hide 决定）
+                is_bounce = False
+            else:
+                # 其他事件（如 click, search）不改变跳出状态，保持默认或由前端传参决定
+                is_bounce = bool(data.get('is_bounce', False))
+
             # 构建保存数据
             track_data = {
                 'event_type': data.get('event_type', 'custom'),
-                'event_name': data.get('event_name'),
+                'event_name': event_name,
                 'event_params': data.get('event_params', {}),
-                'page_path': data.get('page_path'),
+                'page_path': page_path,
                 'page_name': data.get('page_name'),
                 'page_type': data.get('page_type'),
                 'referer': data.get('referer'),
-                'page_stay': int(data.get('page_stay', 0) or 0),
-                'is_bounce': bool(data.get('is_bounce', False)),
-                'unique_id': data.get('unique_id'),
+                'page_stay': page_stay,
+                'is_bounce': is_bounce,
+                'unique_id': unique_id,
                 'client_ip': client_ip,
                 'user_agent': user_agent,
                 'device_type': device_type,
