@@ -18,19 +18,23 @@ class TrackViewSet(BaseViewSet):
     
     @extend_schema(
         summary="上报埋点数据",
-        description="接收页面浏览和用户事件行为数据，自动记录IP和UA",
+        description="接收页面浏览和用户事件行为数据，自动记录IP和UA（若前端未传）",
         request=None,
         parameters=[
             OpenApiParameter(name="event_type", type=str, required=True, description="事件类型"),
             OpenApiParameter(name="page_path", type=str, required=False, description="页面路径"),
             OpenApiParameter(name="page_name", type=str, required=False, description="页面名称"),
             OpenApiParameter(name="page_type", type=str, required=False, description="页面分类"),
-            OpenApiParameter(name="referrer", type=str, required=False, description="来源地址"),
-            OpenApiParameter(name="stay_time", type=int, required=False, description="停留秒数"),
+            OpenApiParameter(name="referer", type=str, required=False, description="来源地址"),
+            OpenApiParameter(name="page_stay", type=int, required=False, description="停留秒数"),
             OpenApiParameter(name="is_bounce", type=bool, required=False, description="是否跳出"),
             OpenApiParameter(name="unique_id", type=str, required=False, description="访客唯一标识"),
             OpenApiParameter(name="event_name", type=str, required=False, description="事件名称"),
             OpenApiParameter(name="event_params", type=dict, required=False, description="事件扩展参数JSON"),
+            OpenApiParameter(name="device_type", type=str, required=False, description="设备类型（desktop/mobile/tablet）"),
+            OpenApiParameter(name="region", type=str, required=False, description="地区标识（us/ja等）"),
+            OpenApiParameter(name="app_version", type=str, required=False, description="应用版本号"),
+            OpenApiParameter(name="event_time", type=str, required=False, description="事件触发时间 yyyy-MM-dd HH:mm:ss"),
         ],
     )
     @action(detail=False, methods=['post'], url_path='report', name='上报埋点数据', permission_classes=[])
@@ -69,6 +73,21 @@ class TrackViewSet(BaseViewSet):
             client_ip = self._get_client_ip(request)
             user_agent = request.META.get('HTTP_USER_AGENT', '')[:500]
             
+            # 设备类型：优先取前端传的，没有则解析 UA
+            device_type = data.get('device_type')
+            if not device_type:
+                device_type, _ = self._parse_ua(user_agent)
+            
+            # 处理事件时间
+            event_time_str = data.get('event_time')
+            event_time = None
+            if event_time_str:
+                try:
+                    from django.utils.dateparse import parse_datetime
+                    event_time = parse_datetime(event_time_str)
+                except:
+                    pass
+
             # 构建保存数据
             track_data = {
                 'event_type': data.get('event_type', 'custom'),
@@ -77,22 +96,27 @@ class TrackViewSet(BaseViewSet):
                 'page_path': data.get('page_path'),
                 'page_name': data.get('page_name'),
                 'page_type': data.get('page_type'),
-                'referrer': data.get('referrer'),
-                'stay_time': int(data.get('stay_time', 0) or 0),
+                'referer': data.get('referer'),
+                'page_stay': int(data.get('page_stay', 0) or 0),
                 'is_bounce': bool(data.get('is_bounce', False)),
                 'unique_id': data.get('unique_id'),
                 'client_ip': client_ip,
                 'user_agent': user_agent,
+                'device_type': device_type,
+                'browser': data.get('browser') or self._parse_ua(user_agent)[1],
+                'region': data.get('region'),
+                'app_version': data.get('app_version'),
+                'event_time': event_time,
             }
             
             # 直接保存，不做验证
             TrackEvent.objects.create(**track_data)
             
-            return ApiResponse(code=200, msg="ok")
+            return ApiResponse(message="ok")
             
         except Exception as e:
             # 即使出错也返回成功，保证前端不阻塞
-            return ApiResponse(code=200, msg="ok")
+            return ApiResponse(message="ok")
     
     def _get_client_ip(self, request):
         """获取客户端真实IP"""
@@ -103,3 +127,34 @@ class TrackViewSet(BaseViewSet):
         else:
             ip = request.META.get('REMOTE_ADDR')
         return ip[:45]  # 限制长度
+
+    def _parse_ua(self, user_agent):
+        """解析 User-Agent 获取设备类型和浏览器名称"""
+        ua = user_agent.lower() if user_agent else ''
+        device_type = 'desktop'
+        browser = 'unknown'
+
+        # 1. 识别设备类型
+        if 'mobile' in ua or 'android' in ua or 'iphone' in ua:
+            if 'ipad' in ua or 'tablet' in ua:
+                device_type = 'tablet'
+            else:
+                device_type = 'mobile'
+        elif 'harmonyos' in ua:
+            device_type = 'mobile'
+
+        # 2. 识别浏览器/应用
+        if 'micromessenger' in ua:
+            browser = 'wechat'
+        elif 'edg/' in ua:
+            browser = 'edge'
+        elif 'chrome/' in ua and 'edg/' not in ua:
+            browser = 'chrome'
+        elif 'firefox/' in ua:
+            browser = 'firefox'
+        elif 'safari/' in ua and 'chrome/' not in ua:
+            browser = 'safari'
+        elif 'trident/' in ua or 'msie' in ua:
+            browser = 'ie'
+        
+        return device_type, browser

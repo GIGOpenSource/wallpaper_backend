@@ -1191,6 +1191,40 @@ class Competitor(models.Model):
         return f"{self.name} ({self.url})"
 
 
+class PageStats(models.Model):
+    """
+    页面详细统计表：聚合 TrackEvent 数据
+    """
+    page_name = models.CharField(max_length=200, blank=True, null=True, verbose_name="页面名称")
+    page_path = models.CharField(max_length=500, verbose_name="页面路径", db_index=True)
+    page_type = models.CharField(max_length=50, verbose_name="页面类型", db_index=True)
+    device_type = models.CharField(max_length=20, default='all', verbose_name="设备类型", db_index=True)
+    
+    visit_count = models.BigIntegerField(default=0, verbose_name="访问量")
+    avg_stay_time = models.FloatField(default=0.0, verbose_name="平均停留时间(秒)")
+    bounce_rate = models.FloatField(default=0.0, verbose_name="跳出率(%)")
+    seo_score = models.IntegerField(default=0, verbose_name="SEO评分")
+    
+    status = models.SmallIntegerField(default=1, choices=[(1, '正常'), (0, '禁用')], verbose_name="状态")
+    last_updated = models.DateTimeField(auto_now=True, verbose_name="最后更新时间")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+
+    class Meta:
+        db_table = 't_page_stats'
+        verbose_name = '页面统计'
+        verbose_name_plural = '页面统计'
+        ordering = ['-visit_count']
+        indexes = [
+            models.Index(fields=['page_type', 'device_type']),
+            models.Index(fields=['-visit_count']),
+        ]
+        # 联合唯一索引：同一路径+类型+设备只有一条记录
+        unique_together = ('page_path', 'page_type', 'device_type')
+
+    def __str__(self):
+        return f"{self.page_name or self.page_path} [{self.device_type}] - {self.visit_count}次访问"
+
+
 class TrackEvent(models.Model):
     """
     埋点事件原始数据表
@@ -1215,18 +1249,23 @@ class TrackEvent(models.Model):
     page_path = models.CharField(max_length=500, blank=True, null=True, verbose_name="页面路径", db_index=True)
     page_name = models.CharField(max_length=200, blank=True, null=True, verbose_name="页面名称")
     page_type = models.CharField(max_length=50, blank=True, null=True, verbose_name="页面分类", db_index=True)
-    referrer = models.CharField(max_length=1000, blank=True, null=True, verbose_name="来源地址")
+    referer = models.CharField(max_length=1000, blank=True, null=True, verbose_name="来源地址")
     
     # 用户行为
-    stay_time = models.IntegerField(default=0, verbose_name="停留秒数")
+    page_stay = models.IntegerField(default=0, verbose_name="页面停留秒数")
     is_bounce = models.BooleanField(default=False, verbose_name="是否跳出")
     unique_id = models.CharField(max_length=100, blank=True, null=True, verbose_name="访客唯一标识", db_index=True)
     
-    # 客户端信息（后端自动获取）
+    # 客户端与环境信息
     client_ip = models.GenericIPAddressField(blank=True, null=True, verbose_name="访客IP", db_index=True)
-    user_agent = models.CharField(max_length=500, blank=True, null=True, verbose_name="客户端UA")
+    user_agent = models.CharField(max_length=500, blank=True, null=True, verbose_name="原始UA")
+    device_type = models.CharField(max_length=20, blank=True, null=True, verbose_name="设备类型", db_index=True)
+    browser = models.CharField(max_length=50, blank=True, null=True, verbose_name="浏览器名称", db_index=True)
+    region = models.CharField(max_length=20, blank=True, null=True, verbose_name="地区标识", db_index=True)
+    app_version = models.CharField(max_length=20, blank=True, null=True, verbose_name="应用版本号")
     
     # 时间
+    event_time = models.DateTimeField(blank=True, null=True, verbose_name="事件触发时间", db_index=True)
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间", db_index=True)
     
     class Meta:

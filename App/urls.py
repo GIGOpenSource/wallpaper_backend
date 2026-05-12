@@ -19,6 +19,7 @@ from App.view.strategy import urls as strategy
 from App.view.operation_log import urls as operation_log
 from App.view.seo import urls as seo
 from App.view.track import urls as track
+from App.view.page_stats import urls as page_stats
 
 urlpatterns = [
     path('', include(user)),
@@ -31,5 +32,6 @@ urlpatterns = [
     path('operation_log/', include(operation_log)),
     path('seo/', include(seo)),
     path('track/', include(track)),
+    path('page_stats/', include(page_stats)),
 
 ]

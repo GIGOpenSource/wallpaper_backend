@@ -1492,6 +1492,91 @@ class BacklinkMonitorTool:
         return toxic_links
 
 
+class PageSEOAnalyzer:
+    """页面 SEO 评分分析器"""
+    
+    def __init__(self):
+        self.gsc_tool = GoogleSearchConsoleTool()
+        self.base_url = os.getenv('SITE_BASE_URL', 'https://www.markwallpapers.com')
+
+    def calculate_seo_score(self, page_path, days=30):
+        """
+        计算单个页面的 SEO 评分 (0-100)
+        
+        Args:
+            page_path: 页面路径 (如 /markwallpapers/trending)
+            days: GSC 数据查询天数
+            
+        Returns:
+            SEO 评分 (int)
+        """
+        if not self.gsc_tool.service:
+            return 0
+            
+        # 拼接完整 URL
+        full_url = f"{self.base_url}{page_path}"
+        site_url = os.getenv('GSC_SITE_URL', self.base_url + '/')
+        
+        try:
+            end_date = datetime.now().strftime('%Y-%m-%d')
+            start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
+            
+            # 1. 获取 GSC 性能数据
+            rows = self.gsc_tool.get_search_analytics(
+                site_url,
+                start_date,
+                end_date,
+                dimensions=['page']
+            )
+            
+            page_data = None
+            for row in rows:
+                if row['keys'][0] == full_url:
+                    page_data = row
+                    break
+                    
+            score = 50 # 基础分
+            
+            if page_data:
+                clicks = page_data['clicks']
+                impressions = page_data['impressions']
+                ctr = page_data['ctr']
+                position = page_data['position']
+                
+                # 维度 1: 排名表现 (30分)
+                if position <= 3:
+                    score += 30
+                elif position <= 10:
+                    score += 20
+                elif position <= 20:
+                    score += 10
+                    
+                # 维度 2: 点击率表现 (20分)
+                if ctr > 0.10:
+                    score += 20
+                elif ctr > 0.05:
+                    score += 10
+                    
+                # 维度 3: 流量贡献 (20分)
+                if clicks > 100:
+                    score += 20
+                elif clicks > 10:
+                    score += 10
+            else:
+                # 如果没有数据，可能是未收录或无曝光
+                score -= 20
+                
+            # 维度 4: 移动友好性 (30分) - 简化处理，假设大部分现代页面都通过
+            # 实际生产中应调用 PageSpeed API
+            score += 25 
+            
+            return min(100, max(0, score))
+            
+        except Exception as e:
+            print(f"❌ 计算 SEO 评分失败 {page_path}: {e}")
+            return 0
+
+
 gsc_tool = GoogleSearchConsoleTool()
 keyword_tool = KeywordResearchTool()
 backlink_tool = BacklinkMonitorTool()
