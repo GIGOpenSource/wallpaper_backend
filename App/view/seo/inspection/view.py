@@ -1399,13 +1399,18 @@ class SEOInspectionViewSet(BaseViewSet):
     def _save_or_update_inspection(self, site_url, inspection_item, category, 
                                    status, current_value, threshold, suggestion, problem_urls=None,
                                    start_date=None, end_date=None):
-        """保存或更新巡查结果"""
+        """保存巡查结果：同一天、同一网站、同一检查项则覆盖，否则新建"""
         try:
             from django.utils import timezone
+            now = timezone.now()
+            
+            # 关键修改：在筛选条件中加入“当天”的限制
+            # 这样只有当【网站 + 检查项 + 分类 + 当天】都存在时才会更新，否则会创建新记录
             inspection, created = SEOInspection.objects.update_or_create(
                 site_url=site_url,
                 inspection_item=inspection_item,
                 category=category,
+                inspected_at__date=now.date(),  # 匹配当前日期
                 defaults={
                     'status': status,
                     'current_value': current_value,
@@ -1414,7 +1419,7 @@ class SEOInspectionViewSet(BaseViewSet):
                     'problem_urls': problem_urls,
                     'start_date': start_date,
                     'end_date': end_date,
-                    'inspected_at': timezone.now()
+                    'inspected_at': now
                 }
             )
             
