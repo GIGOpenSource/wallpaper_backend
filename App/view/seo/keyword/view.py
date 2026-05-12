@@ -16,6 +16,7 @@ from tool.base_views import BaseViewSet
 from tool.permissions import IsAdmin
 from tool.utils import ApiResponse, CustomPagination
 from .google_trends_tool import GoogleTrendsTool
+from tool.keyword_mining_tool import KeywordMiningTool
 
 
 class KeywordLibrarySerializer(serializers.ModelSerializer):
@@ -129,6 +130,7 @@ class KeywordResearchViewSet(BaseViewSet):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.trends_tool = GoogleTrendsTool()
+        self.mining_tool = KeywordMiningTool()
     
     # ==================== 关键词词库 CRUD ====================
     
@@ -403,3 +405,97 @@ class KeywordResearchViewSet(BaseViewSet):
             
         except Exception as e:
             return ApiResponse(code=500, message=f"请求失败: {str(e)}")
+    
+    # ==================== AI 关键词挖掘接口 ====================
+    
+    @extend_schema(
+        summary="AI 挖掘热门关键词",
+        description="基于种子关键词，使用 AI 挖掘相关的热门关键词",
+        parameters=[
+            OpenApiParameter(name="seed_keyword", type=str, required=True, description="种子关键词"),
+            OpenApiParameter(name="category", type=str, required=False, description="分类：style/theme/device/type", default='style'),
+            OpenApiParameter(name="count", type=int, required=False, description="返回数量（10-20）", default=15),
+        ],
+    )
+    @action(detail=False, methods=['get'], name='AI 挖掘热门关键词')
+    def ai_mine_hot_keywords(self, request):
+        """AI 挖掘热门关键词"""
+        seed_keyword = request.query_params.get('seed_keyword')
+        if not seed_keyword:
+            return ApiResponse(code=400, message="请提供 seed_keyword 参数")
+        
+        category = request.query_params.get('category', 'style')
+        count = int(request.query_params.get('count', 15))
+        
+        # 限制数量范围
+        if count < 10:
+            count = 10
+        elif count > 20:
+            count = 20
+        
+        try:
+            keywords = self.mining_tool.mine_hot_keywords(
+                seed_keyword=seed_keyword,
+                category=category,
+                count=count
+            )
+            
+            return ApiResponse(
+                data={
+                    'seed_keyword': seed_keyword,
+                    'category': category,
+                    'keywords': keywords,
+                    'total': len(keywords)
+                },
+                message=f"成功挖掘 {len(keywords)} 个热门关键词"
+            )
+        except Exception as e:
+            return ApiResponse(code=500, message=f"挖掘失败: {str(e)}")
+    
+    @extend_schema(
+        summary="AI 扩展长尾关键词",
+        description="基于父关键词，使用 AI 扩展相关的长尾关键词，支持词性和修饰词筛选",
+        parameters=[
+            OpenApiParameter(name="parent_keyword", type=str, required=True, description="父关键词（核心词）"),
+            OpenApiParameter(name="pos", type=str, required=False, description="词性：noun(名词)/adjective(形容词)/verb(动词)", default='noun'),
+            OpenApiParameter(name="modifiers", type=str, required=False, description="修饰词，逗号分隔（如：4k,高清,免费,下载）"),
+            OpenApiParameter(name="count", type=int, required=False, description="返回数量（10-20）", default=15),
+        ],
+    )
+    @action(detail=False, methods=['get'], name='AI 扩展长尾关键词')
+    def ai_expand_long_tail(self, request):
+        """AI 扩展长尾关键词"""
+        parent_keyword = request.query_params.get('parent_keyword')
+        if not parent_keyword:
+            return ApiResponse(code=400, message="请提供 parent_keyword 参数")
+        
+        pos = request.query_params.get('pos', 'noun')
+        modifiers = request.query_params.get('modifiers', '')
+        count = int(request.query_params.get('count', 15))
+        
+        # 限制数量范围
+        if count < 10:
+            count = 10
+        elif count > 20:
+            count = 20
+        
+        try:
+            keywords = self.mining_tool.expand_long_tail_keywords(
+                parent_keyword=parent_keyword,
+                pos=pos,
+                modifiers=modifiers,
+                count=count
+            )
+            
+            return ApiResponse(
+                data={
+                    'parent_keyword': parent_keyword,
+                    'pos': pos,
+                    'modifiers': modifiers,
+                    'keywords': keywords,
+                    'total': len(keywords)
+                },
+                message=f"成功扩展 {len(keywords)} 个长尾关键词"
+            )
+        except Exception as e:
+            return ApiResponse(code=500, message=f"扩展失败: {str(e)}")
