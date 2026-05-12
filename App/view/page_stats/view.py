@@ -167,34 +167,39 @@ class PageStatsViewSet(BaseViewSet):
         except Exception as e:
             return ApiResponse(code=500, message=f"删除失败: {str(e)}")
 
+    @extend_schema(
+        summary="页面统计看板",
+        description="获取页面统计核心指标：分端访问量、总页面数、总访问量、平均SEO评分及跳出率",
+        responses={200: {"type": "object"}}
+    )
     @action(detail=False, methods=['get'], url_path='dashboard', name='页面统计看板')
     def dashboard(self, request):
         """获取页面统计看板数据（8个核心指标）"""
         from django.db.models import Sum, Avg, Count, Q
         
-        # 1. 各端访问量统计
-        desktop_visits = PageStats.objects.filter(device_type='desktop').aggregate(total=Sum('visit_count'))['total'] or 0
-        android_visits = PageStats.objects.filter(device_type='mobile', user_agent__icontains='android').aggregate(total=Sum('visit_count'))['total'] or 0
-        ios_visits = PageStats.objects.filter(device_type='mobile', user_agent__icontains='iphone').aggregate(total=Sum('visit_count'))['total'] or 0
-        tablet_visits = PageStats.objects.filter(device_type='tablet').aggregate(total=Sum('visit_count'))['total'] or 0
-        
-        # 注意：由于 PageStats 目前只存了 device_type，如果要精确区分 Android/iOS，
-        # 建议前端传 device_type 时细分，或者我们在 TrackEvent 聚合时存入更细的维度。
-        # 这里暂时按 device_type 分类，如果 mobile 包含安卓和iOS，我们可能需要从原始埋点表 TrackEvent 查更准。
-        
-        # 为了更精准，我们从 TrackEvent 实时聚合一下设备分布（或者优化 PageStats 结构）
-        # 这里采用从 PageStats 快速查询的方式，假设 device_type 已经分得够细
-        # 如果 page_stats 里 mobile 没分安卓/ios，我们这里用 TrackEvent 补一下逻辑：
-        
+        # 1. 基础统计数据（来自 PageStats 聚合表）
         total_pages = PageStats.objects.count()
         total_visits = PageStats.objects.aggregate(total=Sum('visit_count'))['total'] or 0
         avg_seo = PageStats.objects.aggregate(avg=Avg('seo_score'))['avg'] or 0
         avg_bounce = PageStats.objects.aggregate(avg=Avg('bounce_rate'))['avg'] or 0
 
+        # 2. 分端访问量统计（为了精确区分 Android/iOS，直接从 TrackEvent 原始表聚合）
+        # 桌面端
+        desktop_visits = TrackEvent.objects.filter(device_type='desktop').count()
+        # 平板端
+        tablet_visits = TrackEvent.objects.filter(device_type='tablet').count()
+        # 移动端细分：通过 UA 关键字识别
+        android_visits = TrackEvent.objects.filter(
+            device_type='mobile', user_agent__icontains='android'
+        ).count()
+        ios_visits = TrackEvent.objects.filter(
+            device_type='mobile', 
+        ).exclude(user_agent__icontains='android').count() # 简化处理：非安卓的移动设备视为 iOS
+
         return ApiResponse(data={
             'desktop_visits': desktop_visits,
-            'android_visits': android_visits, # 需根据实际存储逻辑调整
-            'ios_visits': ios_visits,         # 需根据实际存储逻辑调整
+            'android_visits': android_visits,
+            'ios_visits': ios_visits,
             'tablet_visits': tablet_visits,
             'total_pages': total_pages,
             'total_visits': total_visits,
