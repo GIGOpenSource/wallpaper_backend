@@ -828,3 +828,58 @@ class KeywordResearchViewSet(BaseViewSet):
             
         except Exception as e:
             return ApiResponse(code=500, message=f"操作失败: {str(e)}")
+    
+    @extend_schema(
+        summary="关键词数据看板",
+        description="获取关键词统计数据：词库总数、长尾词总数、今日新增、已优化数",
+    )
+    @action(detail=False, methods=['get'], name='关键词数据看板')
+    def keyword_dashboard(self, request):
+        """关键词数据看板"""
+        from datetime import datetime, timedelta, timezone as dt_timezone
+        
+        try:
+            # 1. 关键词库总数
+            total_count = KeywordLibrary.objects.count()
+            
+            # 2. 长尾词总数
+            long_tail_count = KeywordLibrary.objects.filter(keyword_type='long_tail').count()
+            
+            # 3. 今日新增（与昨日对比）
+            now_utc = datetime.now(dt_timezone.utc)
+            today_start = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
+            yesterday_start = today_start - timedelta(days=1)
+            
+            # 今日新增数量
+            today_new = KeywordLibrary.objects.filter(
+                created_at__gte=today_start
+            ).count()
+            
+            # 昨日新增数量
+            yesterday_new = KeywordLibrary.objects.filter(
+                created_at__gte=yesterday_start,
+                created_at__lt=today_start
+            ).count()
+            
+            # 计算变化
+            new_change = today_new - yesterday_new
+            new_trend = 'up' if new_change > 0 else ('down' if new_change < 0 else 'stable')
+            
+            # 4. 已优化数（暂时固定为 99）
+            optimized_count = 99
+            
+            return ApiResponse(
+                data={
+                    'total_count': total_count,
+                    'long_tail_count': long_tail_count,
+                    'today_new': today_new,
+                    'yesterday_new': yesterday_new,
+                    'new_change': new_change,
+                    'new_trend': new_trend,
+                    'optimized_count': optimized_count,
+                },
+                message="关键词数据看板获取成功"
+            )
+            
+        except Exception as e:
+            return ApiResponse(code=500, message=f"获取数据失败: {str(e)}")
