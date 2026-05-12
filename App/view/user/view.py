@@ -6,7 +6,7 @@ from rest_framework.decorators import action
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
 from rest_framework.exceptions import ValidationError
 
-from models.models import User, Role
+from models.models import User, Role, CustomerUser
 from tool.base_views import BaseViewSet
 from tool.password_hasher import verify_password
 from tool.permissions import IsTokenValid, IsOwnerOrAdmin, IsAdmin
@@ -238,30 +238,57 @@ class AdminUserUpdateSerializer(serializers.Serializer):
 
 
     def create(self, validated_data):
-        """创建管理员"""
+        """创建用户（根据 role_id 判断是管理员还是C端用户）"""
         from tool.password_hasher import hash_password
         username = validated_data.get('username')
         email = validated_data.get('email')
         password = validated_data.get('password')
         phone = validated_data.get('phone', '')
         role_id = validated_data.get('role_id')
+        
         if not username or not email or not password:
             raise serializers.ValidationError("用户名、邮箱和密码为必填项")
+        
+        # 尝试获取角色，如果不存在则创建 C 端用户
+        role_code = None
+        is_customer = False
+        
+        if role_id:
+            try:
+                role = Role.objects.get(id=role_id, user_type='admin', is_active=True)
+                role_code = role.code
+            except Role.DoesNotExist:
+                # role_id 不存在，说明是 C 端用户
+                is_customer = True
+                role_code = 'customer'
+        else:
+            # 没有传 role_id，默认创建 C 端用户
+            is_customer = True
+            role_code = 'customer'
+        
+        # 如果是 C 端用户，使用 CustomerUser 表
+        if is_customer:
+            # 检查邮箱是否已存在
+            if CustomerUser.objects.filter(email=email).exists():
+                raise serializers.ValidationError("邮箱已存在")
+            
+            # 创建 C 端用户
+            customer_user = CustomerUser.objects.create(
+                email=email,
+                password=password,  # CustomerUser 的 save 方法会自动哈希
+                nickname=username,
+            )
+            return customer_user
+        
+        # 如果是管理员，使用 User 表
         # 检查用户名是否已存在
         if User.objects.filter(username=username).exists():
             raise serializers.ValidationError("用户名已存在")
         # 检查邮箱是否已存在
         if User.objects.filter(email=email).exists():
             raise serializers.ValidationError("邮箱已存在")
-        # 确定角色
-        role_code = 'operator'  # 默认角色
-        if role_id:
-            try:
-                role = Role.objects.get(id=role_id, user_type='admin', is_active=True)
-                role_code = role.code
-            except Role.DoesNotExist:
-                raise serializers.ValidationError(f"角色 ID '{role_id}' 不存在或已禁用")
-        # 创建用户
+        
+        # 创建管理员用户
         user = User.objects.create(
             username=username,
             email=email,
@@ -269,12 +296,15 @@ class AdminUserUpdateSerializer(serializers.Serializer):
             phone=phone,
             role=role_code
         )
+        
+        # 更新角色用户数量统计
         try:
             role = Role.objects.get(code=role_code)
             role.user_count += 1
             role.save(update_fields=['user_count'])
         except Role.DoesNotExist:
             pass
+        
         return user
     def update(self, instance, validated_data):
         """更新管理员（此方法在 ViewSet.update 中手动处理，这里仅作占位）"""
@@ -331,32 +361,51 @@ class AdminUserViewSet(BaseViewSet):
         return queryset.order_by('-created_at')
 
     def create(self, request, *args, **kwargs):
-        """创建管理员"""
+        """创建用户（管理员或C端用户）"""
         try:
             serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             user = serializer.save()
-            role_id = None
-            if user.role:
-                try:
-                    role = Role.objects.get(code=user.role)
-                    role_id = role.id
-                except Role.DoesNotExist:
-                    pass
+            
+            # 判断是哪种类型的用户
+            if isinstance(user, CustomerUser):
+                # C 端用户返回格式
+                return ApiResponse(
+                    data={
+                        'id': user.id,
+                        'email': user.email,
+                        'nickname': user.nickname,
+                        'user_type': 'customer',
+                        'status': user.status,
+                        'created_at': user.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                    },
+                    message="C端用户创建成功",
+                    code=201
+                )
+            else:
+                # 后台管理员返回格式
+                role_id = None
+                if user.role:
+                    try:
+                        role = Role.objects.get(code=user.role)
+                        role_id = role.id
+                    except Role.DoesNotExist:
+                        pass
 
-            return ApiResponse(
-                data={
-                    'id': user.id,
-                    'username': user.username,
-                    'email': user.email,
-                    'phone': user.phone,
-                    'role': user.role,
-                    'role_id':role_id,
-                    'role_display': user.get_role_display(),
-                },
-                message="创建成功",
-                code=201
-            )
+                return ApiResponse(
+                    data={
+                        'id': user.id,
+                        'username': user.username,
+                        'email': user.email,
+                        'phone': user.phone,
+                        'role': user.role,
+                        'role_id': role_id,
+                        'role_display': user.get_role_display(),
+                        'user_type': 'admin',
+                    },
+                    message="管理员创建成功",
+                    code=201
+                )
         except Exception as e:
             return ApiResponse(code=500, message=f"创建失败: {', '.join(e.args)}")
 
