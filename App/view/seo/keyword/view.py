@@ -22,14 +22,15 @@ from tool.keyword_mining_tool import KeywordMiningTool
 class KeywordLibrarySerializer(serializers.ModelSerializer):
     """关键词词库序列化器"""
     category_display = serializers.CharField(source='get_category_display', read_only=True)
+    keyword_type_display = serializers.CharField(source='get_keyword_type_display', read_only=True)
 
     class Meta:
         model = KeywordLibrary
         fields = [
-            'id', 'keyword', 'category', 'category_display',
+            'id', 'keyword', 'keyword_type', 'keyword_type_display', 'category', 'category_display',
             'monthly_search_volume', 'optimization_difficulty', 'cpc',
             'trend', 'competition', 'is_favorite',
-            'long_tail_keywords', 'parent_keyword', 'is_long_tail',
+            'parent_keyword', 'recommendation_score',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
@@ -39,10 +40,11 @@ class KeywordLibrarySerializer(serializers.ModelSerializer):
 @extend_schema_view(
     list=extend_schema(
         summary="获取关键词列表",
-        description="获取关键词词库列表，支持按关键词、分类、收藏状态筛选",
+        description="获取关键词词库列表，支持按关键词、分类、类型、收藏状态筛选",
         parameters=[
             OpenApiParameter(name="keyword", type=str, required=False, description="关键词模糊搜索"),
             OpenApiParameter(name="category", type=str, required=False, description="分类：style/theme/device/type"),
+            OpenApiParameter(name="keyword_type", type=str, required=False, description="类型：core(核心词)/long_tail(长尾词)"),
             OpenApiParameter(name="is_favorite", type=bool, required=False, description="是否收藏"),
         ],
     ),
@@ -139,20 +141,25 @@ class KeywordResearchViewSet(BaseViewSet):
     pagination_class = CustomPagination
     
     def list(self, request, *args, **kwargs):
-        """获取关键词列表，支持筛选"""
+        """获取关键词列表，支持按类型、分类、收藏状态筛选"""
         queryset = KeywordLibrary.objects.all()
         
-        # 按关键词模糊搜索
+        # 1. 按关键词类型筛选（核心逻辑：区分热门、长尾、普通）
+        keyword_type = request.query_params.get('keyword_type')
+        if keyword_type:
+            queryset = queryset.filter(keyword_type=keyword_type)
+        
+        # 2. 按关键词模糊搜索
         keyword = request.query_params.get('keyword')
         if keyword:
             queryset = queryset.filter(keyword__icontains=keyword)
         
-        # 按分类筛选
+        # 3. 按分类筛选
         category = request.query_params.get('category')
         if category:
             queryset = queryset.filter(category=category)
         
-        # 按收藏状态筛选
+        # 4. 按收藏状态筛选
         is_favorite = request.query_params.get('is_favorite')
         if is_favorite is not None:
             queryset = queryset.filter(is_favorite=is_favorite.lower() == 'true')
@@ -419,7 +426,7 @@ class KeywordResearchViewSet(BaseViewSet):
     )
     @action(detail=False, methods=['get'], name='AI 挖掘热门关键词')
     def ai_mine_hot_keywords(self, request):
-        """AI 挖掘热门关键词"""
+        """AI 挖掘热门关键词（挖掘后自动持久化到词库）"""
         seed_keyword = request.query_params.get('seed_keyword')
         if not seed_keyword:
             return ApiResponse(code=400, message="请提供 seed_keyword 参数")
@@ -440,14 +447,33 @@ class KeywordResearchViewSet(BaseViewSet):
                 count=count
             )
             
+            # 核心逻辑：批量持久化
+            saved_count = 0
+            for item in keywords:
+                kw, created = KeywordLibrary.objects.update_or_create(
+                    keyword=item.get('keyword'),
+                    defaults={
+                        'keyword_type': 'hot',  # 标记为热门关键词
+                        'category': item.get('category', category),
+                        'monthly_search_volume': item.get('monthly_search_volume', 0),
+                        'optimization_difficulty': item.get('optimization_difficulty', 0),
+                        'cpc': item.get('cpc', 0),
+                        'trend': item.get('trend', 'stable'),
+                        'competition': item.get('competition', 0),
+                    }
+                )
+                if created:
+                    saved_count += 1
+            
             return ApiResponse(
                 data={
                     'seed_keyword': seed_keyword,
                     'category': category,
                     'keywords': keywords,
-                    'total': len(keywords)
+                    'total': len(keywords),
+                    'saved_to_library': saved_count
                 },
-                message=f"成功挖掘 {len(keywords)} 个热门关键词"
+                message=f"成功挖掘 {len(keywords)} 个热门关键词，其中 {saved_count} 个已新存入词库"
             )
         except Exception as e:
             return ApiResponse(code=500, message=f"挖掘失败: {str(e)}")
@@ -464,7 +490,7 @@ class KeywordResearchViewSet(BaseViewSet):
     )
     @action(detail=False, methods=['get'], name='AI 扩展长尾关键词')
     def ai_expand_long_tail(self, request):
-        """AI 扩展长尾关键词"""
+        """AI 扩展长尾关键词（扩展后自动持久化到词库）"""
         parent_keyword = request.query_params.get('parent_keyword')
         if not parent_keyword:
             return ApiResponse(code=400, message="请提供 parent_keyword 参数")
@@ -487,15 +513,33 @@ class KeywordResearchViewSet(BaseViewSet):
                 count=count
             )
             
+            # 核心逻辑：批量持久化
+            saved_count = 0
+            for item in keywords:
+                kw, created = KeywordLibrary.objects.update_or_create(
+                    keyword=item.get('long_tail_keyword'),
+                    defaults={
+                        'keyword_type': 'long_tail',
+                        'parent_keyword': parent_keyword,
+                        'monthly_search_volume': item.get('monthly_search_volume', 0),
+                        'optimization_difficulty': item.get('optimization_difficulty', 0),
+                        'cpc': item.get('cpc', 0),
+                        'recommendation_score': item.get('recommendation_score', 0),
+                    }
+                )
+                if created:
+                    saved_count += 1
+            
             return ApiResponse(
                 data={
                     'parent_keyword': parent_keyword,
                     'pos': pos,
                     'modifiers': modifiers,
                     'keywords': keywords,
-                    'total': len(keywords)
+                    'total': len(keywords),
+                    'saved_to_library': saved_count
                 },
-                message=f"成功扩展 {len(keywords)} 个长尾关键词"
+                message=f"成功扩展 {len(keywords)} 个长尾关键词，其中 {saved_count} 个已新存入词库"
             )
         except Exception as e:
             return ApiResponse(code=500, message=f"扩展失败: {str(e)}")

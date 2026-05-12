@@ -1295,8 +1295,20 @@ class KeywordLibrary(models.Model):
         ('device', '设备'),
         ('type', '类型'),
     ]
+    
+    KEYWORD_TYPE_CHOICES = [
+        ('hot', '热门关键词'),
+        ('long_tail', '长尾关键词'),
+        ('normal', '普通关键词/词库'),
+    ]
 
     keyword = models.CharField(max_length=200, unique=True, verbose_name="关键词", db_index=True)
+    keyword_type = models.CharField(
+        max_length=20,
+        choices=KEYWORD_TYPE_CHOICES,
+        default='core',
+        verbose_name="关键词类型"
+    )
     category = models.CharField(
         max_length=20,
         choices=KEYWORD_CATEGORY_CHOICES,
@@ -1310,10 +1322,9 @@ class KeywordLibrary(models.Model):
     competition = models.FloatField(default=0.0, verbose_name="竞争度 (0-1)")
     is_favorite = models.BooleanField(default=False, verbose_name="是否收藏")
     
-    # 新增字段
-    long_tail_keywords = models.TextField(blank=True, null=True, verbose_name="长尾关键词（多个用逗号分隔）")
+    # 关联字段：如果是长尾词，记录它的父关键词
     parent_keyword = models.CharField(max_length=200, blank=True, null=True, verbose_name="父关键词")
-    is_long_tail = models.BooleanField(default=False, verbose_name="是否长尾关键词")
+    recommendation_score = models.IntegerField(default=0, verbose_name="推荐度 (0-100)")
     
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
