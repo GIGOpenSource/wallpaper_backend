@@ -1651,26 +1651,37 @@ class SEOInspectionViewSet(BaseViewSet):
 
         # 获取指定日期范围内最近的一条巡查记录
         def get_latest_inspections(timestamp):
-            from datetime import datetime, timedelta
-            dt = datetime.fromtimestamp(timestamp)
-            start_of_day = dt.replace(hour=0, minute=0, second=0, microsecond=0)
-            end_of_day = start_of_day + timedelta(days=1)
+            from datetime import datetime, timedelta, timezone as dt_timezone
             
+            # 将时间戳转换为 UTC 时间的 datetime 对象
+            dt = datetime.fromtimestamp(timestamp, tz=dt_timezone.utc)
+            target_date = dt.date()
+            
+            # 构造当天的 UTC 时间范围
+            start_utc = datetime(target_date.year, target_date.month, target_date.day, tzinfo=dt_timezone.utc)
+            end_utc = start_utc + timedelta(days=1)
+            
+            print(f"[DEBUG] 正在查询 UTC 日期: {target_date}, 范围: {start_utc} 到 {end_utc}")
+
+            # 1. 基础筛选：直接使用 UTC 时间范围比较，避开 Django 的 AT TIME ZONE 转换
             qs = SEOInspection.objects.filter(
                 category=category,
-                inspected_at__gte=start_of_day,
-                inspected_at__lt=end_of_day
+                inspected_at__gte=start_utc,
+                inspected_at__lt=end_utc
             )
             if site_url:
                 qs = qs.filter(site_url=site_url)
             
-            # 按检查时间倒序，取每个 inspection_item 的最新一条
-            # 这里简化处理：先取所有记录，在内存中按 item 分组取最新
-            records = list(qs.order_by('-inspected_at'))
+            # 打印 SQL 用于调试
+            print(f"[DEBUG] 筛选后 SQL: {qs.query}")
+            print(f"[DEBUG] 筛选后记录数: {qs.count()}")
+
+            # 2. 聚合逻辑：按 inspection_item 分组，取每组中 inspected_at 最新的一条
             result_map = {}
-            for rec in records:
+            for rec in qs.order_by('inspection_item', '-inspected_at'):
                 if rec.inspection_item not in result_map:
                     result_map[rec.inspection_item] = rec
+            
             return result_map
 
         data_a = get_latest_inspections(ts_a)
