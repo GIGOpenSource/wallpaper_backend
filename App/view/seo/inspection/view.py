@@ -7,9 +7,12 @@
 @Date    ：2026/5/7
 @description : SEO日常巡查视图
 """
+import csv
+import io
 from datetime import datetime, timedelta
 
 import requests
+from django.http import HttpResponse
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
 from rest_framework import serializers
 from rest_framework.decorators import action
@@ -1552,8 +1555,153 @@ class SEOInspectionViewSet(BaseViewSet):
         
         return ApiResponse(data=dashboard_data, message="巡查看板数据获取成功")
     
-    @action(detail=False, methods=['get'], name='获取巡查日志列表')
-    def inspection_logs(self, request):
+    @extend_schema(
+        summary="导出巡查报告",
+        description="根据分类导出SEO巡查报告为CSV文件",
+        parameters=[
+            OpenApiParameter(name="category", type=str, required=True, description="分类：search_crawl/page_quality/security/performance"),
+            OpenApiParameter(name="site_url", type=str, required=False, description="网站URL，不传则导出所有网站"),
+        ],
+        responses={200: {"type": "string", "format": "binary"}},
+    )
+    @action(detail=False, methods=['get'], url_path='export_report', name='导出巡查报告')
+    def export_report(self, request):
+        """导出巡查报告为CSV文件"""
+        category = request.query_params.get('category')
+        if not category:
+            return ApiResponse(code=400, message="请提供分类参数 (category)")
+        
+        # 验证分类是否合法
+        valid_categories = [choice[0] for choice in SEOInspection.CATEGORY_CHOICES]
+        if category not in valid_categories:
+            return ApiResponse(code=400, message=f"无效的分类。可选值: {', '.join(valid_categories)}")
+        
+        queryset = SEOInspection.objects.filter(category=category)
+        
+        # 按网站URL筛选
+        site_url = request.query_params.get('site_url')
+        if site_url:
+            queryset = queryset.filter(site_url=site_url)
+        
+        queryset = queryset.order_by('-inspected_at')
+        
+        # 创建 CSV 文件
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # 写入表头
+        writer.writerow([
+            'ID', '网站URL', '检查项', '分类', '状态', '当前值', '阈值', '建议', '问题URL数', '开始日期', '结束日期', '检查时间'
+        ])
+        
+        # 写入数据
+        for inspection in queryset:
+            problem_urls_count = len(inspection.problem_urls) if inspection.problem_urls else 0
+            writer.writerow([
+                inspection.id,
+                inspection.site_url,
+                inspection.get_inspection_item_display(),
+                inspection.get_category_display(),
+                inspection.get_status_display(),
+                inspection.current_value or '',
+                inspection.threshold or '',
+                inspection.suggestion or '',
+                problem_urls_count,
+                inspection.start_date or '',
+                inspection.end_date or '',
+                inspection.inspected_at.strftime('%Y-%m-%d %H:%M:%S') if inspection.inspected_at else ''
+            ])
+        
+        # 生成文件名
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"seo_inspection_{category}_{timestamp}.csv"
+        
+        # 返回文件响应
+        response = HttpResponse(output.getvalue(), content_type='text/csv; charset=utf-8')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        return response
+    
+    @extend_schema(
+        summary="巡查结果对比",
+        description="对比两个日期的巡查结果，返回检查项、当前值变化及趋势",
+        parameters=[
+            OpenApiParameter(name="category", type=str, required=True, description="分类：search_crawl/page_quality/security/performance"),
+            OpenApiParameter(name="site_url", type=str, required=False, description="网站URL"),
+            OpenApiParameter(name="date_a", type=str, required=True, description="日期A (YYYY-MM-DD)"),
+            OpenApiParameter(name="date_b", type=str, required=True, description="日期B (YYYY-MM-DD)"),
+        ],
+    )
+    @action(detail=False, methods=['get'], url_path='compare_report', name='巡查结果对比')
+    def compare_report(self, request):
+        """对比两个日期的巡查结果"""
+        category = request.query_params.get('category')
+        site_url = request.query_params.get('site_url')
+        date_a = request.query_params.get('date_a')
+        date_b = request.query_params.get('date_b')
+
+        if not all([category, date_a, date_b]):
+            return ApiResponse(code=400, message="请提供 category, date_a, date_b 参数")
+
+        # 获取两个日期的巡查记录
+        def get_inspections(date_str):
+            qs = SEOInspection.objects.filter(category=category, start_date=date_str)
+            if site_url:
+                qs = qs.filter(site_url=site_url)
+            return {item.inspection_item: item for item in qs}
+
+        data_a = get_inspections(date_a)
+        data_b = get_inspections(date_b)
+
+        # 获取所有出现过的检查项
+        all_items = set(list(data_a.keys()) + list(data_b.keys()))
+        
+        results = []
+        for item_name in all_items:
+            rec_a = data_a.get(item_name)
+            rec_b = data_b.get(item_name)
+
+            val_a = rec_a.current_value if rec_a else None
+            val_b = rec_b.current_value if rec_b else None
+
+            # 简单的数值对比逻辑（尝试提取数字）
+            diff = 0
+            trend = 'stable'
+            
+            try:
+                num_a = float(''.join(filter(lambda x: x.isdigit() or x == '.', str(val_a))) or 0)
+                num_b = float(''.join(filter(lambda x: x.isdigit() or x == '.', str(val_b))) or 0)
+                diff = round(num_b - num_a, 2)
+                
+                if diff > 0:
+                    trend = 'increase'
+                elif diff < 0:
+                    trend = 'decrease'
+                
+                # 针对错误/警告数，增加是变差，减少是改善
+                if 'error' in item_name or 'warning' in item_name or 'issues' in item_name:
+                    if diff > 0: trend = 'worsen'
+                    elif diff < 0: trend = 'improve'
+                else:
+                    # 针对收录数、点击数等，增加是改善
+                    if diff > 0: trend = 'improve'
+                    elif diff < 0: trend = 'worsen'
+            except:
+                diff = 0
+                trend = 'stable'
+
+            results.append({
+                'inspection_item': item_name,
+                'inspection_item_display': rec_a.get_inspection_item_display() if rec_a else item_name,
+                'value_a': val_a,
+                'value_b': val_b,
+                'difference': diff,
+                'trend': trend,
+                'status_a': rec_a.get_status_display() if rec_a else 'N/A',
+                'status_b': rec_b.get_status_display() if rec_b else 'N/A',
+            })
+
+        return ApiResponse(data=results, message="对比报告生成成功")
         """获取巡查日志列表，支持筛选"""
         from datetime import datetime
         from tool.utils import CustomPagination

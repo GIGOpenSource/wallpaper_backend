@@ -61,7 +61,7 @@ def _perform_aggregation():
     try:
         # 1. 获取每个分组的最新 page_name (使用 Subquery 或简单的逻辑)
         # 为了性能，我们先按 path, type, device 分组统计基础数据
-        stats = TrackEvent.objects.values('page_path', 'page_type', 'device_type').annotate(
+        stats = TrackEvent.objects.values('page_path', 'page_type').annotate(
             visit_count=Count('id'),
             avg_stay=Avg('page_stay'),
             bounce_count=Count('id', filter=Q(is_bounce=True))
