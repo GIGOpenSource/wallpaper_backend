@@ -1624,34 +1624,57 @@ class SEOInspectionViewSet(BaseViewSet):
     
     @extend_schema(
         summary="巡查结果对比",
-        description="对比两个日期的巡查结果，返回检查项、当前值变化及趋势",
+        description="对比两个时间戳对应的巡查结果，自动获取该日最近的一条记录",
         parameters=[
             OpenApiParameter(name="category", type=str, required=True, description="分类：search_crawl/page_quality/security/performance"),
             OpenApiParameter(name="site_url", type=str, required=False, description="网站URL"),
-            OpenApiParameter(name="date_a", type=str, required=True, description="日期A (YYYY-MM-DD)"),
-            OpenApiParameter(name="date_b", type=str, required=True, description="日期B (YYYY-MM-DD)"),
+            OpenApiParameter(name="timestamp_a", type=int, required=True, description="日期A的时间戳（秒）"),
+            OpenApiParameter(name="timestamp_b", type=int, required=True, description="日期B的时间戳（秒）"),
         ],
     )
     @action(detail=False, methods=['get'], url_path='compare_report', name='巡查结果对比')
     def compare_report(self, request):
-        """对比两个日期的巡查结果"""
+        """对比两个日期的巡查结果（基于 inspected_at 字段）"""
         category = request.query_params.get('category')
         site_url = request.query_params.get('site_url')
-        date_a = request.query_params.get('date_a')
-        date_b = request.query_params.get('date_b')
+        ts_a = request.query_params.get('timestamp_a')
+        ts_b = request.query_params.get('timestamp_b')
 
-        if not all([category, date_a, date_b]):
-            return ApiResponse(code=400, message="请提供 category, date_a, date_b 参数")
+        if not all([category, ts_a, ts_b]):
+            return ApiResponse(code=400, message="请提供 category, timestamp_a, timestamp_b 参数")
 
-        # 获取两个日期的巡查记录
-        def get_inspections(date_str):
-            qs = SEOInspection.objects.filter(category=category, start_date=date_str)
+        try:
+            ts_a = int(ts_a)
+            ts_b = int(ts_b)
+        except ValueError:
+            return ApiResponse(code=400, message="时间戳格式错误")
+
+        # 获取指定日期范围内最近的一条巡查记录
+        def get_latest_inspections(timestamp):
+            from datetime import datetime, timedelta
+            dt = datetime.fromtimestamp(timestamp)
+            start_of_day = dt.replace(hour=0, minute=0, second=0, microsecond=0)
+            end_of_day = start_of_day + timedelta(days=1)
+            
+            qs = SEOInspection.objects.filter(
+                category=category,
+                inspected_at__gte=start_of_day,
+                inspected_at__lt=end_of_day
+            )
             if site_url:
                 qs = qs.filter(site_url=site_url)
-            return {item.inspection_item: item for item in qs}
+            
+            # 按检查时间倒序，取每个 inspection_item 的最新一条
+            # 这里简化处理：先取所有记录，在内存中按 item 分组取最新
+            records = list(qs.order_by('-inspected_at'))
+            result_map = {}
+            for rec in records:
+                if rec.inspection_item not in result_map:
+                    result_map[rec.inspection_item] = rec
+            return result_map
 
-        data_a = get_inspections(date_a)
-        data_b = get_inspections(date_b)
+        data_a = get_latest_inspections(ts_a)
+        data_b = get_latest_inspections(ts_b)
 
         # 获取所有出现过的检查项
         all_items = set(list(data_a.keys()) + list(data_b.keys()))
@@ -1672,11 +1695,6 @@ class SEOInspectionViewSet(BaseViewSet):
                 num_a = float(''.join(filter(lambda x: x.isdigit() or x == '.', str(val_a))) or 0)
                 num_b = float(''.join(filter(lambda x: x.isdigit() or x == '.', str(val_b))) or 0)
                 diff = round(num_b - num_a, 2)
-                
-                if diff > 0:
-                    trend = 'increase'
-                elif diff < 0:
-                    trend = 'decrease'
                 
                 # 针对错误/警告数，增加是变差，减少是改善
                 if 'error' in item_name or 'warning' in item_name or 'issues' in item_name:
@@ -1699,6 +1717,8 @@ class SEOInspectionViewSet(BaseViewSet):
                 'trend': trend,
                 'status_a': rec_a.get_status_display() if rec_a else 'N/A',
                 'status_b': rec_b.get_status_display() if rec_b else 'N/A',
+                'time_a': rec_a.inspected_at.strftime('%Y-%m-%d %H:%M:%S') if rec_a else None,
+                'time_b': rec_b.inspected_at.strftime('%Y-%m-%d %H:%M:%S') if rec_b else None,
             })
 
         return ApiResponse(data=results, message="对比报告生成成功")

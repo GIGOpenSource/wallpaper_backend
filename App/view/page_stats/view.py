@@ -59,9 +59,8 @@ def _trigger_aggregate():
 def _perform_aggregation():
     """执行数据库聚合操作"""
     try:
-        # 1. 获取每个分组的最新 page_name (使用 Subquery 或简单的逻辑)
-        # 为了性能，我们先按 path, type, device 分组统计基础数据
-        stats = TrackEvent.objects.values('page_path', 'page_type').annotate(
+        # 1. 按页面路径、类型和设备分组统计基础数据
+        stats = TrackEvent.objects.values('page_path', 'page_type', 'device_type').annotate(
             visit_count=Count('id'),
             avg_stay=Avg('page_stay'),
             bounce_count=Count('id', filter=Q(is_bounce=True))
@@ -71,7 +70,7 @@ def _perform_aggregation():
             if not item['page_path']:
                 continue
             
-            # 2. 获取该路径下最近一次上报的 page_name
+            # 2. 获取该路径及设备下最近一次上报的 page_name
             latest_event = TrackEvent.objects.filter(
                 page_path=item['page_path'],
                 page_type=item['page_type'],
@@ -83,6 +82,7 @@ def _perform_aggregation():
                 
             bounce_rate = (item['bounce_count'] / item['visit_count'] * 100) if item['visit_count'] > 0 else 0
             
+            # 3. 更新或创建统计数据
             PageStats.objects.update_or_create(
                 page_path=item['page_path'],
                 page_type=item['page_type'] or 'unknown',
