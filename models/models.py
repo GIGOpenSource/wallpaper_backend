@@ -11,6 +11,7 @@ from django.db import models
 from django.utils import timezone
 from tool.password_hasher import hash_password
 
+
 class CustomerUser(models.Model):
     """
     C 端客户账户（邮箱 + 密码），与后台管理员 User 分离。
@@ -1282,3 +1283,46 @@ class TrackEvent(models.Model):
     
     def __str__(self):
         return f"{self.event_type} - {self.page_path or 'N/A'} - {self.created_at}"
+
+
+class KeywordLibrary(models.Model):
+    """
+    关键词词库表
+    """
+    KEYWORD_CATEGORY_CHOICES = [
+        ('style', '风格'),
+        ('theme', '主题'),
+        ('device', '设备'),
+        ('type', '类型'),
+    ]
+
+    keyword = models.CharField(max_length=200, unique=True, verbose_name="关键词", db_index=True)
+    category = models.CharField(
+        max_length=20,
+        choices=KEYWORD_CATEGORY_CHOICES,
+        default='style',
+        verbose_name="分类"
+    )
+    monthly_search_volume = models.IntegerField(default=0, verbose_name="月搜索量")
+    optimization_difficulty = models.FloatField(default=0.0, verbose_name="优化难度 (0-100)")
+    cpc = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="CPC (点击成本)")
+    trend = models.CharField(max_length=20, blank=True, null=True, verbose_name="趋势 (rising/falling/stable)")
+    competition = models.FloatField(default=0.0, verbose_name="竞争度 (0-1)")
+    is_favorite = models.BooleanField(default=False, verbose_name="是否收藏")
+    
+    # 新增字段
+    long_tail_keywords = models.TextField(blank=True, null=True, verbose_name="长尾关键词（多个用逗号分隔）")
+    parent_keyword = models.CharField(max_length=200, blank=True, null=True, verbose_name="父关键词")
+    is_long_tail = models.BooleanField(default=False, verbose_name="是否长尾关键词")
+    
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+
+    class Meta:
+        db_table = 't_keyword_library'
+        verbose_name = '关键词词库'
+        verbose_name_plural = '关键词词库'
+        ordering = ['-monthly_search_volume']
+
+    def __str__(self):
+        return self.keyword

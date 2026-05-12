@@ -8,16 +8,63 @@
 @description : 关键词研究视图 - Google Trends分析
 """
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
+from rest_framework import serializers
 from rest_framework.decorators import action
 
+from models.models import KeywordLibrary
 from tool.base_views import BaseViewSet
 from tool.permissions import IsAdmin
-from tool.utils import ApiResponse
+from tool.utils import ApiResponse, CustomPagination
 from .google_trends_tool import GoogleTrendsTool
+
+
+class KeywordLibrarySerializer(serializers.ModelSerializer):
+    """关键词词库序列化器"""
+    category_display = serializers.CharField(source='get_category_display', read_only=True)
+
+    class Meta:
+        model = KeywordLibrary
+        fields = [
+            'id', 'keyword', 'category', 'category_display',
+            'monthly_search_volume', 'optimization_difficulty', 'cpc',
+            'trend', 'competition', 'is_favorite',
+            'long_tail_keywords', 'parent_keyword', 'is_long_tail',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
 
 
 @extend_schema(tags=["关键词研究"])
 @extend_schema_view(
+    list=extend_schema(
+        summary="获取关键词列表",
+        description="获取关键词词库列表，支持按关键词、分类、收藏状态筛选",
+        parameters=[
+            OpenApiParameter(name="keyword", type=str, required=False, description="关键词模糊搜索"),
+            OpenApiParameter(name="category", type=str, required=False, description="分类：style/theme/device/type"),
+            OpenApiParameter(name="is_favorite", type=bool, required=False, description="是否收藏"),
+        ],
+    ),
+    retrieve=extend_schema(
+        summary="获取关键词详情",
+        description="根据ID获取关键词详细信息",
+    ),
+    create=extend_schema(
+        summary="创建关键词",
+        description="新增一个关键词到词库",
+    ),
+    update=extend_schema(
+        summary="更新关键词",
+        description="全量更新关键词信息",
+    ),
+    partial_update=extend_schema(
+        summary="部分更新关键词",
+        description="部分更新关键词信息",
+    ),
+    destroy=extend_schema(
+        summary="删除关键词",
+        description="从词库中删除关键词",
+    ),
     interest_over_time=extend_schema(
         summary="关键词兴趣趋势",
         description="获取关键词随时间的搜索兴趣变化趋势，支持多个关键词对比",
@@ -75,13 +122,85 @@ from .google_trends_tool import GoogleTrendsTool
 class KeywordResearchViewSet(BaseViewSet):
     """
     关键词研究 ViewSet
-    基于Google Trends提供关键词分析功能
+    基于Google Trends提供关键词分析功能，并提供关键词词库管理
     """
     permission_classes = [IsAdmin]
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.trends_tool = GoogleTrendsTool()
+    
+    # ==================== 关键词词库 CRUD ====================
+    
+    queryset = KeywordLibrary.objects.all()
+    serializer_class = KeywordLibrarySerializer
+    pagination_class = CustomPagination
+    
+    def list(self, request, *args, **kwargs):
+        """获取关键词列表，支持筛选"""
+        queryset = KeywordLibrary.objects.all()
+        
+        # 按关键词模糊搜索
+        keyword = request.query_params.get('keyword')
+        if keyword:
+            queryset = queryset.filter(keyword__icontains=keyword)
+        
+        # 按分类筛选
+        category = request.query_params.get('category')
+        if category:
+            queryset = queryset.filter(category=category)
+        
+        # 按收藏状态筛选
+        is_favorite = request.query_params.get('is_favorite')
+        if is_favorite is not None:
+            queryset = queryset.filter(is_favorite=is_favorite.lower() == 'true')
+        
+        queryset = queryset.order_by('-monthly_search_volume')
+        
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        
+        serializer = self.get_serializer(queryset, many=True)
+        return ApiResponse(data=serializer.data, message="关键词列表获取成功")
+    
+    def create(self, request, *args, **kwargs):
+        """创建关键词"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return ApiResponse(data=serializer.data, message="关键词创建成功", code=201)
+    
+    def retrieve(self, request, *args, **kwargs):
+        """获取关键词详情"""
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        return ApiResponse(data=serializer.data, message="获取成功")
+    
+    def update(self, request, *args, **kwargs):
+        """全量更新关键词"""
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return ApiResponse(data=serializer.data, message="关键词更新成功")
+    
+    def partial_update(self, request, *args, **kwargs):
+        """部分更新关键词"""
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return ApiResponse(data=serializer.data, message="关键词更新成功")
+    
+    def destroy(self, request, *args, **kwargs):
+        """删除关键词"""
+        instance = self.get_object()
+        instance.delete()
+        return ApiResponse(message="关键词删除成功")
+    
+    # ==================== Google Trends 分析接口 ====================
     
     @action(detail=False, methods=['get'], name='关键词兴趣趋势')
     def interest_over_time(self, request):
