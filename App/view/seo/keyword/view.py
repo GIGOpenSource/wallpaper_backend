@@ -962,6 +962,13 @@ class CompetitorKeywordDetailSerializer(serializers.ModelSerializer):
             OpenApiParameter(name="id", type=int, required=True, description="竞争对手ID", location="path"),
         ],
     ),
+    export_detail=extend_schema(
+        summary="导出竞争对手关键词详情CSV",
+        description="根据竞争对手ID导出所有关键词的CSV文件并下载",
+        parameters=[
+            OpenApiParameter(name="id", type=int, required=True, description="竞争对手ID", location="path"),
+        ],
+    ),
 )
 class CompetitorKeywordAnalysisViewSet(BaseViewSet):
     """
@@ -1052,3 +1059,54 @@ class CompetitorKeywordAnalysisViewSet(BaseViewSet):
             },
             message="关键词详情获取成功"
         )
+    
+    @action(detail=True, methods=['get'], url_path='export')
+    def export_detail(self, request, *args, **kwargs):
+        """导出竞争对手关键词详情为CSV文件"""
+        pk = kwargs.get('pk')
+        
+        try:
+            competitor = Competitor.objects.get(id=pk)
+        except Competitor.DoesNotExist:
+            return HttpResponse("竞争对手不存在", status=404)
+        
+        # 获取该竞争对手的所有关键词（按排名排序）
+        keywords = WebsiteKeyword.objects.filter(
+            competitor=competitor
+        ).order_by('rank')
+        
+        # 创建CSV响应
+        response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
+        response['Content-Disposition'] = f'attachment; filename="competitor_{competitor.id}_keywords.csv"'
+        
+        # 写入BOM头，确保Excel正确识别中文
+        response.write('\ufeff')
+        
+        writer = csv.writer(response)
+        
+        # 写入表头
+        writer.writerow([
+            '关键词',
+            '排名',
+            '页面标题',
+            '竞价公司数量',
+            '长尾词数量',
+            '索引值',
+            '创建时间',
+            '更新时间'
+        ])
+        
+        # 写入数据行
+        for kw in keywords:
+            writer.writerow([
+                kw.keyword,
+                kw.rank,
+                kw.page_title or '',
+                kw.bidword_companycount,
+                kw.long_keyword_count,
+                kw.index,
+                kw.created_at.strftime('%Y-%m-%d %H:%M:%S') if kw.created_at else '',
+                kw.updated_at.strftime('%Y-%m-%d %H:%M:%S') if kw.updated_at else ''
+            ])
+        
+        return response
