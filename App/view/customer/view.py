@@ -8,7 +8,7 @@ from rest_framework.decorators import action
 from models.models import CustomerUser
 from tool.password_hasher import verify_password
 from tool.permissions import IsCustomerTokenValid
-from tool.token_tools import CustomTokenTool, generate_is_user_token
+from tool.token_tools import CustomTokenTool, generate_is_user_token, _redis
 from tool.utils import ApiResponse
 from django.utils.translation import gettext as _
 
@@ -227,11 +227,39 @@ class CustomerUserViewSet(viewsets.ViewSet):
             user = CustomerUser.objects.get(id=customer_id)
         except CustomerUser.DoesNotExist:
             return ApiResponse(message=_("用户不存在"), code=404)
+        
+        # 检查是否要修改status为2（禁用）
+        new_status = request.data.get('status')
+        will_be_disabled = (new_status is not None and int(new_status) == 2)
+        
         ser = CustomerProfileSerializer(user, data=request.data, partial=True)
         if not ser.is_valid():
             return ApiResponse(data=ser.errors, message=_("参数校验失败"), code=400)
 
         ser.save()
+        
+        # 如果用户将自己设置为禁用状态，需要使其token失效
+        if will_be_disabled:
+            # 删除当前用户所有平台的token
+            for platform in ["", "PC", "Phone"]:
+                map_key = CustomTokenTool._get_token_map_key(platform, customer_id, is_customer=True)
+                existing_token = _redis.getKey(map_key)
+                if existing_token:
+                    # 删除token本身
+                    _redis.delKey(existing_token)
+                    # 删除映射关系
+                    _redis.delKey(map_key)
+            return ApiResponse(
+                data={
+                    "customer_id": user.id,
+                    "nickname": user.nickname,
+                    "gender": user.gender,
+                    "avatar_url": user.avatar_url,
+                    "badge": user.badge,
+                },
+                message=_("保存成功，账号已禁用，token已失效"),
+            )
+        
         return ApiResponse(
             data={
                 "customer_id": user.id,
@@ -338,7 +366,7 @@ class CustomerUserViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['post'], url_path='batch-disable')
     def batch_disable(self, request):
         """
-        批量禁用用户
+        批量禁用/启用用户
         """
         status = request.data.get('status')
         user_ids = request.data.get('user_ids', [])
@@ -351,12 +379,27 @@ class CustomerUserViewSet(viewsets.ViewSet):
             return ApiResponse(code=400, message="用户ID格式错误")
         if not user_ids:
             return ApiResponse(code=400, message="用户ID列表不能为空")
-        # 执行批量禁用（设置 status=2）
+        
+        # 执行批量更新状态
         updated_count = CustomerUser.objects.filter(id__in=user_ids).update(status=status)
+        
+        # 如果是禁用操作(status=2)，需要使这些用户的token失效
         if status == 2:
-            message = f"成功禁用 {updated_count} 个用户"
+            # 遍历被禁用的用户，删除其所有平台的token
+            for user_id in user_ids:
+                # 删除所有平台的token映射
+                for platform in ["", "PC", "Phone"]:
+                    map_key = CustomTokenTool._get_token_map_key(platform, user_id, is_customer=True)
+                    existing_token = _redis.getKey(map_key)
+                    if existing_token:
+                        # 删除token本身
+                        _redis.delKey(existing_token)
+                        # 删除映射关系
+                        _redis.delKey(map_key)
+            message = f"成功禁用 {updated_count} 个用户，并已使其token失效"
         else:
             message = f"成功启用 {updated_count} 个用户"
+        
         return ApiResponse(
             data={'disabled_count': updated_count},
             message=message

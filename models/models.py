@@ -1150,8 +1150,6 @@ class SEOInspection(models.Model):
             models.Index(fields=['site_url', 'inspection_item']),
             models.Index(fields=['-inspected_at']),
         ]
-        # 同一网站+检查项+分类的唯一约束
-        unique_together = ('site_url', 'inspection_item', 'category')
     
     def __str__(self):
         return f"{self.site_url} - {self.get_inspection_item_display()} [{self.get_category_display()}]"

@@ -144,12 +144,10 @@ class SEOInspectionViewSet(BaseViewSet):
     @action(detail=False, methods=['post'], name='执行巡查')
     def run_inspection(self, request):
         """
-        执行SEO巡查
+        执行SEO巡查（只巡查当天数据）
         请求体: {
             "site_url": "https://example.com",
-            "category": "search_crawl",  // 可选，分类：search_crawl/page_quality/security/performance
-            "start_timestamp": 1712361600,  // 可选，开始时间戳（秒）
-            "end_timestamp": 1714953600     // 可选，结束时间戳（秒）
+            "category": "search_crawl"  // 可选，分类：search_crawl/page_quality/security/performance
         }
         """
         from django.utils import timezone
@@ -170,22 +168,10 @@ class SEOInspectionViewSet(BaseViewSet):
         # 获取分类参数
         category = request.data.get('category', 'search_crawl')
         
-        # 处理时间戳参数
-        start_timestamp = request.data.get('start_timestamp')
-        end_timestamp = request.data.get('end_timestamp')
-        
-        if start_timestamp and end_timestamp:
-            try:
-                start_timestamp = int(start_timestamp)
-                end_timestamp = int(end_timestamp)
-                start_date = datetime.fromtimestamp(start_timestamp).strftime('%Y-%m-%d')
-                end_date = datetime.fromtimestamp(end_timestamp).strftime('%Y-%m-%d')
-            except (ValueError, TypeError, OSError) as e:
-                return ApiResponse(code=400, message=f"时间戳格式错误: {str(e)}")
-        else:
-            # 默认使用最近30天
-            end_date = datetime.now().strftime('%Y-%m-%d')
-            start_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+        # 使用当天日期（不需要用户传时间范围）
+        now = timezone.now()
+        start_date = now.strftime('%Y-%m-%d')
+        end_date = now.strftime('%Y-%m-%d')
         
         # 创建巡查日志记录
         log = InspectionLog.objects.create(
@@ -1497,6 +1483,8 @@ class SEOInspectionViewSet(BaseViewSet):
         - 异常项数量
         - 最新检查时间
         """
+        from datetime import datetime
+        
         site_url = request.query_params.get('site_url')
         if not site_url:
             return ApiResponse(code=400, message="请提供网站URL参数")
@@ -1504,6 +1492,22 @@ class SEOInspectionViewSet(BaseViewSet):
         # 确保URL格式正确
         if not site_url.endswith('/'):
             site_url += '/'
+        
+        # 获取时间戳参数
+        start_timestamp = request.query_params.get('start_timestamp')
+        end_timestamp = request.query_params.get('end_timestamp')
+        
+        if not start_timestamp or not end_timestamp:
+            return ApiResponse(code=400, message="请提供 start_timestamp 和 end_timestamp 参数")
+        
+        try:
+            start_timestamp = int(start_timestamp)
+            end_timestamp = int(end_timestamp)
+            # 将时间戳转换为 datetime 对象（UTC时间）
+            start_dt = datetime.fromtimestamp(start_timestamp)
+            end_dt = datetime.fromtimestamp(end_timestamp)
+        except (ValueError, TypeError, OSError) as e:
+            return ApiResponse(code=400, message=f"时间戳格式错误: {str(e)}")
         
         dashboard_data = {
             'site_url': site_url,
@@ -1514,7 +1518,9 @@ class SEOInspectionViewSet(BaseViewSet):
         for category_code, category_name in SEOInspection.CATEGORY_CHOICES:
             queryset = SEOInspection.objects.filter(
                 site_url=site_url,
-                category=category_code
+                category=category_code,
+                inspected_at__gte=start_dt,  # 大于等于开始时间
+                inspected_at__lte=end_dt     # 小于等于结束时间
             )
             
             # 获取该分类的最新检查时间
@@ -1544,15 +1550,23 @@ class SEOInspectionViewSet(BaseViewSet):
             }
         
         # 计算总计
-        all_queryset = SEOInspection.objects.filter(site_url=site_url)
+        all_queryset = SEOInspection.objects.filter(
+            site_url=site_url,
+            inspected_at__gte=start_dt,
+            inspected_at__lte=end_dt
+        )
         
         # 获取总体的最新检查时间
         latest_all = all_queryset.order_by('-inspected_at').first()
         if latest_all:
-            check_time = latest_all.inspected_at.strftime('%Y-%m-%d %H:%M:%S')
+            # 转换为北京时间（UTC+8）
+            from django.utils import timezone as dj_timezone
+            local_time = dj_timezone.localtime(latest_all.inspected_at)
+            check_time = local_time.strftime('%Y-%m-%d %H:%M:%S')
         else:
-            from django.utils import timezone
-            check_time = timezone.now().strftime('%Y-%m-%d %H:%M:%S')
+            from django.utils import timezone as dj_timezone
+            local_time = dj_timezone.localtime(dj_timezone.now())
+            check_time = local_time.strftime('%Y-%m-%d %H:%M:%S')
         
         dashboard_data['summary'] = {
             'total_normal': all_queryset.filter(status='normal').count(),
