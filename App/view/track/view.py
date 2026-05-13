@@ -76,6 +76,10 @@ class TrackViewSet(BaseViewSet):
             # 设备类型：以 UA 解析为最高优先级（忽略前端传的值）
             device_type, browser_name = self._parse_ua(user_agent)
             
+            # 标准化设备类型：将 pc 统一转换为 desktop
+            if device_type == 'pc':
+                device_type = 'desktop'
+            
             # 处理事件时间与跳出逻辑
             event_time_str = data.get('event_time')
             event_time = None
@@ -118,8 +122,8 @@ class TrackViewSet(BaseViewSet):
                 'unique_id': unique_id,
                 'client_ip': client_ip,
                 'user_agent': user_agent,
-                'device_type': device_type,
-                'browser': data.get('browser') or self._parse_ua(user_agent)[1],
+                'device_type': device_type,  # UA 解析结果，忽略前端传的
+                'browser': browser_name,  # UA 解析结果，忽略前端传的
                 'region': data.get('region'),
                 'app_version': data.get('app_version'),
                 'event_time': event_time,
