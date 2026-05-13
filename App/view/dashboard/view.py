@@ -516,6 +516,38 @@ class CustomerUserViewSet(BaseViewSet):
             queryset = queryset.filter(nickname__icontains=nickname)
         return queryset.order_by('-created_at')
 
+    def update(self, request, *args, **kwargs):
+        """
+        更新用户信息，如果检测到status=2（禁用），则使该用户的所有Token失效
+        """
+        from tool.token_tools import CustomTokenTool
+        
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        old_status = instance.status
+        
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        
+        # 检查状态是否从正常变为禁用
+        if old_status != 2 and instance.status == 2:
+            # 遍历该用户的所有可能Token（不同平台）并删除
+            for platform in ["", "PC", "Phone"]:
+                token = CustomTokenTool.generate_customer_token(instance.id, reuse_existing=True, platform=platform)
+                if token:
+                    CustomTokenTool.delete_customer_token(token)
+            
+            # 也可以尝试直接删除Redis中与该用户相关的所有Token
+            # 删除映射键
+            for platform in ["", "PC", "Phone"]:
+                map_key = f"Login:customer_token_map:{platform}:{instance.id}"
+                token_from_map = _redis.getKey(map_key)
+                if token_from_map:
+                    CustomTokenTool.delete_customer_token(token_from_map)
+        
+        return ApiResponse(data=serializer.data, message="用户信息更新成功")
+
     def list(self, request, *args, **kwargs):
         """
         管理员获取用户列表（支持分页、筛选、排序）
