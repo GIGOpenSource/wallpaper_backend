@@ -1520,11 +1520,15 @@ class SEOInspectionViewSet(BaseViewSet):
             # 获取该分类的最新检查时间
             latest_inspection = queryset.order_by('-inspected_at').first()
             if latest_inspection:
-                latest_check_time = latest_inspection.inspected_at.strftime('%Y-%m-%d %H:%M:%S')
+                # 转换为北京时间（UTC+8）
+                from django.utils import timezone as dj_timezone
+                local_time = dj_timezone.localtime(latest_inspection.inspected_at)
+                latest_check_time = local_time.strftime('%Y-%m-%d %H:%M:%S')
             else:
-                # 如果没有巡查记录，返回当前时间
-                from django.utils import timezone
-                latest_check_time = timezone.now().strftime('%Y-%m-%d %H:%M:%S')
+                # 如果没有巡查记录，返回当前北京时间
+                from django.utils import timezone as dj_timezone
+                local_time = dj_timezone.localtime(dj_timezone.now())
+                latest_check_time = local_time.strftime('%Y-%m-%d %H:%M:%S')
             
             # 统计各状态数量
             normal_count = queryset.filter(status='normal').count()
