@@ -152,12 +152,13 @@ class TrackViewSet(BaseViewSet):
         device_type = 'desktop'
         browser = 'unknown'
 
-        # 1. 识别设备类型
-        if 'mobile' in ua or 'android' in ua or 'iphone' in ua:
-            if 'ipad' in ua or 'tablet' in ua:
-                device_type = 'tablet'
-            else:
-                device_type = 'mobile'
+        # 1. 识别设备类型（优先级：iPad > 其他平板 > 手机 > 桌面）
+        if 'ipad' in ua:
+            device_type = 'tablet'
+        elif 'tablet' in ua or 'android' in ua and 'mobile' not in ua:
+            device_type = 'tablet'
+        elif 'mobile' in ua or 'iphone' in ua or 'android' in ua:
+            device_type = 'mobile'
         elif 'harmonyos' in ua:
             device_type = 'mobile'
 
