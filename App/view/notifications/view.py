@@ -106,7 +106,7 @@ class NotificationSerializer(serializers.ModelSerializer):
             title = obj.extra_data.get('title', '')
             content = obj.extra_data.get('content', '')
             if title and content:
-                return f"{title} {content}"
+                return f"{title} : {content}"
             elif title:
                 return title
             elif content:
