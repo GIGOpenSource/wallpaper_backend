@@ -36,6 +36,11 @@ class NotificationSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_sender_info(self, obj):
+        # 系统公告和活动公告不显示发送者，统一显示为系统
+        if obj.notification_type in ['system', 'Activity']:
+            return {'nickname': '系统通知', 'avatar_url': None}
+        
+        # 其他类型通知显示实际发送者
         if obj.sender:
             return {
                 'id': obj.sender.id,
@@ -90,6 +95,20 @@ class NotificationSerializer(serializers.ModelSerializer):
         return None
 
     def get_content_display(self, obj):
+        # 系统公告和活动公告：显示标题 + 内容
+        if obj.notification_type in ['system', 'Activity']:
+            title = obj.extra_data.get('title', '')
+            content = obj.extra_data.get('content', '')
+            if title and content:
+                return f"{title} {content}"
+            elif title:
+                return title
+            elif content:
+                return content
+            else:
+                return "系统公告"
+        
+        # 其他类型通知的显示逻辑
         nickname = obj.sender.nickname if obj.sender else "系统"
         if obj.notification_type == 'like':
             return f"{nickname} 赞了你的帖子"
@@ -103,8 +122,18 @@ class NotificationSerializer(serializers.ModelSerializer):
             points = obj.extra_data.get('points', 0)
             reason = obj.extra_data.get('reason', '系统奖励')
             return f"{reason} {points} 积分"
-        elif obj.notification_type == 'announcement':
-            return obj.extra_data.get('title', '系统公告')
+        elif obj.notification_type == 'feature':
+            # 更新公告也显示标题+内容
+            title = obj.extra_data.get('title', '')
+            content = obj.extra_data.get('content', '')
+            if title and content:
+                return f"{title} {content}"
+            elif title:
+                return title
+            elif content:
+                return content
+            else:
+                return "更新公告"
         else:
             return "收到一条新消息"
 

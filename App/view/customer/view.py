@@ -119,6 +119,11 @@ class CustomerUserViewSet(viewsets.ViewSet):
             user = CustomerUser.objects.get(email=email)
         except CustomerUser.DoesNotExist:
             return ApiResponse(message=_("邮箱未注册"), code=400)
+        
+        # 检查用户状态
+        if user.status == 2:
+            return ApiResponse(message=_("账号已被禁用，请联系客服"), code=403)
+        
         if not verify_password(password, user.password):
             return ApiResponse(message=_("邮箱或密码错误"), code=400)
         user.last_login = timezone.now()
