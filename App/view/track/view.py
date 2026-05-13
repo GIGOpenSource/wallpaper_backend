@@ -73,10 +73,8 @@ class TrackViewSet(BaseViewSet):
             client_ip = self._get_client_ip(request)
             user_agent = request.META.get('HTTP_USER_AGENT', '')[:500]
             
-            # 设备类型：优先取前端传的，没有则解析 UA
-            device_type = data.get('device_type')
-            if not device_type:
-                device_type, _ = self._parse_ua(user_agent)
+            # 设备类型：以 UA 解析为最高优先级（忽略前端传的值）
+            device_type, browser_name = self._parse_ua(user_agent)
             
             # 处理事件时间与跳出逻辑
             event_time_str = data.get('event_time')
@@ -152,19 +150,21 @@ class TrackViewSet(BaseViewSet):
         device_type = 'desktop'
         browser = 'unknown'
 
-        # 1. 识别设备类型（优先级：iPad > 其他平板 > 手机 > 桌面）
+        # 1. 识别设备类型（iPad 优先级最高，不可被其他条件覆盖）
         if 'ipad' in ua:
-            # iPad 即使有 Mobile 关键字也是平板
+            # iPad 无论是否有 Mobile 关键字，强制识别为平板
             device_type = 'tablet'
-        elif 'tablet' in ua:
-            device_type = 'tablet'
-        elif 'android' in ua and 'mobile' not in ua:
-            # Android 但没有 mobile 关键字，可能是平板
-            device_type = 'tablet'
-        elif 'mobile' in ua or 'iphone' in ua or 'android' in ua:
-            device_type = 'mobile'
-        elif 'harmonyos' in ua:
-            device_type = 'mobile'
+        else:
+            # 非 iPad 设备，按正常逻辑判断
+            if 'tablet' in ua:
+                device_type = 'tablet'
+            elif 'android' in ua and 'mobile' not in ua:
+                # Android 但没有 mobile 关键字，可能是平板
+                device_type = 'tablet'
+            elif 'mobile' in ua or 'iphone' in ua or 'android' in ua:
+                device_type = 'mobile'
+            elif 'harmonyos' in ua:
+                device_type = 'mobile'
 
         # 2. 识别浏览器/应用
         if 'micromessenger' in ua:
