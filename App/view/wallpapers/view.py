@@ -686,6 +686,7 @@ class WallpapersViewSet(BaseViewSet):
             strategy_ids = self._get_strategy_wallpaper_ids(order, platform)
         
         strategy_count = len(strategy_ids)
+        strategy_end_page = (strategy_count + page_size - 1) // page_size if strategy_count > 0 else 0
         
         # ---- 判断当前页是否需要策略数据 ----
         if page_num == 1 and strategy_ids:
@@ -693,9 +694,8 @@ class WallpapersViewSet(BaseViewSet):
             return self._return_strategy_with_fallback(
                 strategy_ids, page_num, page_size, customer_id, request, base_queryset, order
             )
-        elif page_num > 1 and strategy_ids:
+        elif page_num > 1 and strategy_ids and strategy_end_page > 0:
             # 后续页：计算策略占用的页数，判断当前页是否在策略范围内
-            strategy_end_page = (strategy_count + page_size - 1) // page_size
             if page_num <= strategy_end_page:
                 # 当前页在策略范围内
                 return self._return_strategy_page(
