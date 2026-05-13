@@ -17,8 +17,8 @@ class WallpaperTagSerializer(serializers.ModelSerializer):
     """壁纸标签序列化器"""
     class Meta:
         model = WallpaperTag
-        fields = ['id', 'name', 'created_at', 'wallpaper_count']
-        read_only_fields = ['id', 'created_at', 'wallpaper_count']
+        fields = ['id', 'name', 'created_at', 'wallpaper_count', 'pc_count', 'phone_count']
+        read_only_fields = ['id', 'created_at', 'wallpaper_count', 'pc_count', 'phone_count']
 
 
 
@@ -94,9 +94,10 @@ class WallpaperTagViewSet(BaseViewSet):
 
     @extend_schema(
         summary="获取所有标签列表（含壁纸总数）",
-        description="每日早8点第一次调用会查询实际总数并缓存，之后24小时内直接返回缓存值",
+        description="每日早8点第一次调用会查询实际总数并缓存，之后24小时内直接返回缓存值。支持通过 platform 参数或 User-Agent 自动识别设备类型",
         parameters=[
             OpenApiParameter(name="q", type=str, required=False, description="关键词搜索"),
+            OpenApiParameter(name="platform", type=str, required=False, description="平台类型：PC 或 PHONE，优先级高于 User-Agent 识别"),
         ],
     )
     @action(detail=False, methods=['get'], url_path='list')
@@ -104,9 +105,22 @@ class WallpaperTagViewSet(BaseViewSet):
         """
         获取所有标签列表，包含每个标签的壁纸总数
         缓存策略：每日早8点第一次调用时刷新缓存
+        支持按平台筛选：PC 或 PHONE
+        优先使用 platform 参数，其次通过 User-Agent 自动识别
         """
 
         q = (request.query_params.get("q") or "").strip()
+        platform_param = (request.query_params.get("platform") or "").upper()
+        
+        # 如果前端没有传 platform 参数，则通过 User-Agent 自动识别
+        if not platform_param:
+            user_agent = request.META.get('HTTP_USER_AGENT', '').lower()
+            if any(keyword in user_agent for keyword in ['mobile', 'android', 'iphone', 'ipad']):
+                platform = 'PHONE'
+            else:
+                platform = 'PC'
+        else:
+            platform = platform_param
         
         now = timezone.now()
         cache_reset_key = "tag_list_cache_reset_time"
@@ -117,28 +131,79 @@ class WallpaperTagViewSet(BaseViewSet):
             today_8am = today_8am - timezone.timedelta(days=1)
 
         need_refresh = last_reset_time is None or last_reset_time < today_8am
+        # need_refresh = True
 
         if need_refresh:
             cache.set(cache_reset_key, now, timeout=None)
             qs = WallpaperTag.objects.all()
             if q:
                 qs = qs.filter(name__icontains=q)
+            
+            # 使用聚合查询一次性获取所有标签的统计数据
+            from django.db.models import Count, Q
+            
+            # 1. 获取每个标签的总数
+            total_counts = Wallpapers.objects.filter(
+                tags__in=qs
+            ).values('tags__id').annotate(
+                count=Count('id')
+            )
+            total_dict = {item['tags__id']: item['count'] for item in total_counts}
+            
+            # 2. 获取每个标签的PC端数量 (category__id=1)
+            pc_counts = Wallpapers.objects.filter(
+                tags__in=qs,
+                category__id=1
+            ).values('tags__id').annotate(
+                count=Count('id', distinct=True)
+            )
+            pc_dict = {item['tags__id']: item['count'] for item in pc_counts}
+            
+            # 3. 获取每个标签的手机端数量 (category__id=2)
+            phone_counts = Wallpapers.objects.filter(
+                tags__in=qs,
+                category__id=2
+            ).values('tags__id').annotate(
+                count=Count('id', distinct=True)
+            )
+            phone_dict = {item['tags__id']: item['count'] for item in phone_counts}
+            
+            # 4. 批量更新标签数据
             tags_to_update = []
             for tag in qs:
-                count = Wallpapers.objects.filter(tags=tag).count()
-                tag.wallpaper_count = count
+                tag.wallpaper_count = total_dict.get(tag.id, 0)
+                tag.pc_count = pc_dict.get(tag.id, 0)
+                tag.phone_count = phone_dict.get(tag.id, 0)
                 tags_to_update.append(tag)
+            
             if tags_to_update:
-                WallpaperTag.objects.bulk_update(tags_to_update, ['wallpaper_count'])
+                WallpaperTag.objects.bulk_update(tags_to_update, ['wallpaper_count', 'pc_count', 'phone_count'])
 
         qs = WallpaperTag.objects.all().order_by('-created_at')
         if q:
             qs = qs.filter(name__icontains=q)
 
-        data = list(qs.values('id', 'name', 'created_at', 'wallpaper_count'))
-        for item in data:
-            if item['created_at']:
-                item['created_at'] = item['created_at'].strftime('%Y-%m-%d %H:%M:%S')
+        # 根据平台参数返回不同的字段
+        if platform == 'PC':
+            data = list(qs.values('id', 'name', 'created_at', 'pc_count'))
+            for item in data:
+                if item['created_at']:
+                    item['created_at'] = item['created_at'].strftime('%Y-%m-%d %H:%M:%S')
+                # 重命名字段以便前端使用
+                item['wallpaper_count'] = item.pop('pc_count')
+        elif platform == 'PHONE':
+            data = list(qs.values('id', 'name', 'created_at', 'phone_count'))
+            for item in data:
+                if item['created_at']:
+                    item['created_at'] = item['created_at'].strftime('%Y-%m-%d %H:%M:%S')
+                # 重命名字段以便前端使用
+                item['wallpaper_count'] = item.pop('phone_count')
+        else:
+            # 默认返回总数
+            data = list(qs.values('id', 'name', 'created_at', 'wallpaper_count'))
+            for item in data:
+                if item['created_at']:
+                    item['created_at'] = item['created_at'].strftime('%Y-%m-%d %H:%M:%S')
 
         message = "标签列表获取成功（已更新计数）" if need_refresh else "标签列表获取成功（缓存）"
         return ApiResponse(data=data, message=message)
@@ -148,12 +213,14 @@ class WallpaperTagViewSet(BaseViewSet):
         description="返回壁纸数量最多的热门标签，支持自定义数量",
         parameters=[
             OpenApiParameter(name="limit", type=int, required=False, description="返回数量，默认 10，最大 20"),
+            OpenApiParameter(name="platform", type=str, required=False, description="平台类型：PC 或 PHONE，不传则按总数排序"),
         ],
     )
     @action(detail=False, methods=['get'], url_path='hot')
     def hot_tags(self, request):
         """
         获取热门标签：按壁纸数量排序
+        支持按平台筛选：PC 或 PHONE
         """
         try:
             limit = int(request.query_params.get("limit", 10))
@@ -161,8 +228,10 @@ class WallpaperTagViewSet(BaseViewSet):
             limit = 10
 
         limit = max(1, min(20, limit))
+        
+        platform = (request.query_params.get("platform") or "").upper()
 
-        cache_key = f"hot_tags_{limit}"
+        cache_key = f"hot_tags_{limit}_{platform}"
         cached_data = cache.get(cache_key)
         if cached_data:
             return ApiResponse(data=cached_data, message="热门标签获取成功（缓存）")
@@ -180,23 +249,70 @@ class WallpaperTagViewSet(BaseViewSet):
         if need_refresh:
             cache.set(cache_reset_key, now, timeout=None)
 
+            from django.db.models import Count
+            
             all_tags = WallpaperTag.objects.all()
+            
+            # 1. 获取每个标签的总数
+            total_counts = Wallpapers.objects.filter(
+                tags__in=all_tags
+            ).values('tags__id').annotate(
+                count=Count('id')
+            )
+            total_dict = {item['tags__id']: item['count'] for item in total_counts}
+            
+            # 2. 获取每个标签的PC端数量
+            pc_counts = Wallpapers.objects.filter(
+                tags__in=all_tags,
+                category__id=1
+            ).values('tags__id').annotate(
+                count=Count('id', distinct=True)
+            )
+            pc_dict = {item['tags__id']: item['count'] for item in pc_counts}
+            
+            # 3. 获取每个标签的手机端数量
+            phone_counts = Wallpapers.objects.filter(
+                tags__in=all_tags,
+                category__id=2
+            ).values('tags__id').annotate(
+                count=Count('id', distinct=True)
+            )
+            phone_dict = {item['tags__id']: item['count'] for item in phone_counts}
+            
+            # 4. 批量更新标签数据
             tags_to_update = []
             for tag in all_tags:
-                count = Wallpapers.objects.filter(tags=tag).count()
-                tag.wallpaper_count = count
+                tag.wallpaper_count = total_dict.get(tag.id, 0)
+                tag.pc_count = pc_dict.get(tag.id, 0)
+                tag.phone_count = phone_dict.get(tag.id, 0)
                 tags_to_update.append(tag)
 
             if tags_to_update:
-                WallpaperTag.objects.bulk_update(tags_to_update, ['wallpaper_count'])
+                WallpaperTag.objects.bulk_update(tags_to_update, ['wallpaper_count', 'pc_count', 'phone_count'])
 
-        tags = WallpaperTag.objects.order_by('-wallpaper_count')[:limit]
-
-        data = [{
-            'id': tag.id,
-            'name': tag.name,
-            'wallpaper_count': tag.wallpaper_count
-        } for tag in tags]
+        # 根据平台参数选择排序字段
+        if platform == 'PC':
+            tags = WallpaperTag.objects.order_by('-pc_count')[:limit]
+            data = [{
+                'id': tag.id,
+                'name': tag.name,
+                'wallpaper_count': tag.pc_count
+            } for tag in tags]
+        elif platform == 'PHONE':
+            tags = WallpaperTag.objects.order_by('-phone_count')[:limit]
+            data = [{
+                'id': tag.id,
+                'name': tag.name,
+                'wallpaper_count': tag.phone_count
+            } for tag in tags]
+        else:
+            # 默认按总数排序
+            tags = WallpaperTag.objects.order_by('-wallpaper_count')[:limit]
+            data = [{
+                'id': tag.id,
+                'name': tag.name,
+                'wallpaper_count': tag.wallpaper_count
+            } for tag in tags]
 
         cache.set(cache_key, data, timeout=3600)
         return ApiResponse(data=data, message="热门标签获取成功")

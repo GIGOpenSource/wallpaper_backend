@@ -106,6 +106,8 @@ class WallpaperCategory(models.Model):
 class WallpaperTag(models.Model):
     name = models.CharField(max_length=50, verbose_name="标签名称", unique=True)
     wallpaper_count = models.PositiveIntegerField(default=0, verbose_name="壁纸总数")
+    pc_count = models.PositiveIntegerField(default=0, verbose_name="PC端壁纸数量")
+    phone_count = models.PositiveIntegerField(default=0, verbose_name="手机端壁纸数量")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
 
     class Meta:
