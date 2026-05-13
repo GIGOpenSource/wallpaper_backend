@@ -105,7 +105,7 @@ def _perform_aggregation():
         description="支持按页面类型、设备类型筛选，每查询10次自动触发一次数据聚合",
         parameters=[
             OpenApiParameter(name="page_type", type=str, required=False, description="页面类型（如 homepage, search, trending, tag）"),
-            OpenApiParameter(name="device_type", type=str, required=False, description="设备类型（desktop, mobile, tablet, all）"),
+            OpenApiParameter(name="device_type", type=str, required=False, description="设备类型（pc, mobile, tablet, all）"),
             OpenApiParameter(name="currentPage", type=int, required=False, description="当前页码"),
             OpenApiParameter(name="pageSize", type=int, required=False, description="每页数量"),
         ],
@@ -185,7 +185,7 @@ class PageStatsViewSet(BaseViewSet):
 
         # 2. 分端访问量统计（为了精确区分 Android/iOS，直接从 TrackEvent 原始表聚合）
         # 桌面端
-        desktop_visits = TrackEvent.objects.filter(device_type='desktop').count()
+        desktop_visits = TrackEvent.objects.filter(device_type='pc').count()
         # 平板端
         tablet_visits = TrackEvent.objects.filter(device_type='tablet').count()
         # 移动端细分：通过 UA 关键字识别
