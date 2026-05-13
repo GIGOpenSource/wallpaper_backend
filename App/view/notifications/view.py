@@ -37,8 +37,14 @@ class NotificationSerializer(serializers.ModelSerializer):
 
     def get_sender_info(self, obj):
         # 系统公告和活动公告不显示发送者，统一显示为系统
-        if obj.notification_type in ['system', 'Activity']:
+        if obj.notification_type in ['system']:
             return {'nickname': '系统通知', 'avatar_url': None}
+        if obj.notification_type in ['Activity']:
+            return {'nickname': '活动通知', 'avatar_url': None}
+
+        if obj.notification_type in ['feature']:
+            return {'nickname': '更新通知', 'avatar_url': None}
+
         
         # 其他类型通知显示实际发送者
         if obj.sender:
