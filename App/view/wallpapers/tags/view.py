@@ -210,10 +210,10 @@ class WallpaperTagViewSet(BaseViewSet):
 
     @extend_schema(
         summary="获取热门标签（按壁纸数量排序）",
-        description="返回壁纸数量最多的热门标签，支持自定义数量",
+        description="返回壁纸数量最多的热门标签，支持自定义数量。支持通过 platform 参数或 User-Agent 自动识别设备类型",
         parameters=[
             OpenApiParameter(name="limit", type=int, required=False, description="返回数量，默认 10，最大 20"),
-            OpenApiParameter(name="platform", type=str, required=False, description="平台类型：PC 或 PHONE，不传则按总数排序"),
+            OpenApiParameter(name="platform", type=str, required=False, description="平台类型：PC 或 PHONE，优先级高于 User-Agent 识别"),
         ],
     )
     @action(detail=False, methods=['get'], url_path='hot')
@@ -221,6 +221,7 @@ class WallpaperTagViewSet(BaseViewSet):
         """
         获取热门标签：按壁纸数量排序
         支持按平台筛选：PC 或 PHONE
+        优先使用 platform 参数，其次通过 User-Agent 自动识别
         """
         try:
             limit = int(request.query_params.get("limit", 10))
@@ -229,7 +230,17 @@ class WallpaperTagViewSet(BaseViewSet):
 
         limit = max(1, min(20, limit))
         
-        platform = (request.query_params.get("platform") or "").upper()
+        platform_param = (request.query_params.get("platform") or "").upper()
+        
+        # 如果前端没有传 platform 参数，则通过 User-Agent 自动识别
+        if not platform_param:
+            user_agent = request.META.get('HTTP_USER_AGENT', '').lower()
+            if any(keyword in user_agent for keyword in ['mobile', 'android', 'iphone', 'ipad']):
+                platform = 'PHONE'
+            else:
+                platform = 'PC'
+        else:
+            platform = platform_param
 
         cache_key = f"hot_tags_{limit}_{platform}"
         cached_data = cache.get(cache_key)

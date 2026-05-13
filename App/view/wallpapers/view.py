@@ -675,6 +675,10 @@ class WallpapersViewSet(BaseViewSet):
         
         # ---- 先应用平台筛选（策略和普通数据都需要）----
         base_queryset = self.filter_queryset(self.get_queryset())
+        
+        # 过滤掉审核不通过的壁纸（audit_status为rejected的不显示，为空或其他值都可显示）
+        base_queryset = base_queryset.exclude(audit_status='rejected')
+        
         if platform == 'PC':
             base_queryset = base_queryset.filter(category__id=1).distinct()
         elif platform == 'PHONE':
