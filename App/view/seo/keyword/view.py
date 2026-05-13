@@ -14,7 +14,7 @@ import csv
 import io
 from django.http import HttpResponse
 
-from models.models import KeywordLibrary, Competitor, WebsiteKeyword
+from models.models import KeywordLibrary, Competitor, WebsiteKeyword, KeywordFavorite
 from tool.base_views import BaseViewSet
 from tool.permissions import IsAdmin
 from tool.utils import ApiResponse, CustomPagination
@@ -32,7 +32,7 @@ class KeywordLibrarySerializer(serializers.ModelSerializer):
         fields = [
             'id', 'keyword', 'keyword_type', 'keyword_type_display', 'category', 'category_display',
             'monthly_search_volume', 'optimization_difficulty', 'cpc',
-            'trend', 'competition', 'is_favorite',
+            'trend', 'competition',
             'parent_keyword', 'recommendation_score',
             'created_at', 'updated_at'
         ]
@@ -144,7 +144,7 @@ class KeywordResearchViewSet(BaseViewSet):
     pagination_class = CustomPagination
     
     def list(self, request, *args, **kwargs):
-        """获取关键词列表，支持按类型、分类、收藏状态筛选和排序"""
+        """获取关键词列表，支持按类型、分类筛选和排序"""
         queryset = KeywordLibrary.objects.all()
         
         # 1. 按关键词类型筛选（核心逻辑：区分热门、长尾、普通）
@@ -162,12 +162,7 @@ class KeywordResearchViewSet(BaseViewSet):
         if category:
             queryset = queryset.filter(category=category)
         
-        # 4. 按收藏状态筛选
-        is_favorite = request.query_params.get('is_favorite')
-        if is_favorite is not None:
-            queryset = queryset.filter(is_favorite=is_favorite.lower() == 'true')
-        
-        # 5. 排序逻辑
+        # 4. 排序逻辑
         order_by = request.query_params.get('order_by', 'monthly_search_volume')
         order_direction = request.query_params.get('order_direction', 'desc')
         
@@ -653,7 +648,7 @@ class KeywordResearchViewSet(BaseViewSet):
         writer.writerow([
             'ID', '关键词', '类型', '分类', '月搜索量',
             '优化难度', 'CPC', '趋势', '竞争度',
-            '是否收藏', '父关键词', '推荐分数', '创建时间', '更新时间'
+            '父关键词', '推荐分数', '创建时间', '更新时间'
         ])
         
         # 写入数据行
@@ -668,7 +663,6 @@ class KeywordResearchViewSet(BaseViewSet):
                 kw.cpc,
                 kw.trend,
                 kw.competition,
-                '是' if kw.is_favorite else '否',
                 kw.parent_keyword or '',
                 kw.recommendation_score,
                 kw.created_at.strftime('%Y-%m-%d %H:%M:%S') if kw.created_at else '',
@@ -762,7 +756,6 @@ class KeywordResearchViewSet(BaseViewSet):
                         'cpc': float(row.get('CPC', 0) or 0),
                         'trend': str(row.get('趋势', 'stable') or 'stable'),
                         'competition': float(row.get('竞争度', 0) or 0),
-                        'is_favorite': str(row.get('是否收藏', '否') or '否') == '是',
                         'parent_keyword': str(row.get('父关键词', '') or '').strip() or None,
                         'recommendation_score': int(float(row.get('推荐分数', 0) or 0)),
                     }
@@ -808,7 +801,7 @@ class KeywordResearchViewSet(BaseViewSet):
     
     @extend_schema(
         summary="批量收藏关键词",
-        description="根据关键词 ID 列表批量设置收藏状态",
+        description="根据关键词 ID 列表批量添加或取消收藏",
         request={
             'application/json': {
                 'type': 'object',
@@ -819,7 +812,7 @@ class KeywordResearchViewSet(BaseViewSet):
                             {'type': 'integer', 'description': '单个关键词 ID，如 1'}
                         ]
                     },
-                    'is_favorite': {'type': 'boolean', 'description': '收藏状态：true(收藏)/false(取消收藏)', 'default': True}
+                    'action': {'type': 'string', 'description': '操作类型：add(收藏)/remove(取消收藏)', 'default': 'add', 'enum': ['add', 'remove']}
                 },
                 'required': ['ids']
             }
@@ -845,24 +838,44 @@ class KeywordResearchViewSet(BaseViewSet):
         if not isinstance(ids, list) or len(ids) == 0:
             return ApiResponse(code=400, message="ID 列表不能为空")
         
-        # 获取收藏状态（默认 true）
-        is_favorite = request.data.get('is_favorite', True)
+        # 获取当前用户ID
+        user_id = request.user.id
+        
+        # 获取操作类型（默认 add）
+        action = request.data.get('action', 'add')
         
         try:
-            # 批量更新收藏状态
-            updated_count = KeywordLibrary.objects.filter(id__in=ids).update(is_favorite=is_favorite)
-            
-            if updated_count == 0:
-                return ApiResponse(code=404, message="未找到指定的关键词")
-            
-            action_text = "收藏" if is_favorite else "取消收藏"
-            return ApiResponse(
-                data={
-                    'updated_count': updated_count,
-                    'is_favorite': is_favorite
-                },
-                message=f"成功{action_text} {updated_count} 个关键词"
-            )
+            if action == 'add':
+                # 批量添加收藏（使用 bulk_create + ignore_conflicts 避免重复）
+                favorites = [
+                    KeywordFavorite(user_id=user_id, keyword_id=kw_id)
+                    for kw_id in ids
+                ]
+                KeywordFavorite.objects.bulk_create(favorites, ignore_conflicts=True)
+                
+                return ApiResponse(
+                    data={
+                        'total': len(ids),
+                        'added': len(ids)
+                    },
+                    message=f"成功收藏 {len(ids)} 个关键词"
+                )
+            else:
+                # 批量取消收藏
+                deleted_count, _ = KeywordFavorite.objects.filter(
+                    user_id=user_id,
+                    keyword_id__in=ids
+                ).delete()
+                
+                if deleted_count == 0:
+                    return ApiResponse(code=404, message="未找到指定的收藏记录")
+                
+                return ApiResponse(
+                    data={
+                        'deleted_count': deleted_count
+                    },
+                    message=f"成功取消收藏 {deleted_count} 个关键词"
+                )
             
         except Exception as e:
             return ApiResponse(code=500, message=f"操作失败: {str(e)}")

@@ -1356,7 +1356,6 @@ class KeywordLibrary(models.Model):
     cpc = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="CPC (点击成本)")
     trend = models.CharField(max_length=20, blank=True, null=True, verbose_name="趋势 (rising/falling/stable)")
     competition = models.FloatField(default=0.0, verbose_name="竞争度 (0-1)")
-    is_favorite = models.BooleanField(default=False, verbose_name="是否收藏")
     
     # 关联字段：如果是长尾词，记录它的父关键词
     parent_keyword = models.CharField(max_length=200, blank=True, null=True, verbose_name="父关键词")
@@ -1373,3 +1372,30 @@ class KeywordLibrary(models.Model):
 
     def __str__(self):
         return self.keyword
+
+
+class KeywordFavorite(models.Model):
+    """
+    关键词收藏表
+    """
+    user_id = models.IntegerField(verbose_name="用户ID", db_index=True)
+    keyword = models.ForeignKey(
+        KeywordLibrary,
+        on_delete=models.CASCADE,
+        related_name='favorited_by',
+        verbose_name="关键词"
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="收藏时间")
+
+    class Meta:
+        db_table = 't_keyword_favorite'
+        verbose_name = '关键词收藏'
+        verbose_name_plural = '关键词收藏'
+        unique_together = ('user_id', 'keyword')  # 同一用户不能重复收藏同一关键词
+        indexes = [
+            models.Index(fields=['user_id', '-created_at']),
+            models.Index(fields=['keyword']),
+        ]
+
+    def __str__(self):
+        return f"用户 {self.user_id} 收藏了 {self.keyword.keyword}"

@@ -621,6 +621,9 @@ class WallpapersViewSet(BaseViewSet):
             queryset = queryset.filter(category__id=1).distinct()
         elif platform == 'PHONE':
             queryset = queryset.filter(category__id=2).distinct()
+        name = request.query_params.get("name", "").strip()
+        if name:
+            queryset = queryset.filter(name__icontains=name).distinct()
 
         tag_name = request.query_params.get("tag_name", "").strip()
         if tag_name:
