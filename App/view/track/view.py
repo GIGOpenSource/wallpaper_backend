@@ -154,8 +154,12 @@ class TrackViewSet(BaseViewSet):
 
         # 1. 识别设备类型（优先级：iPad > 其他平板 > 手机 > 桌面）
         if 'ipad' in ua:
+            # iPad 即使有 Mobile 关键字也是平板
             device_type = 'tablet'
-        elif 'tablet' in ua or 'android' in ua and 'mobile' not in ua:
+        elif 'tablet' in ua:
+            device_type = 'tablet'
+        elif 'android' in ua and 'mobile' not in ua:
+            # Android 但没有 mobile 关键字，可能是平板
             device_type = 'tablet'
         elif 'mobile' in ua or 'iphone' in ua or 'android' in ua:
             device_type = 'mobile'
