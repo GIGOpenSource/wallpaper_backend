@@ -5,7 +5,7 @@
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
 from rest_framework import serializers
 from rest_framework.decorators import action
-from models.models import Competitor
+from models.models import Competitor, WebsiteKeyword
 from tool.base_views import BaseViewSet
 from tool.permissions import IsAdmin
 from tool.utils import ApiResponse, CustomPagination
@@ -24,6 +24,28 @@ class CompetitorSerializer(serializers.ModelSerializer):
             'last_synced_at', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'last_synced_at', 'created_at', 'updated_at']
+        # 移除 url 的唯一性验证，在 create 方法中处理重复逻辑
+        extra_kwargs = {
+            'url': {'validators': []}
+        }
+    
+    def create(self, validated_data):
+        """
+        重写create方法：如果URL已存在则返回现有实例，否则创建新实例
+        """
+        url = validated_data.get('url')
+        competitor = Competitor.objects.filter(url=url).first()
+        
+        if competitor:
+            # 已存在，更新名称（如果提供了新名称）
+            name = validated_data.get('name')
+            if name:
+                competitor.name = name
+                competitor.save()
+            return competitor
+        else:
+            # 不存在，创建新的
+            return super().create(validated_data)
 
 
 @extend_schema(tags=["竞争对手管理"])
@@ -95,7 +117,7 @@ class CompetitorViewSet(BaseViewSet):
         return ApiResponse(data=serializer.data, message="列表获取成功")
 
     def create(self, request, *args, **kwargs):
-        """添加竞争对手并自动同步数据"""
+        """添加竞争对手并自动同步数据（如果已存在则更新）"""
         from django.db import transaction
         
         serializer = self.get_serializer(data=request.data)
@@ -103,7 +125,7 @@ class CompetitorViewSet(BaseViewSet):
         
         try:
             with transaction.atomic():
-                # 保存竞争对手基本信息
+                # 保存或更新竞争对手基本信息（序列化器中处理了重复检查）
                 competitor = serializer.save()
                 
                 # 提取域名
@@ -124,12 +146,42 @@ class CompetitorViewSet(BaseViewSet):
                 competitor.last_synced_at = timezone.now()
                 competitor.save()
                 
+                # 保存关键词数据到 WebsiteKeyword 模型（先删除旧数据再插入新数据）
+                keywords = seo_data.get('keywords', [])
+                if keywords:
+                    # 先删除该竞争对手的旧关键词数据
+                    WebsiteKeyword.objects.filter(competitor=competitor).delete()
+                    
+                    keyword_objects = []
+                    seen_keywords = set()  # 用于去重
+                    for kw_data in keywords:
+                        keyword_str = kw_data['keyword']
+                        # 跳过重复的关键词
+                        if keyword_str in seen_keywords:
+                            continue
+                        seen_keywords.add(keyword_str)
+                        
+                        keyword_obj = WebsiteKeyword(
+                            competitor=competitor,
+                            keyword=keyword_str,
+                            rank=kw_data['rank'],
+                            page_title=kw_data.get('page_title', ''),
+                            bidword_companycount=kw_data.get('bidword_companycount', 0),
+                            long_keyword_count=kw_data.get('long_keyword_count', 0),
+                            index=kw_data.get('index', 0)
+                        )
+                        keyword_objects.append(keyword_obj)
+                    
+                    # 批量创建关键词记录（忽略冲突）
+                    if keyword_objects:
+                        WebsiteKeyword.objects.bulk_create(keyword_objects, ignore_conflicts=True)
+                
                 # 重新序列化返回完整数据
                 result_serializer = self.get_serializer(competitor)
                 return ApiResponse(
                     data=result_serializer.data,
-                    message="竞争对手添加成功，数据已同步",
-                    code=201
+                    message="竞争对手数据已同步",
+                    code=200
                 )
         except Exception as e:
             return ApiResponse(code=500, message=f"添加竞争对手失败: {str(e)}")
@@ -252,6 +304,36 @@ class CompetitorViewSet(BaseViewSet):
                     competitor.growth_trend = seo_data['growth_trend']
                     competitor.last_synced_at = timezone.now()
                     competitor.save()
+                    
+                    # 保存关键词数据到 WebsiteKeyword 模型
+                    keywords = seo_data.get('keywords', [])
+                    if keywords:
+                        # 先删除该竞争对手的旧关键词数据
+                        WebsiteKeyword.objects.filter(competitor=competitor).delete()
+                        
+                        keyword_objects = []
+                        seen_keywords = set()  # 用于去重
+                        for kw_data in keywords:
+                            keyword_str = kw_data['keyword']
+                            # 跳过重复的关键词
+                            if keyword_str in seen_keywords:
+                                continue
+                            seen_keywords.add(keyword_str)
+                            
+                            keyword_obj = WebsiteKeyword(
+                                competitor=competitor,
+                                keyword=keyword_str,
+                                rank=kw_data['rank'],
+                                page_title=kw_data.get('page_title', ''),
+                                bidword_companycount=kw_data.get('bidword_companycount', 0),
+                                long_keyword_count=kw_data.get('long_keyword_count', 0),
+                                index=kw_data.get('index', 0)
+                            )
+                            keyword_objects.append(keyword_obj)
+                        
+                        # 批量创建关键词记录（忽略冲突）
+                        if keyword_objects:
+                            WebsiteKeyword.objects.bulk_create(keyword_objects, ignore_conflicts=True)
                 
                 success_count += 1
                 results.append({

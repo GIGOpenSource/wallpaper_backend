@@ -14,7 +14,7 @@ import csv
 import io
 from django.http import HttpResponse
 
-from models.models import KeywordLibrary
+from models.models import KeywordLibrary, Competitor, WebsiteKeyword
 from tool.base_views import BaseViewSet
 from tool.permissions import IsAdmin
 from tool.utils import ApiResponse, CustomPagination
@@ -898,3 +898,134 @@ class KeywordResearchViewSet(BaseViewSet):
             
         except Exception as e:
             return ApiResponse(code=500, message=f"获取数据失败: {str(e)}")
+
+
+# ==================== 关键词竞品分析 ====================
+
+class CompetitorKeywordSerializer(serializers.ModelSerializer):
+    """竞争对手序列化器（精简版）"""
+    growth_trend_display = serializers.CharField(source='get_growth_trend_display', read_only=True)
+    
+    class Meta:
+        model = Competitor
+        fields = [
+            'id', 'name', 'url', 'domain_authority', 'monthly_traffic',
+            'keyword_count', 'backlink_count', 'growth_trend', 'growth_trend_display',
+            'last_synced_at'
+        ]
+
+
+class CompetitorKeywordDetailSerializer(serializers.ModelSerializer):
+    """竞争对手关键词详情序列化器"""
+    class Meta:
+        model = WebsiteKeyword
+        fields = [
+            'id', 'keyword', 'rank', 'page_title',
+            'bidword_companycount', 'long_keyword_count', 'index',
+            'created_at', 'updated_at'
+        ]
+
+
+@extend_schema(tags=["关键词竞品分析"])
+@extend_schema_view(
+    list=extend_schema(
+        summary="获取竞争对手列表及Top3关键词",
+        description="获取所有竞争对手列表，每个竞争对手返回前3个关键词",
+    ),
+    retrieve=extend_schema(
+        summary="获取竞争对手关键词详情",
+        description="根据竞争对手ID获取所有关键词列表",
+        parameters=[
+            OpenApiParameter(name="id", type=int, required=True, description="竞争对手ID", location="path"),
+        ],
+    ),
+)
+class CompetitorKeywordAnalysisViewSet(BaseViewSet):
+    """
+    关键词竞品分析 ViewSet
+    提供竞争对手关键词分析功能
+    """
+    permission_classes = [IsAdmin]
+    queryset = Competitor.objects.all()
+    serializer_class = CompetitorKeywordSerializer
+    pagination_class = CustomPagination
+    
+    def list(self, request, *args, **kwargs):
+        """获取竞争对手列表及Top3关键词"""
+        queryset = Competitor.objects.all().order_by('-created_at')
+        
+        # 分页
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            competitors = page
+        else:
+            competitors = queryset
+        
+        # 构建返回数据
+        result_data = []
+        for competitor in competitors:
+            # 获取该竞争对手的前3个关键词（按排名排序）
+            top_keywords = WebsiteKeyword.objects.filter(
+                competitor=competitor
+            ).order_by('rank')[:3]
+            
+            competitor_data = {
+                'id': competitor.id,
+                'name': competitor.name,
+                'url': competitor.url,
+                'domain_authority': competitor.domain_authority,
+                'monthly_traffic': competitor.monthly_traffic,
+                'keyword_count': competitor.keyword_count,
+                'backlink_count': competitor.backlink_count,
+                'growth_trend': competitor.growth_trend,
+                'growth_trend_display': competitor.get_growth_trend_display(),
+                'last_synced_at': competitor.last_synced_at,
+                'top_keywords': [
+                    {
+                        'keyword': kw.keyword,
+                        'rank': kw.rank,
+                        'page_title': kw.page_title,
+                    }
+                    for kw in top_keywords
+                ]
+            }
+            result_data.append(competitor_data)
+        
+        if page is not None:
+            return self.get_paginated_response(result_data)
+        
+        return ApiResponse(data=result_data, message="竞争对手列表获取成功")
+    
+    def retrieve(self, request, *args, **kwargs):
+        """获取竞争对手关键词详情"""
+        pk = kwargs.get('pk')
+        
+        try:
+            competitor = Competitor.objects.get(id=pk)
+        except Competitor.DoesNotExist:
+            return ApiResponse(code=404, message="竞争对手不存在")
+        
+        # 获取该竞争对手的所有关键词（按排名排序）
+        keywords = WebsiteKeyword.objects.filter(
+            competitor=competitor
+        ).order_by('rank')
+        
+        # 分页
+        page = self.paginate_queryset(keywords)
+        if page is not None:
+            serializer = CompetitorKeywordDetailSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        
+        serializer = CompetitorKeywordDetailSerializer(keywords, many=True)
+        return ApiResponse(
+            data={
+                'competitor': {
+                    'id': competitor.id,
+                    'name': competitor.name,
+                    'url': competitor.url,
+                    'keyword_count': competitor.keyword_count,
+                },
+                'keywords': serializer.data
+            },
+            message="关键词详情获取成功"
+        )

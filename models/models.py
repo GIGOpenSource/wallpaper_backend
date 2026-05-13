@@ -1192,6 +1192,42 @@ class Competitor(models.Model):
         return f"{self.name} ({self.url})"
 
 
+class WebsiteKeyword(models.Model):
+    """
+    网站关键词列表：存储竞争对手网站的关键词数据
+    """
+    competitor = models.ForeignKey(
+        Competitor,
+        on_delete=models.CASCADE,
+        related_name='keywords',
+        verbose_name="竞争对手"
+    )
+    keyword = models.CharField(max_length=200, verbose_name="关键词", db_index=True)
+    rank = models.IntegerField(default=0, verbose_name="排名")
+    page_title = models.CharField(max_length=500, blank=True, null=True, verbose_name="页面标题")
+    bidword_companycount = models.IntegerField(default=0, verbose_name="竞价公司数量")
+    long_keyword_count = models.IntegerField(default=0, verbose_name="长尾词数量")
+    index = models.IntegerField(default=0, verbose_name="索引值")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+    
+    class Meta:
+        db_table = 't_website_keyword'
+        verbose_name = '网站关键词'
+        verbose_name_plural = '网站关键词'
+        ordering = ['-rank']
+        indexes = [
+            models.Index(fields=['competitor', 'keyword']),
+            models.Index(fields=['competitor', '-rank']),
+            models.Index(fields=['keyword']),
+        ]
+        # 联合唯一索引：同一竞争对手的同一关键词只有一条记录
+        unique_together = ('competitor', 'keyword')
+    
+    def __str__(self):
+        return f"{self.competitor.name} - {self.keyword} (排名: {self.rank})"
+
+
 class PageStats(models.Model):
     """
     页面详细统计表：聚合 TrackEvent 数据

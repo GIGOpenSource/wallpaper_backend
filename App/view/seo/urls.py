@@ -11,6 +11,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
 from App.view.seo.domain_analysis.view import DetectionLogViewSet
+from App.view.seo.keyword.view import CompetitorKeywordAnalysisViewSet
 from App.view.seo.view import SEOViewSet
 from App.view.seo.sitemap import urls as sitemap_urls
 from App.view.seo.tdk import urls as tdk_urls
@@ -25,6 +26,8 @@ from App.view.seo.keyword import urls as keyword_urls
 router = DefaultRouter()
 router.register(r'seo_view', SEOViewSet, basename='seo_view')
 router.register(r'detection-log', DetectionLogViewSet, basename='detection_log')
+router.register(r'competitor-analysis', CompetitorKeywordAnalysisViewSet, basename='competitor-analysis')
+
 
 urlpatterns = [
     path('', include(router.urls)),
