@@ -144,7 +144,7 @@ class KeywordResearchViewSet(BaseViewSet):
     pagination_class = CustomPagination
     
     def list(self, request, *args, **kwargs):
-        """获取关键词列表，支持按类型、分类、收藏状态筛选"""
+        """获取关键词列表，支持按类型、分类、收藏状态筛选和排序"""
         queryset = KeywordLibrary.objects.all()
         
         # 1. 按关键词类型筛选（核心逻辑：区分热门、长尾、普通）
@@ -167,7 +167,22 @@ class KeywordResearchViewSet(BaseViewSet):
         if is_favorite is not None:
             queryset = queryset.filter(is_favorite=is_favorite.lower() == 'true')
         
-        queryset = queryset.order_by('-monthly_search_volume')
+        # 5. 排序逻辑
+        order_by = request.query_params.get('order_by', 'monthly_search_volume')
+        order_direction = request.query_params.get('order_direction', 'desc')
+        
+        # 构建排序字段
+        valid_order_fields = ['monthly_search_volume', 'updated_at', 'created_at', 'optimization_difficulty', 'cpc']
+        if order_by not in valid_order_fields:
+            order_by = 'monthly_search_volume'
+        
+        # 确定排序方向
+        if order_direction.lower() == 'asc':
+            sort_field = order_by
+        else:
+            sort_field = f'-{order_by}'
+        
+        queryset = queryset.order_by(sort_field)
         
         page = self.paginate_queryset(queryset)
         if page is not None:
