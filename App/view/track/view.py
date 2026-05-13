@@ -151,7 +151,7 @@ class TrackViewSet(BaseViewSet):
     def _parse_ua(self, user_agent):
         """解析 User-Agent 获取设备类型和浏览器名称"""
         ua = user_agent.lower() if user_agent else ''
-        device_type = 'desktop'
+        device_type = 'pc'  # 默认桌面端为 pc
         browser = 'unknown'
 
         # 1. 识别设备类型（iPad 优先级最高，不可被其他条件覆盖）
@@ -169,6 +169,7 @@ class TrackViewSet(BaseViewSet):
                 device_type = 'mobile'
             elif 'harmonyos' in ua:
                 device_type = 'mobile'
+            # 其他情况默认为 pc（桌面端）
 
         # 2. 识别浏览器/应用
         if 'micromessenger' in ua:
