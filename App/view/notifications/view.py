@@ -43,7 +43,7 @@ class NotificationSerializer(serializers.ModelSerializer):
             return {'nickname': '活动通知', 'avatar_url': None}
 
         if obj.notification_type in ['feature']:
-            return {'nickname': '更新通知', 'avatar_url': None}
+            return {'nickname': '功能通知', 'avatar_url': None}
 
         
         # 其他类型通知显示实际发送者
