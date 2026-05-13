@@ -26,17 +26,31 @@ class KeywordLibrarySerializer(serializers.ModelSerializer):
     """关键词词库序列化器"""
     category_display = serializers.CharField(source='get_category_display', read_only=True)
     keyword_type_display = serializers.CharField(source='get_keyword_type_display', read_only=True)
+    is_favorite = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = KeywordLibrary
         fields = [
             'id', 'keyword', 'keyword_type', 'keyword_type_display', 'category', 'category_display',
             'monthly_search_volume', 'optimization_difficulty', 'cpc',
-            'trend', 'competition',
+            'trend', 'competition', 'is_favorite',
             'parent_keyword', 'recommendation_score',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def get_is_favorite(self, obj):
+        """动态获取当前用户是否收藏了该关键词"""
+        request = self.context.get('request')
+        if not request or not hasattr(request, 'user'):
+            return False
+        
+        user_id = request.user.id
+        # 检查该用户是否收藏了这个关键词
+        return KeywordFavorite.objects.filter(
+            user_id=user_id,
+            keyword=obj
+        ).exists()
 
 
 @extend_schema(tags=["关键词研究"])
@@ -144,7 +158,7 @@ class KeywordResearchViewSet(BaseViewSet):
     pagination_class = CustomPagination
     
     def list(self, request, *args, **kwargs):
-        """获取关键词列表，支持按类型、分类筛选和排序"""
+        """获取关键词列表，支持按类型、分类、收藏状态筛选和排序"""
         queryset = KeywordLibrary.objects.all()
         
         # 1. 按关键词类型筛选（核心逻辑：区分热门、长尾、普通）
@@ -162,7 +176,19 @@ class KeywordResearchViewSet(BaseViewSet):
         if category:
             queryset = queryset.filter(category=category)
         
-        # 4. 排序逻辑
+        # 4. 按收藏状态筛选
+        is_favorite = request.query_params.get('is_favorite')
+        if is_favorite is not None:
+            user_id = request.user.id
+            if is_favorite.lower() == 'true':
+                # 只返回当前用户收藏的关键词
+                favorite_keyword_ids = KeywordFavorite.objects.filter(
+                    user_id=user_id
+                ).values_list('keyword_id', flat=True)
+                queryset = queryset.filter(id__in=favorite_keyword_ids)
+            # 如果为 false，则返回未收藏的（可选，目前不实现）
+        
+        # 5. 排序逻辑
         order_by = request.query_params.get('order_by', 'monthly_search_volume')
         order_direction = request.query_params.get('order_direction', 'desc')
         
