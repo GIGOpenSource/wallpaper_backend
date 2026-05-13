@@ -12,7 +12,7 @@ import uuid
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
-from django.db.models import F
+from django.db.models import F, Case, When, IntegerField
 from django.db.models.functions import Greatest
 from PIL import Image
 from django.utils import timezone
@@ -686,14 +686,21 @@ class WallpapersViewSet(BaseViewSet):
             strategy_ids = self._get_strategy_wallpaper_ids(order, platform)
         
         strategy_count = len(strategy_ids)
-        strategy_end_page = (strategy_count + page_size - 1) // page_size  # 策略覆盖的最后一页
         
-        # ---- 判断当前页是否在策略范围内 ----
-        if page_num <= strategy_end_page and strategy_ids:
-            # 当前页在策略范围内，直接返回策略数据（不应用其他筛选）
-            return self._return_strategy_page(
-                strategy_ids, page_num, page_size, customer_id, request
+        # ---- 判断当前页是否需要策略数据 ----
+        if page_num == 1 and strategy_ids:
+            # 第一页：策略数据 + 补充普通数据（如果策略不足一页）
+            return self._return_strategy_with_fallback(
+                strategy_ids, page_num, page_size, customer_id, request, base_queryset, order
             )
+        elif page_num > 1 and strategy_ids:
+            # 后续页：计算策略占用的页数，判断当前页是否在策略范围内
+            strategy_end_page = (strategy_count + page_size - 1) // page_size
+            if page_num <= strategy_end_page:
+                # 当前页在策略范围内
+                return self._return_strategy_page(
+                    strategy_ids, page_num, page_size, customer_id, request
+                )
         
         # ---- 超过策略范围，使用筛选条件查询普通数据 ----
         queryset = base_queryset
@@ -887,6 +894,82 @@ class WallpapersViewSet(BaseViewSet):
         
         return strategy_ids
     
+    def _return_strategy_with_fallback(self, strategy_ids, page_num, page_size, customer_id, request, base_queryset, order):
+        """返回策略页面数据，如果策略不足一页则从普通数据中补充"""
+        # 计算策略数据的分页
+        start_idx = (page_num - 1) * page_size
+        end_idx = start_idx + page_size
+        page_strategy_ids = strategy_ids[start_idx:end_idx]
+        
+        # 获取策略壁纸数据
+        strategy_qs = Wallpapers.objects.filter(id__in=page_strategy_ids).prefetch_related('tags').only(
+            'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
+            'has_watermark', 'is_live', 'is_hd', 'hot_score', 'like_count',
+            'collect_count', 'download_count', 'view_count', 'created_at', 'audit_status'
+        )
+        
+        # 保持策略中的顺序
+        preserved_order = Case(*[When(id=pk, then=pos) for pos, pk in enumerate(page_strategy_ids)])
+        strategy_qs = strategy_qs.order_by(preserved_order)
+        
+        # 如果策略数据不足一页，从普通数据中补充
+        strategy_count = len(page_strategy_ids)
+        need_fallback = page_size - strategy_count
+        
+        fallback_data = []
+        if need_fallback > 0:
+            # 构建普通数据查询集（排除策略中已展示的壁纸）
+            all_strategy_ids = set(strategy_ids)  # 所有策略ID
+            fallback_queryset = base_queryset.exclude(id__in=all_strategy_ids)
+            
+            # 应用排序
+            if order == 'hot':
+                fallback_queryset = fallback_queryset.order_by('-hot_score', '-created_at')
+            elif order == 'home':
+                fallback_queryset = fallback_queryset.order_by('-created_at')
+            else:
+                fallback_queryset = fallback_queryset.order_by('-updated_at', '-created_at', '-hot_score')
+            
+            # 获取补充数据
+            fallback_qs = fallback_queryset[:need_fallback].prefetch_related('tags').only(
+                'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
+                'has_watermark', 'is_live', 'is_hd', 'hot_score', 'like_count',
+                'collect_count', 'download_count', 'view_count', 'created_at', 'audit_status'
+            )
+            fallback_data = list(fallback_qs)
+        
+        # 用户互动信息
+        liked_ids = collected_ids = set()
+        if customer_id:
+            liked_ids = set(
+                WallpaperLike.objects.filter(customer_id=customer_id).values_list('wallpaper_id', flat=True))
+            collected_ids = set(
+                WallpaperCollection.objects.filter(user_id=customer_id).values_list('wallpaper_id', flat=True))
+        
+        # 合并策略数据和补充数据
+        combined_data = list(strategy_qs) + fallback_data
+        
+        # 序列化
+        context = self.get_serializer_context()
+        context['liked_wallpaper_ids'] = liked_ids
+        context['collected_wallpaper_ids'] = collected_ids
+        serializer = WallpapersListSerializer(combined_data, many=True, context=context)
+        
+        # 获取策略总数
+        total_strategy_count = len(strategy_ids)
+        
+        return ApiResponse(
+            data={
+                'results': serializer.data,
+                'count': total_strategy_count,
+                'currentPage': page_num,
+                'pageSize': page_size,
+                'totalPages': (total_strategy_count + page_size - 1) // page_size,
+                'isStrategyPage': True
+            },
+            message="列表获取成功"
+        )
+
     def _return_strategy_page(self, strategy_ids, page_num, page_size, customer_id, request):
         """返回策略页面的数据"""
         # 计算策略数据的分页
