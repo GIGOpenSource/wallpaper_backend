@@ -700,7 +700,7 @@ class KeywordResearchViewSet(BaseViewSet):
     )
     @action(detail=False, methods=['post'], name='导入关键词')
     def import_keywords(self, request):
-        """从 CSV 文件导入关键词"""
+        """从 CSV 或 Excel 文件导入关键词"""
         file_obj = request.FILES.get('file')
         if not file_obj:
             return ApiResponse(code=400, message="请上传文件")
@@ -709,22 +709,46 @@ class KeywordResearchViewSet(BaseViewSet):
         keyword_type = request.POST.get('keyword_type', 'normal')
         
         # 验证文件类型
-        if not file_obj.name.endswith('.csv'):
-            return ApiResponse(code=400, message="仅支持 CSV 格式文件")
+        file_name = file_obj.name.lower()
+        is_excel = file_name.endswith(('.xlsx', '.xls'))
+        is_csv = file_name.endswith('.csv')
+        
+        if not (is_excel or is_csv):
+            return ApiResponse(code=400, message="仅支持 CSV 或 Excel 格式文件（.csv, .xlsx, .xls）")
         
         try:
-            # 读取 CSV 文件
-            decoded_file = file_obj.read().decode('utf-8-sig')
-            csv_reader = csv.DictReader(io.StringIO(decoded_file))
+            rows_data = []
+            
+            if is_csv:
+                # 读取 CSV 文件
+                decoded_file = file_obj.read().decode('utf-8-sig')
+                csv_reader = csv.DictReader(io.StringIO(decoded_file))
+                for row in csv_reader:
+                    rows_data.append(row)
+            else:
+                # 读取 Excel 文件
+                import openpyxl
+                workbook = openpyxl.load_workbook(file_obj)
+                sheet = workbook.active
+                
+                # 获取表头
+                headers = [cell.value for cell in sheet[1]]
+                
+                # 读取数据行
+                for row in sheet.iter_rows(min_row=2, values_only=True):
+                    if all(v is None for v in row):  # 跳过空行
+                        continue
+                    row_dict = {headers[i]: row[i] for i in range(len(headers)) if i < len(row)}
+                    rows_data.append(row_dict)
             
             success_count = 0
             error_count = 0
             errors = []
             
-            for row_num, row in enumerate(csv_reader, start=2):  # 从第2行开始（第1行是表头）
+            for row_num, row in enumerate(rows_data, start=2):  # 从第2行开始（第1行是表头）
                 try:
                     # 提取字段
-                    keyword = row.get('关键词', '').strip()
+                    keyword = str(row.get('关键词', '') or '').strip()
                     if not keyword:
                         errors.append(f"第{row_num}行：关键词不能为空")
                         error_count += 1
@@ -733,18 +757,18 @@ class KeywordResearchViewSet(BaseViewSet):
                     # 准备数据
                     data = {
                         'keyword_type': keyword_type,
-                        'monthly_search_volume': int(row.get('月搜索量', 0) or 0),
+                        'monthly_search_volume': int(float(row.get('月搜索量', 0) or 0)),
                         'optimization_difficulty': float(row.get('优化难度', 0) or 0),
                         'cpc': float(row.get('CPC', 0) or 0),
-                        'trend': row.get('趋势', 'stable'),
+                        'trend': str(row.get('趋势', 'stable') or 'stable'),
                         'competition': float(row.get('竞争度', 0) or 0),
-                        'is_favorite': row.get('是否收藏', '否') == '是',
-                        'parent_keyword': row.get('父关键词', '').strip() or None,
-                        'recommendation_score': int(row.get('推荐分数', 0) or 0),
+                        'is_favorite': str(row.get('是否收藏', '否') or '否') == '是',
+                        'parent_keyword': str(row.get('父关键词', '') or '').strip() or None,
+                        'recommendation_score': int(float(row.get('推荐分数', 0) or 0)),
                     }
                     
                     # 处理分类映射（中文转英文）
-                    category_display = row.get('分类', '风格').strip()
+                    category_display = str(row.get('分类', '风格') or '风格').strip()
                     category_map = {
                         '风格': 'style',
                         '主题': 'theme',
@@ -759,11 +783,8 @@ class KeywordResearchViewSet(BaseViewSet):
                         defaults=data
                     )
                     
-                    if created:
-                        success_count += 1
-                    else:
-                        # 如果已存在，也算成功（更新）
-                        success_count += 1
+                    # 如果已存在，也算成功（更新）
+                    success_count += 1
                         
                 except Exception as e:
                     errors.append(f"第{row_num}行：{str(e)}")
@@ -780,6 +801,8 @@ class KeywordResearchViewSet(BaseViewSet):
             
         except UnicodeDecodeError:
             return ApiResponse(code=400, message="文件编码错误，请使用 UTF-8 编码的 CSV 文件")
+        except ImportError:
+            return ApiResponse(code=500, message="缺少 openpyxl 库，请安装: pip install openpyxl")
         except Exception as e:
             return ApiResponse(code=500, message=f"导入失败: {str(e)}")
     

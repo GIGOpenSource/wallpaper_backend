@@ -127,9 +127,9 @@ class SitemapURLViewSet(BaseViewSet):
         if is_active is not None:
             queryset = queryset.filter(is_active=is_active.lower() == 'true')
 
-        url = request.query_params.get('url')
-        if url:
-            queryset = queryset.filter(content__icontains=url)
+        content = request.query_params.get('content')
+        if content:
+            queryset = queryset.filter(content__icontains=content)
 
         queryset = queryset.order_by('-priority', '-created_at')
 
