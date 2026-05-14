@@ -10,7 +10,8 @@ from App.view.recommendation.user_interest_algorithm import (
     filter_by_ctr,
     get_layer_score_wallpapers,
     get_cold_start_wallpaper_ids,
-    get_ctr_based_wallpapers
+    get_ctr_based_wallpapers,
+    get_diversity_exploration_wallpapers
 )
 
 
@@ -18,6 +19,7 @@ from App.view.recommendation.user_interest_algorithm import (
 PERSONAL_POOL_PREFIX = "recommend:personal_pool:"
 COLD_POOL_PREFIX = "recommend:cold_pool:"
 CTR_POOL_PREFIX = "recommend:ctr_pool:"
+DIVERSITY_POOL_PREFIX = "recommend:diversity_pool:"  # 多样性与防滤泡池
 MIXED_POOL_PREFIX = "recommend:mixed_pool:"
 
 # 过期时间（秒）
@@ -138,47 +140,98 @@ def build_ctr_pool(unique_id, platform, order):
         return []
 
 
-def merge_three_pools(personal_ids, cold_ids, ctr_ids, ratio=(0.5, 0.2, 0.3)):
-    """混合三个推荐池（个性化:冷启动:CTR = 5:2:3）
+def build_diversity_pool(unique_id, platform, order):
+    """构建多样性与防滤泡推荐池
+    
+    核心功能：
+    1. 引入低优先级标签（不在用户TOP标签中的标签）
+    2. 结合全局热门壁纸（hot_score高）
+    3. 末尾强制插入5张探索内容（打破信息茧房）
+    
+    Args:
+        unique_id: 用户唯一标识
+        platform: 平台类型 'PC' 或 'PHONE'
+        order: 排序类型 'hot' 或 'home'
+        
+    Returns:
+        list: 壁纸ID列表（前部分为多样性内容，末尾5张为探索内容）
+    """
+    try:
+        # 防御性检查
+        if not unique_id:
+            print(f"[Error] unique_id is empty, cannot build diversity pool")
+            return []
+        
+        # 获取用户标签（用于排除，避免重复推荐）
+        user_tags = get_user_top_tags(unique_id, top_n=10, sync_from_track=True)
+        
+        # 构建多样性壁纸池（400张，其中末尾5张为探索内容）
+        diversity_ids = get_diversity_exploration_wallpapers(
+            user_tags=user_tags,
+            platform=platform,
+            limit=400,
+            exploration_count=5
+        )
+        
+        # 存入Redis
+        redis_key = f"{DIVERSITY_POOL_PREFIX}{unique_id}:{platform}:{order}"
+        _redis.setKey(redis_key, json.dumps(diversity_ids), ex=POOL_EXPIRE_TIME)
+        
+        print(f"[Diversity Pool] unique_id: {unique_id}, platform: {platform}, order: {order}, count: {len(diversity_ids)}")
+        return diversity_ids
+        
+    except Exception as e:
+        print(f"[Build Diversity Pool Failed] error: {e}")
+        return []
+
+
+def merge_four_pools(personal_ids, cold_ids, ctr_ids, diversity_ids, ratio=(0.45, 0.2, 0.25, 0.1)):
+    """混合四个推荐池（个性化:冷启动:CTR:多样性 = 45:20:25:10）
     
     Args:
         personal_ids: 个性化壁纸ID列表
         cold_ids: 冷启动壁纸ID列表
         ctr_ids: CTR标签壁纸ID列表
-        ratio: 各池占比（personal, cold, ctr），默认(0.5, 0.2, 0.3)
+        diversity_ids: 多样性与防滤泡壁纸ID列表（末尾包含5张探索内容）
+        ratio: 各池占比（personal, cold, ctr, diversity），默认(0.45, 0.2, 0.25, 0.1)
         
     Returns:
         list: 混合后的壁纸ID列表
     """
     try:
-        if not personal_ids and not cold_ids and not ctr_ids:
+        if not personal_ids and not cold_ids and not ctr_ids and not diversity_ids:
             return []
         
         # 如果只有一个池有数据，直接返回
-        if not personal_ids and not cold_ids:
-            return ctr_ids
-        if not personal_ids and not ctr_ids:
-            return cold_ids
-        if not cold_ids and not ctr_ids:
-            return personal_ids
+        active_pools = [p for p in [personal_ids, cold_ids, ctr_ids, diversity_ids] if p]
+        if len(active_pools) == 1:
+            return active_pools[0]
         
         # 计算各自的数量
-        total_count = min(len(personal_ids) + len(cold_ids) + len(ctr_ids), 2000)  # 最多2000张
+        total_count = min(
+            len(personal_ids or []) + len(cold_ids or []) + 
+            len(ctr_ids or []) + len(diversity_ids or []),
+            2000
+        )  # 最多2000张
+        
         personal_count = int(total_count * ratio[0])
         cold_count = int(total_count * ratio[1])
-        ctr_count = total_count - personal_count - cold_count
+        ctr_count = int(total_count * ratio[2])
+        diversity_count = total_count - personal_count - cold_count - ctr_count
         
         # 截取对应数量
-        personal_part = personal_ids[:personal_count]
-        cold_part = cold_ids[:cold_count]
-        ctr_part = ctr_ids[:ctr_count]
+        personal_part = (personal_ids or [])[:personal_count]
+        cold_part = (cold_ids or [])[:cold_count]
+        ctr_part = (ctr_ids or [])[:ctr_count]
+        diversity_part = (diversity_ids or [])[:diversity_count]
         
         # 交替合并（避免同一来源连续出现）
         merged = []
-        p_idx, c_idx, t_idx = 0, 0, 0
+        p_idx, c_idx, t_idx, d_idx = 0, 0, 0, 0
         
-        while p_idx < len(personal_part) or c_idx < len(cold_part) or t_idx < len(ctr_part):
-            # 按顺序从三个池中取
+        while (p_idx < len(personal_part) or c_idx < len(cold_part) or 
+               t_idx < len(ctr_part) or d_idx < len(diversity_part)):
+            # 按顺序从四个池中取
             if p_idx < len(personal_part):
                 merged.append(personal_part[p_idx])
                 p_idx += 1
@@ -187,20 +240,26 @@ def merge_three_pools(personal_ids, cold_ids, ctr_ids, ratio=(0.5, 0.2, 0.3)):
                 merged.append(ctr_part[t_idx])
                 t_idx += 1
             
+            if d_idx < len(diversity_part):
+                merged.append(diversity_part[d_idx])
+                d_idx += 1
+            
             if c_idx < len(cold_part):
                 merged.append(cold_part[c_idx])
                 c_idx += 1
         
-        print(f"[Merge Three Pools] personal: {len(personal_part)}, cold: {len(cold_part)}, ctr: {len(ctr_part)}, merged: {len(merged)}")
+        print(f"[Merge Four Pools] personal: {len(personal_part)}, cold: {len(cold_part)}, "
+              f"ctr: {len(ctr_part)}, diversity: {len(diversity_part)}, merged: {len(merged)}")
         return merged
         
     except Exception as e:
-        print(f"[Merge Three Pools Failed] error: {e}")
+        print(f"[Merge Four Pools Failed] error: {e}")
         # 降级：简单拼接
         result = []
         result.extend(personal_ids or [])
         result.extend(cold_ids or [])
         result.extend(ctr_ids or [])
+        result.extend(diversity_ids or [])
         return result
 
 
@@ -244,10 +303,13 @@ def get_or_build_mixed_pool(unique_id, platform, order):
         # 3. 构建CTR池
         ctr_ids = build_ctr_pool(unique_id, platform, order)
         
-        # 4. 三路混合（5:2:3）
-        mixed_ids = merge_three_pools(personal_ids, cold_ids, ctr_ids, ratio=(0.5, 0.2, 0.3))
+        # 4. 构建多样性与防滤泡池
+        diversity_ids = build_diversity_pool(unique_id, platform, order)
         
-        # 5. 存入Redis
+        # 5. 四路混合（45:20:25:10）
+        mixed_ids = merge_four_pools(personal_ids, cold_ids, ctr_ids, diversity_ids, ratio=(0.45, 0.2, 0.25, 0.1))
+        
+        # 6. 存入Redis
         if mixed_ids:
             _redis.setKey(redis_key, json.dumps(mixed_ids), ex=POOL_EXPIRE_TIME)
         
@@ -308,10 +370,12 @@ def invalidate_pool(unique_id, platform, order=None):
         for ord in orders:
             personal_key = f"{PERSONAL_POOL_PREFIX}{unique_id}:{platform}:{ord}"
             ctr_key = f"{CTR_POOL_PREFIX}{unique_id}:{platform}:{ord}"
+            diversity_key = f"{DIVERSITY_POOL_PREFIX}{unique_id}:{platform}:{ord}"
             mixed_key = f"{MIXED_POOL_PREFIX}{unique_id}:{platform}:{ord}"
             
             _redis.delKey(personal_key)
             _redis.delKey(ctr_key)
+            _redis.delKey(diversity_key)
             _redis.delKey(mixed_key)
         
         print(f"[Invalidate Pool] unique_id: {unique_id}, platform: {platform}, order: {order or 'all'}")

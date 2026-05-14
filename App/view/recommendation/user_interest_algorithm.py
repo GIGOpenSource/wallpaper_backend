@@ -829,5 +829,107 @@ def get_ctr_based_wallpapers(user_tags, platform, min_ctr=0.01, limit=200):
         return []
 
 
+def get_diversity_exploration_wallpapers(user_tags, platform, limit=400, exploration_count=5):
+    """获取多样性与防滤泡探索壁纸
+    
+    核心逻辑：
+    1. 识别低优先级标签（不在用户TOP标签中的标签）
+    2. 获取全局热门壁纸（hot_score高）
+    3. 末尾强制插入3-5张探索内容
+    
+    Args:
+        user_tags: 用户标签列表（用于排除，避免重复推荐）
+        platform: 平台类型 'PC' 或 'PHONE'
+        limit: 总数量限制（包含探索内容）
+        exploration_count: 末尾探索内容数量（默认5张）
+        
+    Returns:
+        list: 壁纸ID列表（前limit-exploration_count为多样性内容，末尾exploration_count为探索内容）
+    """
+    from models.models import WallpaperTag, UserInterestTag
+    
+    try:
+        # 1. 获取用户已有的标签ID集合（用于排除）
+        user_tag_names = set()
+        if user_tags:
+            user_tag_names = {tag.name.lower() for tag in user_tags if hasattr(tag, 'name')}
+        
+        # 2. 获取低优先级标签（不在用户标签中的标签）
+        # 策略：随机选择一些标签，但排除用户已有的标签
+        diversity_tags = WallpaperTag.objects.exclude(
+            name__in=list(user_tag_names)
+        ).order_by('?')[:30]  # 随机选30个标签
+        
+        # 3. 从低优先级标签中获取壁纸
+        diversity_ids = []
+        seen_ids = set()
+        
+        for tag in diversity_tags:
+            if len(diversity_ids) >= (limit - exploration_count):
+                break
+            
+            # 获取该标签的壁纸，按热度排序
+            queryset = Wallpapers.objects.filter(
+                tags=tag
+            ).exclude(audit_status='rejected')
+            
+            if platform == 'PC':
+                queryset = queryset.filter(category__id=1)
+            elif platform == 'PHONE':
+                queryset = queryset.filter(category__id=2)
+            
+            # 排除已选中的壁纸
+            if seen_ids:
+                queryset = queryset.exclude(id__in=seen_ids)
+            
+            # 按热度排序，取前几张
+            wallpaper_ids = list(queryset.order_by('-hot_score').values_list('id', flat=True)[:3])
+            
+            for wid in wallpaper_ids:
+                if wid not in seen_ids and len(diversity_ids) < (limit - exploration_count):
+                    diversity_ids.append(wid)
+                    seen_ids.add(wid)
+        
+        # 4. 如果多样性壁纸不够，补充全局热门壁纸
+        if len(diversity_ids) < (limit - exploration_count):
+            remaining_count = (limit - exploration_count) - len(diversity_ids)
+            
+            global_hot_ids = list(
+                Wallpapers.objects
+                .exclude(audit_status='rejected')
+                .exclude(id__in=seen_ids)
+                .filter(
+                    category__id=1 if platform == 'PC' else 2
+                )
+                .order_by('-hot_score', '-like_count')
+                .values_list('id', flat=True)[:remaining_count]
+            )
+            
+            diversity_ids.extend(global_hot_ids)
+            seen_ids.update(global_hot_ids)
+        
+        # 5. 获取末尾探索内容（全局最热门的壁纸，强制插入）
+        exploration_ids = list(
+            Wallpapers.objects
+            .exclude(audit_status='rejected')
+            .exclude(id__in=seen_ids)
+            .filter(
+                category__id=1 if platform == 'PC' else 2
+            )
+            .order_by('-hot_score', '-view_count')
+            .values_list('id', flat=True)[:exploration_count]
+        )
+        
+        # 6. 合并：多样性内容 + 探索内容
+        final_ids = diversity_ids + exploration_ids
+        
+        print(f"[Diversity Pool] diversity: {len(diversity_ids)}, exploration: {len(exploration_ids)}, total: {len(final_ids)}")
+        return final_ids
+        
+    except Exception as e:
+        print(f"[Get Diversity Exploration Wallpapers Failed] error: {e}")
+        return []
+
+
 
 
