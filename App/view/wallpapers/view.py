@@ -765,7 +765,8 @@ class WallpapersViewSet(BaseViewSet):
                 # 推荐池有数据，使用推荐结果
                 # 关键：total 使用 base_queryset 的真实总数，而不是池的大小
                 return self._return_recommended_page(
-                    page_wallpaper_ids, page_num, page_size, customer_id, total_count, total_pages
+                    page_wallpaper_ids, page_num, page_size, customer_id, total_count, total_pages,
+                    request=request, base_queryset=base_queryset, order=order
                 )
         
         # 推荐池无数据或超出范围，降级到普通排序
@@ -773,7 +774,7 @@ class WallpapersViewSet(BaseViewSet):
             page_num, page_size, customer_id, request, base_queryset, order
         )
     
-    def _return_recommended_page(self, page_wallpaper_ids, page_num, page_size, customer_id, total_count, total_pages):
+    def _return_recommended_page(self, page_wallpaper_ids, page_num, page_size, customer_id, total_count, total_pages, request=None, base_queryset=None, order=None):
         """返回推荐页面数据
         
         Args:
@@ -783,10 +784,36 @@ class WallpapersViewSet(BaseViewSet):
             customer_id: 用户ID
             total_count: 总数量（base_queryset的总数）
             total_pages: 总页数
+            request: 请求对象（用于降级时获取筛选条件）
+            base_queryset: 基础查询集（用于降级时补充数据）
+            order: 排序类型（用于降级时补充数据）
             
         Returns:
             dict: 包含 pagination 和 results 的数据字典
         """
+        # 如果推荐池返回的ID数量不足，需要从普通排序中补充
+        if len(page_wallpaper_ids) < page_size and base_queryset is not None:
+            print(f"[Recommendation Supplement] Pool returned {len(page_wallpaper_ids)} IDs, need {page_size}, supplementing...")
+            
+            # 从普通排序中获取补充数据
+            supplement_qs = base_queryset.exclude(id__in=page_wallpaper_ids)
+            
+            # 应用相同的排序规则
+            if order == 'hot':
+                supplement_qs = supplement_qs.order_by('-hot_score', '-like_count', '-created_at')
+            elif order == 'home':
+                supplement_qs = supplement_qs.order_by('-created_at')
+            else:
+                supplement_qs = supplement_qs.order_by('-updated_at', '-created_at', '-hot_score')
+            
+            # 获取需要的补充数量
+            need_count = page_size - len(page_wallpaper_ids)
+            supplement_ids = list(supplement_qs.values_list('id', flat=True)[:need_count])
+            
+            # 合并ID列表
+            page_wallpaper_ids = page_wallpaper_ids + supplement_ids
+            print(f"[Recommendation Supplement] Added {len(supplement_ids)} wallpapers from normal order")
+        
         # 获取壁纸数据（保持推荐顺序）
         recommended_qs = Wallpapers.objects.filter(id__in=page_wallpaper_ids).prefetch_related('tags').only(
             'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
