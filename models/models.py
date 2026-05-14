@@ -1400,3 +1400,36 @@ class KeywordFavorite(models.Model):
 
     def __str__(self):
         return f"用户 {self.user_id} 收藏了 {self.keyword.keyword}"
+
+
+class UserInterestTag(models.Model):
+    """
+    用户兴趣标签表
+    存储用户的标签兴趣分数，支持时间衰减和TOP10保留
+    """
+    unique_id = models.CharField(max_length=100, verbose_name="访客唯一标识", db_index=True)
+    user_id = models.IntegerField(blank=True, null=True, verbose_name="用户ID", db_index=True)
+    tag_level1 = models.CharField(max_length=50, verbose_name="一级标签", db_index=True)
+    tag_level2 = models.CharField(max_length=50, blank=True, null=True, verbose_name="二级标签", db_index=True)
+    score = models.FloatField(default=0.0, verbose_name="兴趣分数")
+    last_interaction_time = models.DateTimeField(verbose_name="最后交互时间", db_index=True)
+    interaction_count = models.IntegerField(default=1, verbose_name="交互次数")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+
+    class Meta:
+        db_table = 'r_user_interest_tag'
+        verbose_name = '用户兴趣标签'
+        verbose_name_plural = '用户兴趣标签'
+        ordering = ['-score']
+        indexes = [
+            models.Index(fields=['unique_id', '-score']),
+            models.Index(fields=['user_id', '-score']),
+            models.Index(fields=['tag_level1', 'tag_level2']),
+        ]
+        # 确保同一用户的同一标签只有一条记录
+        unique_together = ('unique_id', 'tag_level1', 'tag_level2')
+
+    def __str__(self):
+        tag_display = self.tag_level2 if self.tag_level2 else self.tag_level1
+        return f"{self.unique_id} - {tag_display} (score: {self.score:.2f})"
