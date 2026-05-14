@@ -675,7 +675,7 @@ class WallpapersViewSet(BaseViewSet):
         page_size = int(request.query_params.get("pageSize", 10))
         order = request.query_params.get("order", "").lower()
         platform = request.query_params.get("platform", "").upper()
-        unique_id = request.query_params.get("unique_id", "").strip()
+        unique_id = request.META.get("HTTP_UNIQUE_ID", "").strip()
         
         # ---- 先应用平台筛选 ----
         base_queryset = self.filter_queryset(self.get_queryset())
