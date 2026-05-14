@@ -719,26 +719,76 @@ class WallpapersViewSet(BaseViewSet):
     def _handle_recommendation_order(self, unique_id, platform, page_num, page_size, customer_id, request, base_queryset, order):
         """处理 hot/home 排序：使用推荐算法池化方案
         
+        核心逻辑：
+        1. 推荐池用于前 N 页（保证推荐质量）
+        2. 超出推荐池范围时，降级到普通排序（保证可翻到尾页）
+        3. total 返回 base_queryset.count()（真实总数）
+        4. 如果有筛选条件（tag_id等），直接走普通排序（推荐池不包含筛选条件）
+        
         Returns:
             dict: 包含 pagination 和 results 的数据字典
         """
         from App.view.recommendation.recommendation_pool import get_pool_page
         
-        # 从推荐池中获取当前页的壁纸ID
-        page_wallpaper_ids, total_count = get_pool_page(
-            unique_id=unique_id,
-            platform=platform,
-            order=order,  # 传入排序类型（hot/home）
-            page_num=page_num,
-            page_size=page_size
-        )
+        # 检查是否有筛选条件
+        has_filter = any([
+            request.query_params.get("tag_name", "").strip(),
+            request.query_params.get("tag_id", "").strip(),
+            request.query_params.get("media_live", "").strip(),
+            request.query_params.get("resolution", "").strip(),
+            request.query_params.get("name", "").strip(),
+        ])
         
-        if not page_wallpaper_ids:
-            # 如果推荐池为空，降级到普通数据
+        if has_filter:
+            # 有筛选条件，推荐池不适用，直接走普通排序
             return self._handle_normal_order(
                 page_num, page_size, customer_id, request, base_queryset, order
             )
         
+        # 获取 base_queryset 的真实总数（70万+）
+        total_count = base_queryset.count()
+        total_pages = (total_count + page_size - 1) // page_size if page_size > 0 else 0
+        
+        # 计算推荐池能覆盖的最大页数（假设推荐池最多2000张）
+        # 如果当前页在推荐池范围内，使用推荐池
+        # 如果超出推荐池范围，降级到普通排序
+        max_pool_pages = 2000 // page_size  # 推荐池最大覆盖页数
+        
+        if page_num <= max_pool_pages:
+            # 在推荐池范围内，使用推荐算法
+            page_wallpaper_ids, _ = get_pool_page(
+                unique_id=unique_id,
+                platform=platform,
+                order=order,
+                page_num=page_num,
+                page_size=page_size
+            )
+            
+            if page_wallpaper_ids:
+                # 推荐池有数据，使用推荐结果
+                return self._return_recommended_page(
+                    page_wallpaper_ids, page_num, page_size, customer_id, total_count, total_pages
+                )
+        
+        # 推荐池无数据或超出范围，降级到普通排序
+        return self._handle_normal_order(
+            page_num, page_size, customer_id, request, base_queryset, order
+        )
+    
+    def _return_recommended_page(self, page_wallpaper_ids, page_num, page_size, customer_id, total_count, total_pages):
+        """返回推荐页面数据
+        
+        Args:
+            page_wallpaper_ids: 当前页的壁纸ID列表
+            page_num: 当前页码
+            page_size: 每页数量
+            customer_id: 用户ID
+            total_count: 总数量（base_queryset的总数）
+            total_pages: 总页数
+            
+        Returns:
+            dict: 包含 pagination 和 results 的数据字典
+        """
         # 获取壁纸数据（保持推荐顺序）
         recommended_qs = Wallpapers.objects.filter(id__in=page_wallpaper_ids).prefetch_related('tags').only(
             'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
@@ -769,8 +819,8 @@ class WallpapersViewSet(BaseViewSet):
             'pagination': {
                 'page': page_num,
                 'page_size': page_size,
-                'total': total_count,
-                'total_pages': (total_count + page_size - 1) // page_size if page_size > 0 else 0
+                'total': total_count,  # 使用base_queryset的真实总数
+                'total_pages': total_pages
             },
             'results': serializer.data
         }
@@ -830,8 +880,14 @@ class WallpapersViewSet(BaseViewSet):
             else:
                 queryset = queryset.filter(name__icontains=user_input)
         
-        # ---- 按排序类型排序（只处理非 hot/home 的情况）----
-        if order == 'latest':
+        # ---- 按排序类型排序 ----
+        if order == 'hot':
+            # hot 排序：按热度降序（推荐池用完后的降级策略）
+            queryset = queryset.order_by('-hot_score', '-like_count', '-created_at')
+        elif order == 'home':
+            # home 排序：按时间降序（推荐池用完后的降级策略）
+            queryset = queryset.order_by('-created_at')
+        elif order == 'latest':
             queryset = queryset.order_by('-created_at')
         elif order == 'views':
             queryset = queryset.order_by('-view_count', '-created_at')

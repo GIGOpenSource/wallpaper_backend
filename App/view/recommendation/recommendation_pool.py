@@ -61,7 +61,7 @@ def build_personal_pool(unique_id, platform, order):
             best_tags = user_tags
         
         # 3. 分层评分获取壁纸
-        personal_ids = get_layer_score_wallpapers(best_tags, platform, limit=300)
+        personal_ids = get_layer_score_wallpapers(best_tags, platform, limit=800)
         
         # 4. 存入Redis
         redis_key = f"{PERSONAL_POOL_PREFIX}{unique_id}:{platform}:{order}"
@@ -87,7 +87,7 @@ def build_cold_pool(platform, order):
     """
     try:
         # 获取冷启动壁纸（策略壁纸或热门壁纸）
-        cold_ids = get_cold_start_wallpaper_ids(platform, limit=200)
+        cold_ids = get_cold_start_wallpaper_ids(platform, limit=600)
         
         # 存入Redis
         redis_key = f"{COLD_POOL_PREFIX}{platform}:{order}"
@@ -124,7 +124,7 @@ def build_ctr_pool(unique_id, platform, order):
         user_tags = get_user_top_tags(unique_id, top_n=10, sync_from_track=True)
         
         # 基于CTR获取壁纸池
-        ctr_ids = get_ctr_based_wallpapers(user_tags, platform, min_ctr=0.01, limit=200)
+        ctr_ids = get_ctr_based_wallpapers(user_tags, platform, min_ctr=0.01, limit=600)
         
         # 存入Redis
         redis_key = f"{CTR_POOL_PREFIX}{unique_id}:{platform}:{order}"
@@ -163,7 +163,7 @@ def merge_three_pools(personal_ids, cold_ids, ctr_ids, ratio=(0.5, 0.2, 0.3)):
             return personal_ids
         
         # 计算各自的数量
-        total_count = min(len(personal_ids) + len(cold_ids) + len(ctr_ids), 500)  # 最多500张
+        total_count = min(len(personal_ids) + len(cold_ids) + len(ctr_ids), 2000)  # 最多2000张
         personal_count = int(total_count * ratio[0])
         cold_count = int(total_count * ratio[1])
         ctr_count = total_count - personal_count - cold_count
