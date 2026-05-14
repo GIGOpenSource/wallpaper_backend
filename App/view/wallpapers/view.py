@@ -815,11 +815,51 @@ class WallpapersViewSet(BaseViewSet):
             print(f"[Recommendation Supplement] Added {len(supplement_ids)} wallpapers from normal order")
         
         # 获取壁纸数据（保持推荐顺序）
-        recommended_qs = Wallpapers.objects.filter(id__in=page_wallpaper_ids).prefetch_related('tags').only(
+        # 关键：必须排除 audit_status='rejected' 的壁纸，否则返回数量会不足
+        recommended_qs = Wallpapers.objects.filter(
+            id__in=page_wallpaper_ids
+        ).exclude(
+            audit_status='rejected'
+        ).prefetch_related('tags').only(
             'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
             'has_watermark', 'is_live', 'is_hd', 'hot_score', 'like_count',
             'collect_count', 'download_count', 'view_count', 'created_at', 'audit_status'
         )
+        
+        # 检查实际返回的数量，如果不足则再次补充
+        actual_count = recommended_qs.count()
+        if actual_count < page_size and base_queryset is not None:
+            print(f"[Recommendation Supplement 2] After filtering, got {actual_count} IDs, need {page_size}, supplementing again...")
+            
+            # 获取已经成功查询到的ID
+            valid_ids = set(recommended_qs.values_list('id', flat=True))
+            
+            # 从普通排序中获取更多补充数据
+            supplement_qs = base_queryset.exclude(id__in=valid_ids)
+            
+            if order == 'hot':
+                supplement_qs = supplement_qs.order_by('-hot_score', '-like_count', '-created_at')
+            elif order == 'home':
+                supplement_qs = supplement_qs.order_by('-created_at')
+            else:
+                supplement_qs = supplement_qs.order_by('-updated_at', '-created_at', '-hot_score')
+            
+            need_count = page_size - actual_count
+            supplement_ids = list(supplement_qs.values_list('id', flat=True)[:need_count])
+            
+            # 重新查询所有壁纸
+            all_ids = list(valid_ids) + supplement_ids
+            recommended_qs = Wallpapers.objects.filter(
+                id__in=all_ids
+            ).exclude(
+                audit_status='rejected'
+            ).prefetch_related('tags').only(
+                'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
+                'has_watermark', 'is_live', 'is_hd', 'hot_score', 'like_count',
+                'collect_count', 'download_count', 'view_count', 'created_at', 'audit_status'
+            )
+            
+            print(f"[Recommendation Supplement 2] Added {len(supplement_ids)} more wallpapers")
         
         # 用户互动信息
         liked_ids = collected_ids = set()
