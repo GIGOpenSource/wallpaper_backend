@@ -760,5 +760,74 @@ def get_layer_score_wallpapers(best_tags, platform, limit=300):
         return []
 
 
+def get_ctr_based_wallpapers(user_tags, platform, min_ctr=0.01, limit=200):
+    """基于CTR标签获取壁纸池（不考虑用户兴趣等级）
+    
+    核心逻辑：
+    1. 获取所有有CTR数据的标签
+    2. 按CTR排序，取高CTR的标签
+    3. 从这些标签中获取壁纸
+    
+    Args:
+        user_tags: 用户标签列表
+        platform: 平台类型 'PC' 或 'PHONE'
+        min_ctr: 最小CTR阈值
+        limit: 最大返回数量
+        
+    Returns:
+        list: 壁纸ID列表
+    """
+    from models.models import WallpaperTag, WallpaperTagCTR
+    
+    try:
+        # 获取所有有CTR数据的标签，按CTR降序
+        ctr_tags = WallpaperTagCTR.objects.filter(
+            impression_count__gt=0
+        ).order_by('-click_count')[:50]  # 取CTR最高的50个标签
+        
+        if not ctr_tags:
+            return []
+        
+        recommended_ids = []
+        seen_ids = set()
+        
+        for ctr_data in ctr_tags:
+            if len(recommended_ids) >= limit:
+                break
+            
+            tag = ctr_data.tag
+            
+            # 检查该标签是否在用户标签中（可选，如果想更个性化）
+            # 这里我们直接使用高CTR标签，不限制必须在用户标签中
+            
+            # 获取该标签的壁纸
+            queryset = Wallpapers.objects.filter(
+                tags=tag
+            ).exclude(audit_status='rejected')
+            
+            if platform == 'PC':
+                queryset = queryset.filter(category__id=1)
+            elif platform == 'PHONE':
+                queryset = queryset.filter(category__id=2)
+            
+            # 排除已选中的壁纸
+            if seen_ids:
+                queryset = queryset.exclude(id__in=seen_ids)
+            
+            # 随机获取一些壁纸（增加多样性）
+            wallpaper_ids = list(queryset.order_by('?').values_list('id', flat=True)[:5])
+            
+            for wid in wallpaper_ids:
+                if wid not in seen_ids:
+                    recommended_ids.append(wid)
+                    seen_ids.add(wid)
+        
+        return recommended_ids[:limit]
+        
+    except Exception as e:
+        print(f"[Get CTR Based Wallpapers Failed] error: {e}")
+        return []
+
+
 
 

@@ -9,13 +9,15 @@ from App.view.recommendation.user_interest_algorithm import (
     get_user_top_tags,
     filter_by_ctr,
     get_layer_score_wallpapers,
-    get_cold_start_wallpaper_ids
+    get_cold_start_wallpaper_ids,
+    get_ctr_based_wallpapers
 )
 
 
 # Redis键前缀
 PERSONAL_POOL_PREFIX = "recommend:personal_pool:"
 COLD_POOL_PREFIX = "recommend:cold_pool:"
+CTR_POOL_PREFIX = "recommend:ctr_pool:"
 MIXED_POOL_PREFIX = "recommend:mixed_pool:"
 
 # 过期时间（秒）
@@ -99,55 +101,107 @@ def build_cold_pool(platform, order):
         return []
 
 
-def merge_personal_and_cold(personal_ids, cold_ids, ratio=0.7):
-    """混合个性化和冷启动池（7:3比例）
+def build_ctr_pool(unique_id, platform, order):
+    """构建CTR标签推荐池
+    
+    基于全局高CTR标签获取壁纸，增加数据丰富度
+    
+    Args:
+        unique_id: 用户唯一标识
+        platform: 平台类型 'PC' 或 'PHONE'
+        order: 排序类型 'hot' 或 'home'
+        
+    Returns:
+        list: 壁纸ID列表
+    """
+    try:
+        # 防御性检查
+        if not unique_id:
+            print(f"[Error] unique_id is empty, cannot build ctr pool")
+            return []
+        
+        # 获取用户标签（用于参考，但不限制）
+        user_tags = get_user_top_tags(unique_id, top_n=10, sync_from_track=True)
+        
+        # 基于CTR获取壁纸池
+        ctr_ids = get_ctr_based_wallpapers(user_tags, platform, min_ctr=0.01, limit=200)
+        
+        # 存入Redis
+        redis_key = f"{CTR_POOL_PREFIX}{unique_id}:{platform}:{order}"
+        _redis.setKey(redis_key, json.dumps(ctr_ids), ex=POOL_EXPIRE_TIME)
+        
+        print(f"[CTR Pool] unique_id: {unique_id}, platform: {platform}, order: {order}, count: {len(ctr_ids)}")
+        return ctr_ids
+        
+    except Exception as e:
+        print(f"[Build CTR Pool Failed] error: {e}")
+        return []
+
+
+def merge_three_pools(personal_ids, cold_ids, ctr_ids, ratio=(0.5, 0.2, 0.3)):
+    """混合三个推荐池（个性化:冷启动:CTR = 5:2:3）
     
     Args:
         personal_ids: 个性化壁纸ID列表
         cold_ids: 冷启动壁纸ID列表
-        ratio: 个性化占比（默认0.7）
+        ctr_ids: CTR标签壁纸ID列表
+        ratio: 各池占比（personal, cold, ctr），默认(0.5, 0.2, 0.3)
         
     Returns:
         list: 混合后的壁纸ID列表
     """
     try:
-        if not personal_ids and not cold_ids:
+        if not personal_ids and not cold_ids and not ctr_ids:
             return []
         
-        if not personal_ids:
+        # 如果只有一个池有数据，直接返回
+        if not personal_ids and not cold_ids:
+            return ctr_ids
+        if not personal_ids and not ctr_ids:
             return cold_ids
-        
-        if not cold_ids:
+        if not cold_ids and not ctr_ids:
             return personal_ids
         
         # 计算各自的数量
-        total_count = min(len(personal_ids) + len(cold_ids), 500)  # 最多500张
-        personal_count = int(total_count * ratio)
-        cold_count = total_count - personal_count
+        total_count = min(len(personal_ids) + len(cold_ids) + len(ctr_ids), 500)  # 最多500张
+        personal_count = int(total_count * ratio[0])
+        cold_count = int(total_count * ratio[1])
+        ctr_count = total_count - personal_count - cold_count
         
         # 截取对应数量
         personal_part = personal_ids[:personal_count]
         cold_part = cold_ids[:cold_count]
+        ctr_part = ctr_ids[:ctr_count]
         
         # 交替合并（避免同一来源连续出现）
         merged = []
-        p_idx, c_idx = 0, 0
+        p_idx, c_idx, t_idx = 0, 0, 0
         
-        while p_idx < len(personal_part) or c_idx < len(cold_part):
+        while p_idx < len(personal_part) or c_idx < len(cold_part) or t_idx < len(ctr_part):
+            # 按顺序从三个池中取
             if p_idx < len(personal_part):
                 merged.append(personal_part[p_idx])
                 p_idx += 1
+            
+            if t_idx < len(ctr_part):
+                merged.append(ctr_part[t_idx])
+                t_idx += 1
             
             if c_idx < len(cold_part):
                 merged.append(cold_part[c_idx])
                 c_idx += 1
         
-        print(f"[Merge Pool] personal: {len(personal_part)}, cold: {len(cold_part)}, merged: {len(merged)}")
+        print(f"[Merge Three Pools] personal: {len(personal_part)}, cold: {len(cold_part)}, ctr: {len(ctr_part)}, merged: {len(merged)}")
         return merged
         
     except Exception as e:
-        print(f"[Merge Pool Failed] error: {e}")
-        return personal_ids + cold_ids
+        print(f"[Merge Three Pools Failed] error: {e}")
+        # 降级：简单拼接
+        result = []
+        result.extend(personal_ids or [])
+        result.extend(cold_ids or [])
+        result.extend(ctr_ids or [])
+        return result
 
 
 def get_or_build_mixed_pool(unique_id, platform, order):
@@ -187,10 +241,13 @@ def get_or_build_mixed_pool(unique_id, platform, order):
         # 2. 构建冷启动池
         cold_ids = build_cold_pool(platform, order)
         
-        # 3. 混合（7:3）
-        mixed_ids = merge_personal_and_cold(personal_ids, cold_ids, ratio=0.7)
+        # 3. 构建CTR池
+        ctr_ids = build_ctr_pool(unique_id, platform, order)
         
-        # 4. 存入Redis
+        # 4. 三路混合（5:2:3）
+        mixed_ids = merge_three_pools(personal_ids, cold_ids, ctr_ids, ratio=(0.5, 0.2, 0.3))
+        
+        # 5. 存入Redis
         if mixed_ids:
             _redis.setKey(redis_key, json.dumps(mixed_ids), ex=POOL_EXPIRE_TIME)
         
@@ -250,9 +307,11 @@ def invalidate_pool(unique_id, platform, order=None):
         
         for ord in orders:
             personal_key = f"{PERSONAL_POOL_PREFIX}{unique_id}:{platform}:{ord}"
+            ctr_key = f"{CTR_POOL_PREFIX}{unique_id}:{platform}:{ord}"
             mixed_key = f"{MIXED_POOL_PREFIX}{unique_id}:{platform}:{ord}"
             
             _redis.delKey(personal_key)
+            _redis.delKey(ctr_key)
             _redis.delKey(mixed_key)
         
         print(f"[Invalidate Pool] unique_id: {unique_id}, platform: {platform}, order: {order or 'all'}")
