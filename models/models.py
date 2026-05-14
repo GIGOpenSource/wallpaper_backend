@@ -1292,6 +1292,7 @@ class TrackEvent(models.Model):
     page_stay = models.IntegerField(default=0, verbose_name="页面停留秒数")
     is_bounce = models.BooleanField(default=False, verbose_name="是否跳出")
     unique_id = models.CharField(max_length=100, blank=True, null=True, verbose_name="访客唯一标识", db_index=True)
+    user_id = models.IntegerField(blank=True, null=True, verbose_name="用户ID", db_index=True)
     
     # 客户端与环境信息
     client_ip = models.GenericIPAddressField(blank=True, null=True, verbose_name="访客IP", db_index=True)

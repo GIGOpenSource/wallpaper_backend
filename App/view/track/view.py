@@ -29,6 +29,7 @@ class TrackViewSet(BaseViewSet):
             OpenApiParameter(name="page_stay", type=int, required=False, description="停留秒数"),
             OpenApiParameter(name="is_bounce", type=bool, required=False, description="是否跳出"),
             OpenApiParameter(name="unique_id", type=str, required=False, description="访客唯一标识"),
+            OpenApiParameter(name="user_id", type=int, required=False, description="用户ID（已登录用户）"),
             OpenApiParameter(name="event_name", type=str, required=False, description="事件名称"),
             OpenApiParameter(name="event_params", type=dict, required=False, description="事件扩展参数JSON"),
             OpenApiParameter(name="device_type", type=str, required=False, description="设备类型（desktop/mobile/tablet）"),
@@ -116,6 +117,7 @@ class TrackViewSet(BaseViewSet):
                 'page_stay': page_stay,
                 'is_bounce': is_bounce,
                 'unique_id': unique_id,
+                'user_id': data.get('user_id'),  # 接收用户ID
                 'client_ip': client_ip,
                 'user_agent': user_agent,
                 'device_type': device_type,  # UA 解析结果，忽略前端传的
