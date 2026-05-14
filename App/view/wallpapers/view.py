@@ -722,7 +722,7 @@ class WallpapersViewSet(BaseViewSet):
         核心逻辑：
         1. 推荐池用于前 N 页（保证推荐质量）
         2. 超出推荐池范围时，降级到普通排序（保证可翻到尾页）
-        3. total 返回 base_queryset.count()（真实总数）
+        3. total 始终返回 base_queryset.count()（真实总数，保证可翻页）
         4. 如果有筛选条件（tag_id等），直接走普通排序（推荐池不包含筛选条件）
         
         Returns:
@@ -734,7 +734,6 @@ class WallpapersViewSet(BaseViewSet):
         has_filter = any([
             request.query_params.get("tag_name", "").strip(),
             request.query_params.get("tag_id", "").strip(),
-            request.query_params.get("media_live", "").strip(),
             request.query_params.get("resolution", "").strip(),
             request.query_params.get("name", "").strip(),
         ])
@@ -745,14 +744,12 @@ class WallpapersViewSet(BaseViewSet):
                 page_num, page_size, customer_id, request, base_queryset, order
             )
         
-        # 获取 base_queryset 的真实总数（70万+）
+        # 获取 base_queryset 的真实总数（70万+）- 只查询一次
         total_count = base_queryset.count()
         total_pages = (total_count + page_size - 1) // page_size if page_size > 0 else 0
         
         # 计算推荐池能覆盖的最大页数（假设推荐池最多2000张）
-        # 如果当前页在推荐池范围内，使用推荐池
-        # 如果超出推荐池范围，降级到普通排序
-        max_pool_pages = 2000 // page_size  # 推荐池最大覆盖页数
+        max_pool_pages = 2000 // page_size
         
         if page_num <= max_pool_pages:
             # 在推荐池范围内，使用推荐算法
@@ -766,6 +763,7 @@ class WallpapersViewSet(BaseViewSet):
             
             if page_wallpaper_ids:
                 # 推荐池有数据，使用推荐结果
+                # 关键：total 使用 base_queryset 的真实总数，而不是池的大小
                 return self._return_recommended_page(
                     page_wallpaper_ids, page_num, page_size, customer_id, total_count, total_pages
                 )

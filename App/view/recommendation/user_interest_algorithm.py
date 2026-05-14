@@ -206,8 +206,10 @@ def _cleanup_low_score_tags(unique_id):
         ).order_by('-score')
         
         if all_tags.count() > TOP_N_TAGS:
-            tags_to_delete = all_tags[TOP_N_TAGS:]
-            tags_to_delete.delete()
+            # 获取要删除的标签ID列表
+            tags_to_delete_ids = all_tags.values_list('id', flat=True)[TOP_N_TAGS:]
+            # 通过ID列表删除
+            UserInterestTag.objects.filter(id__in=list(tags_to_delete_ids)).delete()
             
     except Exception as e:
         print(f"[Cleanup Low Score Tags Failed] unique_id: {unique_id}, error: {e}")
@@ -723,7 +725,9 @@ def get_layer_score_wallpapers(best_tags, platform, limit=300):
         recommended_ids = []
         seen_ids = set()
         
-        for tag_info in best_tags:
+        print(f"[Layer Score Debug] Processing {len(best_tags)} tags for platform {platform}")
+        
+        for idx, tag_info in enumerate(best_tags):
             if len(recommended_ids) >= limit:
                 break
             
@@ -739,6 +743,8 @@ def get_layer_score_wallpapers(best_tags, platform, limit=300):
             else:
                 count = 2
             
+            print(f"[Layer Score Debug] Tag {idx+1}: {tag_level1}/{tag_level2}, level={interest_level}, want={count}")
+            
             # 获取该标签的壁纸
             tag_wallpaper_ids = _get_wallpapers_by_tag(
                 tag_level1,
@@ -748,15 +754,20 @@ def get_layer_score_wallpapers(best_tags, platform, limit=300):
                 exclude_ids=seen_ids
             )
             
+            print(f"[Layer Score Debug]   Got {len(tag_wallpaper_ids)} wallpapers")
+            
             for wid in tag_wallpaper_ids:
                 if wid not in seen_ids:
                     recommended_ids.append(wid)
                     seen_ids.add(wid)
         
+        print(f"[Layer Score Debug] Total recommended: {len(recommended_ids)}")
         return recommended_ids[:limit]
         
     except Exception as e:
         print(f"[Get Layer Score Wallpapers Failed] error: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 

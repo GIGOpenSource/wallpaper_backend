@@ -331,7 +331,7 @@ def get_pool_page(unique_id, platform, order, page_num, page_size):
         page_size: 每页数量
         
     Returns:
-        tuple: (当前页壁纸ID列表, 总数量)
+        tuple: (当前页壁纸ID列表, 池的总数量)
     """
     try:
         # 获取或构建混合池
