@@ -1620,37 +1620,107 @@ class WallpapersViewSet(BaseViewSet):
     @action(detail=False, methods=['get'], url_path='guess_you_like')
     def guess_you_like(self, request):
         """
-        猜你喜欢：根据传入的壁纸 ID，推荐具有相同标签的其他壁纸
+        猜你喜欢：基于用户兴趣标签推荐壁纸
+        
+        核心逻辑：
+        1. 获取用户的 unique_id（从 header 或 customer_id）
+        2. 获取用户 TOP 标签
+        3. 使用分层评分算法推荐壁纸
+        4. 排除当前壁纸 ID（如果提供）
         """
-        from django.db.models import Count, Q
-        wallpaper_id = request.query_params.get("wallpaper_id")
+        from App.view.recommendation.user_interest_algorithm import get_user_top_tags, get_layer_score_wallpapers
+        
+        # 获取参数
+        wallpaper_id = request.query_params.get("wallpaper_id")  # 可选，用于排除当前壁纸
         limit = int(request.query_params.get("limit", 10))
-        if not wallpaper_id:
-            return ApiResponse(code=400, message="请提供壁纸 ID")
+        platform = request.query_params.get("platform", "PC").upper()  # PC 或 PHONE
+        
+        # 获取用户唯一标识
+        unique_id = request.META.get("HTTP_UNIQUE_ID", "").strip()
+        customer_id = getattr(request.user, 'id', None) if hasattr(request, 'user') else None
+        
+        # 如果 unique_id 为空，使用 customer_id 或生成临时ID
+        if not unique_id:
+            if customer_id:
+                unique_id = f"customer_{customer_id}"
+            else:
+                # 未登录且无 unique_id，使用 IP + User-Agent 的哈希值
+                import hashlib
+                ip = request.META.get('REMOTE_ADDR', 'unknown')
+                ua = request.META.get('HTTP_USER_AGENT', '')
+                unique_id = hashlib.md5(f"{ip}:{ua}".encode()).hexdigest()[:16]
+        
         try:
-            # 获取指定壁纸及其标签
-            target_wallpaper = Wallpapers.objects.prefetch_related('tags').get(id=wallpaper_id)
-            target_tags = target_wallpaper.tags.all()
-            if not target_tags.exists():
-                # 如果该壁纸没有标签，返回空列表
-                return ApiResponse(data=[], message="该壁纸没有标签，无法推荐")
-            target_tag_ids = list(target_tags.values_list('id', flat=True))
-            # 查询具有相同标签的其他壁纸（排除自身）
-            # 使用 annotate 计算匹配的标签数量
+            # 1. 获取用户 TOP 标签
+            user_tags = get_user_top_tags(unique_id, top_n=10, sync_from_track=True)
+            
+            if not user_tags:
+                # 如果用户没有标签，返回空列表或热门壁纸
+                return ApiResponse(
+                    data=[],
+                    message="暂无个性化推荐，请先浏览一些壁纸吧~"
+                )
+            
+            # 2. 使用分层评分算法获取推荐壁纸
+            recommended_ids = get_layer_score_wallpapers(user_tags, platform, limit=limit * 2)
+            
+            if not recommended_ids:
+                return ApiResponse(
+                    data=[],
+                    message="暂无相关壁纸推荐"
+                )
+            
+            # 3. 排除当前壁纸 ID（如果提供）
+            if wallpaper_id:
+                try:
+                    wallpaper_id = int(wallpaper_id)
+                    recommended_ids = [wid for wid in recommended_ids if wid != wallpaper_id]
+                except (TypeError, ValueError):
+                    pass
+            
+            # 4. 截取指定数量
+            recommended_ids = recommended_ids[:limit]
+            
+            if not recommended_ids:
+                return ApiResponse(
+                    data=[],
+                    message="暂无更多推荐"
+                )
+            
+            # 5. 获取壁纸数据
             recommended_wallpapers = Wallpapers.objects.filter(
-                tags__id__in=target_tag_ids
-            ).exclude(
-                id=wallpaper_id
-            ).annotate(
-                match_count=Count('tags', filter=Q(tags__id__in=target_tag_ids))
-            ).order_by(
-                '-match_count', '-hot_score', '-created_at'
-            ).distinct()[:limit]
-            # 序列化返回数据
-            serializer = self.get_serializer(recommended_wallpapers, many=True)
-            return ApiResponse(data=serializer.data, message=f"为您找到{len(serializer.data)}个相关推荐")
-        except Wallpapers.DoesNotExist:
-            return ApiResponse(code=404, message="指定的壁纸不存在")
+                id__in=recommended_ids
+            ).prefetch_related('tags').only(
+                'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
+                'has_watermark', 'is_live', 'is_hd', 'hot_score', 'like_count',
+                'collect_count', 'download_count', 'view_count', 'created_at', 'audit_status'
+            )
+            
+            # 6. 序列化返回数据
+            context = self.get_serializer_context()
+            
+            # 如果用户已登录，获取点赞/收藏状态
+            if customer_id:
+                liked_ids = set(
+                    WallpaperLike.objects.filter(customer_id=customer_id).values_list('wallpaper_id', flat=True)
+                )
+                collected_ids = set(
+                    WallpaperCollection.objects.filter(user_id=customer_id).values_list('wallpaper_id', flat=True)
+                )
+                context['liked_wallpaper_ids'] = liked_ids
+                context['collected_wallpaper_ids'] = collected_ids
+            
+            serializer = WallpapersListSerializer(recommended_wallpapers, many=True, context=context)
+            
+            # 7. CTR 标签曝光统计
+            from App.view.recommendation.ctr_filter_algorithm import increment_tag_impressions
+            increment_tag_impressions(recommended_ids)
+            
+            return ApiResponse(
+                data=serializer.data,
+                message=f"为您找到{len(serializer.data)}个个性化推荐"
+            )
+            
         except Exception as e:
             logger.error(f"猜你喜欢推荐失败：{str(e)}", exc_info=True)
             return ApiResponse(code=500, message=f"推荐失败：{str(e)}")
