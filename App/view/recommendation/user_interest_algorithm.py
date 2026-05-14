@@ -641,4 +641,124 @@ def _get_tags_from_wallpaper_path(page_path):
         return []
 
 
+def filter_by_ctr(user_tags, min_ctr=0.01):
+    """根据CTR过滤用户标签，保留高点击率的标签
+    
+    Args:
+        user_tags: 用户标签列表，每个元素包含 tag_level1, tag_level2
+        min_ctr: 最小CTR阈值（默认0.01）
+        
+    Returns:
+        list: 过滤后的标签列表
+    """
+    from models.models import WallpaperTag, WallpaperTagCTR
+    
+    try:
+        best_tags = []
+        
+        for tag_info in user_tags:
+            tag_level1 = tag_info.get('tag_level1')
+            tag_level2 = tag_info.get('tag_level2')
+            
+            if not tag_level1:
+                continue
+            
+            # 查询标签
+            tag_query = WallpaperTag.objects.filter(name__icontains=tag_level1)
+            if tag_level2:
+                tag_query = tag_query.filter(name__icontains=tag_level2)
+            
+            matched_tag = tag_query.first()
+            if not matched_tag:
+                continue
+            
+            # 查询CTR数据
+            try:
+                ctr_data = WallpaperTagCTR.objects.get(tag=matched_tag)
+                ctr = ctr_data.click_count / ctr_data.impression_count if ctr_data.impression_count > 0 else 0
+                
+                # CTR高于阈值的标签保留
+                if ctr >= min_ctr:
+                    best_tags.append({
+                        **tag_info,
+                        'ctr': ctr,
+                        'tag_id': matched_tag.id
+                    })
+            except WallpaperTagCTR.DoesNotExist:
+                # 没有CTR数据的标签也保留（新标签）
+                best_tags.append({
+                    **tag_info,
+                    'ctr': 0,
+                    'tag_id': matched_tag.id
+                })
+        
+        # 按CTR降序排序
+        best_tags.sort(key=lambda x: x['ctr'], reverse=True)
+        
+        return best_tags
+        
+    except Exception as e:
+        print(f"[Filter By CTR Failed] error: {e}")
+        return user_tags
+
+
+def get_layer_score_wallpapers(best_tags, platform, limit=300):
+    """根据分层评分获取壁纸ID列表
+    
+    核心逻辑：
+    1. 根据标签的兴趣等级分配不同数量的壁纸
+    2. 核心兴趣标签：每个取10张
+    3. 主要兴趣标签：每个取5张
+    4. 潜在兴趣标签：每个取2张
+    
+    Args:
+        best_tags: 过滤后的高CTR标签列表
+        platform: 平台类型 'PC' 或 'PHONE'
+        limit: 最大返回数量
+        
+    Returns:
+        list: 壁纸ID列表
+    """
+    try:
+        recommended_ids = []
+        seen_ids = set()
+        
+        for tag_info in best_tags:
+            if len(recommended_ids) >= limit:
+                break
+            
+            tag_level1 = tag_info.get('tag_level1')
+            tag_level2 = tag_info.get('tag_level2')
+            interest_level = tag_info.get('interest_level', 'potential')
+            
+            # 根据兴趣等级决定获取数量
+            if interest_level == 'core':
+                count = 10
+            elif interest_level == 'main':
+                count = 5
+            else:
+                count = 2
+            
+            # 获取该标签的壁纸
+            tag_wallpaper_ids = _get_wallpapers_by_tag(
+                tag_level1,
+                tag_level2,
+                platform,
+                count,
+                exclude_ids=seen_ids
+            )
+            
+            for wid in tag_wallpaper_ids:
+                if wid not in seen_ids:
+                    recommended_ids.append(wid)
+                    seen_ids.add(wid)
+        
+        return recommended_ids[:limit]
+        
+    except Exception as e:
+        print(f"[Get Layer Score Wallpapers Failed] error: {e}")
+        return []
+
+
+
 

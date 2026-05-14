@@ -1433,3 +1433,36 @@ class UserInterestTag(models.Model):
     def __str__(self):
         tag_display = self.tag_level2 if self.tag_level2 else self.tag_level1
         return f"{self.unique_id} - {tag_display} (score: {self.score:.2f})"
+
+
+class WallpaperTagCTR(models.Model):
+    """
+    壁纸标签CTR统计表
+    存储标签的曝光和点击数据，用于CTR标签筛选算法
+    """
+    tag = models.ForeignKey(
+        'WallpaperTag',
+        on_delete=models.CASCADE,
+        related_name='ctr_stats',
+        verbose_name="标签",
+        db_index=True
+    )
+    impression_count = models.PositiveIntegerField(default=0, verbose_name="曝光次数")
+    click_count = models.PositiveIntegerField(default=0, verbose_name="点击次数")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+
+    class Meta:
+        db_table = 'r_wallpaper_tag_ctr'
+        verbose_name = '壁纸标签CTR统计'
+        verbose_name_plural = '壁纸标签CTR统计'
+        unique_together = ('tag',)
+        indexes = [
+            models.Index(fields=['tag']),
+            models.Index(fields=['-impression_count']),
+            models.Index(fields=['-click_count']),
+        ]
+
+    def __str__(self):
+        ctr = self.click_count / self.impression_count if self.impression_count > 0 else 0
+        return f"{self.tag.name} - 曝光:{self.impression_count}, 点击:{self.click_count}, CTR:{ctr:.4f}"
