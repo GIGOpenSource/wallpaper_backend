@@ -870,12 +870,13 @@ class WallpapersViewSet(BaseViewSet):
             serializer = WallpapersListSerializer(page, many=True, context=context)
             
             # 返回数据格式（由 _list_for_customer 统一包装成 ApiResponse）
+            # page 已经是分页后的数据列表，需要从 self.paginator 获取分页信息
             return {
                 'pagination': {
-                    'page': page.number,
-                    'page_size': page.paginator.per_page,
-                    'total': page.paginator.count,
-                    'total_pages': page.paginator.num_pages
+                    'page': self.paginator.page.number,
+                    'page_size': self.paginator.page_size,
+                    'total': self.paginator.page.paginator.count,
+                    'total_pages': self.paginator.page.paginator.num_pages
                 },
                 'results': serializer.data
             }
