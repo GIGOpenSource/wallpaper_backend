@@ -285,7 +285,7 @@ def _classify_interest_level(score):
         return 'potential'
 
 
-def get_cold_start_wallpaper_ids(platform, limit=50):
+def get_cold_start_wallpaper_ids(platform, order,limit=50):
     """冷启动推荐：使用策略壁纸
     
     当新用户没有标签数据时，使用此方法返回推荐壁纸
@@ -318,7 +318,8 @@ def get_cold_start_wallpaper_ids(platform, limit=50):
             strategies_with_area = RecommendStrategy.objects.filter(
                 platform=p, 
                 status='active',
-                apply_area=current_language
+                apply_area=current_language,
+                strategy_type=order
             ).order_by('-priority', '-created_at')
             
             for strategy in strategies_with_area:
