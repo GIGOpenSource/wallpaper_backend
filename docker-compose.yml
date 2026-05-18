@@ -3,72 +3,15 @@ networks:
     driver: bridge
     name: wallpaper_net
 
-
 volumes:
   pgdata:
     driver: local
-  staticfiles:
-    driver: local
-  nginx_logs:
+  redisdata:
     driver: local
 
 services:
-  nginx:
-    image: nginx:1.27-alpine
-    container_name: wallpaper_nginx
-    ports:
-      - "80:80"
-      - "8000:8000"
-    volumes:
-      #       - ./pages/app/dist/h5/:/usr/share/nginx/html/gig-x/
-      #       - ./pages/admin/dist/:/usr/share/nginx/html/gig-admin/
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - staticfiles:/usr/share/nginx/html/static
-      - nginx_logs:/var/log/nginx
-    networks:
-      - wallpaper_net
-    restart: unless-stopped
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8000/" ]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-    depends_on:
-      - web
-
-  web:
-    # 保持原有配置不变，添加Redis依赖
-    build: .
-    container_name: wallpaper_web
-    command: sh -c "
-      find . -path '*/migrations/*.py' -not -name '__init__.py' -delete &&
-      find . -path '*/migrations/*.pyc' -delete &&
-      python manage.py makemigrations models&&
-      python manage.py migrate models--noinput &&
-      python manage.py collectstatic --noinput &&
-      python manage.py runserver 0.0.0.0:8000"
-    ports:
-      - "10080:8000"
-    volumes:
-      - staticfiles:/app/staticfiles
-    environment:
-      - DJANGO_SETTINGS_MODULE=WallPaper.settings.pro
-      - ALLOWED_HOSTS=*
-      - POSTGRES_HOST=db
-      - POSTGRES_DB=wallpaper_db
-      - POSTGRES_USER=wallpaper123
-      - POSTGRES_PASSWORD=wallpaper123
-      - POSTGRES_PORT=5432
-      - REDIS_HOST=119.45.233.147
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-    depends_on:
-      - db
-    networks:
-      - wallpaper_net
-    restart: unless-stopped
+  # PostgreSQL 数据库（原有，保持不变）
   db:
-    # 保持原有配置不变
     image: postgres:16-alpine
     container_name: wallpaper_db
     environment:
@@ -77,9 +20,38 @@ services:
       - POSTGRES_PASSWORD=wallpaper123
       - PGDATA=/var/lib/postgresql/data/pgdata
     ports:
-      - "5436:5432" # 宿主机5432端口 / 容器5432端口
+      - "5436:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     networks:
       - wallpaper_net
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wallpaper123 -d wallpaper_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis 缓存（新增）
+  redis:
+    image: redis:7-alpine
+    container_name: wallpaper_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    networks:
+      - wallpaper_net
+    restart: unless-stopped
+    command: >
+      redis-server
+      --requirepass Redis@2026#0119
+      --protected-mode yes
+      --rename-command FLUSHALL ""
+      --rename-command FLUSHDB ""
+      --rename-command CONFIG ""
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "Redis@2026#0119", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
