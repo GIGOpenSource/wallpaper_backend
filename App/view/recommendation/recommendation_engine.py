@@ -33,7 +33,7 @@ def get_recommended_wallpaper_ids(unique_id, platform='all', limit=20):
     
     if not top_tags:
         # Cold start: use strategy-based recommendations
-        return get_cold_start_wallpaper_ids(platform, limit)
+        return get_cold_start_wallpaper_ids(platform,limit)
     
     # Personalized recommendations
     # Currently using tag-based algorithm

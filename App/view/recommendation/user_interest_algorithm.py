@@ -217,18 +217,18 @@ def _cleanup_low_score_tags(unique_id):
 
 def get_user_top_tags(unique_id, top_n=TOP_N_TAGS, sync_from_track=True):
     """获取用户TOP N兴趣标签
-    
+
     核心流程：
     1. （可选）从 TrackEvent 表同步最新行为数据
     2. 查询用户所有标签，按分数降序排列
     3. 返回前N个标签及其详细信息
     4. 每10次更新清理一次TOP10（删除低分标签）
-    
+
     Args:
         unique_id: 用户唯一标识
         top_n: 返回的标签数量
         sync_from_track: 是否从 TrackEvent 同步数据（默认True）
-        
+
     Returns:
         list: 标签列表，按分数从高到低排序
               每个元素包含：tag_level1, tag_level2, score, interaction_count, interest_level
@@ -237,26 +237,31 @@ def get_user_top_tags(unique_id, top_n=TOP_N_TAGS, sync_from_track=True):
         # 从 TrackEvent 同步数据
         if sync_from_track:
             sync_user_tags_from_track_event(unique_id)
-        
-        tags = UserInterestTag.objects.filter(
-            unique_id=unique_id
-        ).order_by('-score')[:top_n]
-        
+
+        # ===================== 优化 1：只查询需要的字段，速度更快 =====================
+        tags = UserInterestTag.objects.filter(unique_id=unique_id) \
+                   .order_by('-score') \
+                   .values('id', 'tag_level1', 'tag_level2', 'score', 'interaction_count')[:top_n]
+
         result = []
         for tag in tags:
             result.append({
-                'tag_level1': tag.tag_level1,
-                'tag_level2': tag.tag_level2,
-                'score': tag.score,
-                'interaction_count': tag.interaction_count,
-                'interest_level': _classify_interest_level(tag.score)
+                'tag_level1': tag['tag_level1'],
+                'tag_level2': tag['tag_level2'],
+                'score': tag['score'],
+                'interaction_count': tag['interaction_count'],
+                'interest_level': _classify_interest_level(tag['score'])
             })
-        
-        # Cleanup TOP10 every 10 updates
-        if tags and tags[0].interaction_count % CLEANUP_INTERVAL == 0:
+
+        # ===================== 优化 2：更安全的 cleanup 判断 =====================
+        if result and result[0]['interaction_count'] % CLEANUP_INTERVAL == 0:
             _cleanup_low_score_tags(unique_id)
-        
+
         return result
+
+    except Exception as e:
+        print(f"[Get User Top Tags Error] unique_id: {unique_id}, error: {e}")
+        return []
         
     except Exception as e:
         print(f"[Get User Tags Failed] unique_id: {unique_id}, error: {e}")
@@ -438,33 +443,40 @@ def _get_wallpapers_by_tag(tag_level1, tag_level2, platform, count, exclude_ids=
     """Get wallpaper IDs by tag with random ordering for diversity"""
     try:
         from models.models import WallpaperTag
-        
+
+        # 1. 查询匹配的标签 ID（很快）
         tag_query = WallpaperTag.objects.filter(name__icontains=tag_level1)
         if tag_level2:
             tag_query = tag_query.filter(name__icontains=tag_level2)
-        
+
         matched_tags = list(tag_query.values_list('id', flat=True))
-        
         if not matched_tags:
             return []
-        
+        wallpaper_ids_in_tag = Wallpapers.tags.through.objects.filter(
+            wallpapertag_id__in=matched_tags
+        ).values_list('wallpapers_id', flat=True)
+
         queryset = Wallpapers.objects.filter(
-            tags__id__in=matched_tags
-        ).exclude(audit_status='rejected')
-        
+            id__in=wallpaper_ids_in_tag,
+            audit_status='approved'  # 只保留审核通过
+        )
+
         if platform == 'PC':
-            queryset = queryset.filter(category__id=1)
+            queryset = queryset.filter(category_id=1)
         elif platform == 'PHONE':
-            queryset = queryset.filter(category__id=2)
-        
+            queryset = queryset.filter(category_id=2)
+
         if exclude_ids:
             queryset = queryset.exclude(id__in=exclude_ids)
-        
-        # Random ordering for diversity (different results each call)
-        wallpaper_ids = list(queryset.order_by('?').values_list('id', flat=True)[:count])
-        
+
+        wallpaper_ids = list(
+            queryset
+            .order_by('-hot_score')  # 走索引排序
+            .values_list('id', flat=True)[:count]
+        )
+
         return wallpaper_ids
-        
+
     except Exception as e:
         print(f"[Get Wallpapers By Tag Failed] tag: {tag_level1}/{tag_level2}, error: {e}")
         return []
@@ -827,7 +839,7 @@ def get_ctr_based_wallpapers(user_tags, platform, min_ctr=0.01, limit=200):
                 queryset = queryset.exclude(id__in=seen_ids)
             
             # 随机获取一些壁纸（增加多样性）
-            wallpaper_ids = list(queryset.order_by('?').values_list('id', flat=True)[:5])
+            wallpaper_ids = list(queryset.order_by('hot_score').values_list('id', flat=True)[:5])
             
             for wid in wallpaper_ids:
                 if wid not in seen_ids:
@@ -869,8 +881,8 @@ def get_diversity_exploration_wallpapers(user_tags, platform, limit=400, explora
         # 2. 获取低优先级标签（不在用户标签中的标签）
         # 策略：随机选择一些标签，但排除用户已有的标签
         diversity_tags = WallpaperTag.objects.exclude(
-            name__in=list(user_tag_names)
-        ).order_by('?')[:30]  # 随机选30个标签
+            name__in=user_tag_names
+        ).order_by('-wallpaper_count')[:30]
         
         # 3. 从低优先级标签中获取壁纸
         diversity_ids = []
