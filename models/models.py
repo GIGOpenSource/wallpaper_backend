@@ -802,6 +802,36 @@ class PageTDK(models.Model):
         return f"{self.get_page_type_display()} - {url_str}"
 
 
+class WallpaperDetailSEO(models.Model):
+    """
+    壁纸详情SEO表：存储壁纸详情页的SEO信息（不收录到sitemap）
+    """
+    wallpaper = models.OneToOneField(
+        'Wallpapers',
+        on_delete=models.CASCADE,
+        related_name='seo_info',
+        verbose_name="关联壁纸",
+        help_text="一对一关联壁纸ID"
+    )
+    seo_title = models.CharField(max_length=200, verbose_name="SEO标题")
+    seo_description = models.TextField(blank=True, null=True, verbose_name="SEO描述")
+    seo_keywords = models.CharField(max_length=500, blank=True, null=True, verbose_name="SEO关键词（逗号分隔）")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="最后更新时间")
+
+    class Meta:
+        db_table = 't_wallpaper_detail_seo'
+        verbose_name = '壁纸详情SEO'
+        verbose_name_plural = '壁纸详情SEO'
+        ordering = ['-updated_at']
+        indexes = [
+            models.Index(fields=['wallpaper']),
+        ]
+
+    def __str__(self):
+        return f"Wallpaper {self.wallpaper_id} SEO - {self.seo_title[:50]}"
+
+
 class BacklinkManagement(models.Model):
     """
     外链管理表：管理网站的外链信息
@@ -1466,3 +1496,5 @@ class WallpaperTagCTR(models.Model):
     def __str__(self):
         ctr = self.click_count / self.impression_count if self.impression_count > 0 else 0
         return f"{self.tag.name} - 曝光:{self.impression_count}, 点击:{self.click_count}, CTR:{ctr:.4f}"
+
+

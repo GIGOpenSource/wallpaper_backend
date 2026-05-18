@@ -38,6 +38,19 @@ class PageTDKSerializer(serializers.ModelSerializer):
         return None
 
 
+class WallpaperDetailSEOSerializer(serializers.ModelSerializer):
+    """壁纸详情SEO序列化器"""
+    wallpaper_name = serializers.CharField(source='wallpaper.name', read_only=True)
+    
+    class Meta:
+        model = None  # 稍后动态设置
+        fields = [
+            'id', 'wallpaper', 'wallpaper_name', 'seo_title', 
+            'seo_description', 'seo_keywords', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
 @extend_schema(tags=["页面TDK管理"])
 @extend_schema_view(
     list=extend_schema(
@@ -49,6 +62,7 @@ class PageTDKSerializer(serializers.ModelSerializer):
             OpenApiParameter(name="pageSize", type=int, required=False, description="每页数量"),
             OpenApiParameter(name="is_template", type=str, required=False, description="是否模板"),
             OpenApiParameter(name="url", type=str, required=False, description="是否模板"),
+            OpenApiParameter(name="wallpaper_id", type=int, required=False, description="壁纸id"),
         ],
     ),
     retrieve=extend_schema(summary="获取页面TDK详情"),
@@ -104,7 +118,70 @@ class PageTDKViewSet(BaseViewSet):
         return queryset.order_by('-updated_at')
 
     def list(self, request, *args, **kwargs):
-        """获取页面TDK列表"""
+        """获取页面TDK列表或壁纸详情SEO
+        
+        逻辑：
+        1. 如果请求参数中有 wallpaper_id，返回 WallpaperDetailSEO
+        2. 否则按原有逻辑返回 PageTDK 列表
+        """
+        # 检查是否传入壁纸ID
+        wallpaper_id = request.query_params.get('wallpaper_id')
+        
+        if wallpaper_id:
+            try:
+                from models.models import WallpaperDetailSEO, Wallpapers
+                
+                # 验证壁纸是否存在
+                wallpaper = Wallpapers.objects.get(id=wallpaper_id)
+                
+                # 获取SEO信息
+                seo_info = WallpaperDetailSEO.objects.filter(wallpaper=wallpaper).first()
+                
+                if seo_info:
+                    # 使用新的序列化器
+                    serializer_class = type(
+                        'WallpaperDetailSEOSerializer',
+                        (serializers.ModelSerializer,),
+                        {
+                            'Meta': type(
+                                'Meta',
+                                (),
+                                {
+                                    'model': WallpaperDetailSEO,
+                                    'fields': [
+                                        'id', 'wallpaper', 'seo_title',
+                                        'seo_description', 'seo_keywords',
+                                        'created_at', 'updated_at'
+                                    ],
+                                    'read_only_fields': ['id', 'created_at', 'updated_at']
+                                }
+                            )
+                        }
+                    )
+                    serializer = serializer_class(seo_info)
+                    return ApiResponse(
+                        data=serializer.data,
+                        message="获取壁纸详情SEO成功"
+                    )
+                else:
+                    # SEO信息不存在，返回空
+                    return ApiResponse(
+                        data=None,
+                        message="该壁纸暂无SEO信息",
+                        code=404
+                    )
+            except Wallpapers.DoesNotExist:
+                return ApiResponse(
+                    code=404,
+                    message=f"壁纸ID {wallpaper_id} 不存在"
+                )
+            except Exception as e:
+                return ApiResponse(
+                    code=500,
+                    message=f"查询失败：{str(e)}"
+                )
+        
+        # 原有逻辑：获取页面TDK列表
         queryset = self.filter_queryset(self.get_queryset())
         page = self.paginate_queryset(queryset)
         if page is not None:
@@ -146,6 +223,97 @@ class PageTDKViewSet(BaseViewSet):
         instance = self.get_object()
         instance.delete()
         return ApiResponse(message="删除成功")
+    
+    @extend_schema(
+        summary="保存壁纸详情SEO",
+        description="保存或更新壁纸详情SEO信息。如果该壁纸已有SEO记录则更新，否则创建新记录。所有字段可选，传空值则设置为NULL。",
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "wallpaper_id": {"type": "integer", "description": "壁纸ID", "example": 805470},
+                    "seo_title": {"type": "string", "description": "SEO标题", "example": "高清动漫壁纸下载"},
+                    "seo_description": {"type": "string", "description": "SEO描述", "example": "提供最新最全的高清动漫壁纸..."},
+                    "seo_keywords": {"type": "string", "description": "SEO关键词（逗号分隔）", "example": "动漫,壁纸,高清,二次元"}
+                },
+                "required": ["wallpaper_id"]
+            }
+        },
+        responses={
+            200: {"description": "保存成功"},
+            400: {"description": "参数错误"},
+            404: {"description": "壁纸不存在"}
+        }
+    )
+    @action(detail=False, methods=['post'], url_path='save-wallpaper-seo', name='保存壁纸详情SEO')
+    def save_wallpaper_seo(self, request):
+        """
+        保存或更新壁纸详情SEO
+        
+        请求示例：
+        POST /api/seo/tdk/save-wallpaper-seo/
+        {
+            "wallpaper_id": 805470,
+            "seo_title": "高清动漫壁纸下载",
+            "seo_description": "提供最新最全的高清动漫壁纸...",
+            "seo_keywords": "动漫,壁纸,高清,二次元"
+        }
+        """
+        from models.models import WallpaperDetailSEO, Wallpapers
+        
+        # 获取参数
+        wallpaper_id = request.data.get('wallpaper_id')
+        seo_title = request.data.get('seo_title')
+        seo_description = request.data.get('seo_description')
+        seo_keywords = request.data.get('seo_keywords')
+        
+        # 验证必需参数
+        if not wallpaper_id:
+            return ApiResponse(code=400, message="缺少必需参数：wallpaper_id")
+        
+        try:
+            # 验证壁纸是否存在
+            wallpaper = Wallpapers.objects.get(id=wallpaper_id)
+            
+            # 准备数据（允许为空）
+            seo_data = {}
+            if seo_title is not None:
+                seo_data['seo_title'] = seo_title.strip() if seo_title else ''
+            if seo_description is not None:
+                seo_data['seo_description'] = seo_description.strip() if seo_description else None
+            if seo_keywords is not None:
+                seo_data['seo_keywords'] = seo_keywords.strip() if seo_keywords else None
+            
+            # 使用 update_or_create：存在则更新，不存在则创建
+            seo_info, created = WallpaperDetailSEO.objects.update_or_create(
+                wallpaper=wallpaper,
+                defaults=seo_data
+            )
+            
+            # 返回结果
+            result_data = {
+                'id': seo_info.id,
+                'wallpaper_id': seo_info.wallpaper_id,
+                'seo_title': seo_info.seo_title,
+                'seo_description': seo_info.seo_description,
+                'seo_keywords': seo_info.seo_keywords,
+                'created': created,  # True=新建, False=更新
+                'updated_at': seo_info.updated_at
+            }
+            
+            message = "创建成功" if created else "更新成功"
+            return ApiResponse(data=result_data, message=message)
+            
+        except Wallpapers.DoesNotExist:
+            return ApiResponse(
+                code=404,
+                message=f"壁纸ID {wallpaper_id} 不存在"
+            )
+        except Exception as e:
+            return ApiResponse(
+                code=500,
+                message=f"保存失败：{str(e)}"
+            )
     
     @extend_schema(
         summary="检测重复标题",
