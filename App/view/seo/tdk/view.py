@@ -167,12 +167,12 @@ class PageTDKViewSet(BaseViewSet):
                     # SEO信息不存在，返回空
                     return ApiResponse(
                         data=None,
-                        message="该壁纸暂无SEO信息",
-                        code=404
+                        message="该壁纸暂未配置SEO信息，请配置",
+                        code=200
                     )
             except Wallpapers.DoesNotExist:
                 return ApiResponse(
-                    code=404,
+                    code=200,
                     message=f"壁纸ID {wallpaper_id} 不存在"
                 )
             except Exception as e:
