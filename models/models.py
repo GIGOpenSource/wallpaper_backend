@@ -144,7 +144,9 @@ class Wallpapers(models.Model):
     like_count = models.PositiveIntegerField(default=0, verbose_name="点赞数",blank=True)
     collect_count = models.PositiveIntegerField(default=0, verbose_name="收藏数",blank=True)
     download_count = models.PositiveIntegerField(default=0, verbose_name="下载量",blank=True)
-    view_count = models.PositiveIntegerField(default=0, verbose_name="浏览量", blank=True)
+    view_count = models.PositiveIntegerField(default=0, verbose_name=" 详情浏览量", blank=True)
+    exposure_count = models.PositiveIntegerField(default=0, verbose_name="曝光量", blank=True)
+    comment_count = models.PositiveIntegerField(default=0, verbose_name="评论数", blank=True)
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
 
@@ -153,6 +155,9 @@ class Wallpapers(models.Model):
         verbose_name = '壁纸'
         verbose_name_plural = '壁纸'
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['view_count', 'like_count', 'collect_count', 'download_count','exposure_count']),
+        ]
 
     def __str__(self):
         return self.name[:50]  # 截断过长名称
@@ -437,6 +442,14 @@ class UserNotificationSettings(models.Model):
     enable_reply_notification = models.BooleanField(default=True)
     enable_follow_notification = models.BooleanField(default=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 't_user_notification_settings'
+        verbose_name = '用户通知设置'
+        verbose_name_plural = '用户通知设置'
+
+    def __str__(self):
+        return f"{self.user.email} 的通知设置"
 
 
 class SiteConfig(models.Model):

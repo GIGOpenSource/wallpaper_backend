@@ -8,6 +8,12 @@ from django.utils import timezone
 
 import logging
 
+# 导入定时任务
+from App.view.tasks.hot_score_update import update_hot_score_daily
+from App.view.tasks.sync_wallpaper_counts import sync_wallpaper_all_counts
+
+logger = logging.getLogger(__name__)
+
 fixed_exec_time = timezone.make_aware(
     datetime(2025, 10, 16, 10, 42, 0)  # 年、月、日、时、分、秒
 )
@@ -50,7 +56,17 @@ class DjangoTaskScheduler:
         :param kwargs: 触发器参数 (如 hour, minute 等)
         """
         try:
-            if trigger == "daily":
+            if trigger == "cron":
+                # 标准 cron 触发器，直接传递给 APScheduler
+                self.scheduler.add_job(
+                    func,
+                    trigger='cron',
+                    id=job_id,
+                    replace_existing=replace_existing,
+                    **kwargs
+                )
+                logging.info(f"Cron任务 {job_id} 添加成功")
+            elif trigger == "daily":
                 """
                 每日执行N次  trigger=daily    nums=1~5
                 """
@@ -187,17 +203,52 @@ class DjangoTaskScheduler:
             logging.info(f"恢复任务 {job_id} 失败: {e}")
 
     def modify_job(self, job_id, **kwargs):
-        """
-        修改定时任务
-
-        :param job_id: 任务唯一标识
-        :param kwargs: 需要修改的参数 (如 hour, minute 等)
-        """
         try:
-            self.scheduler.modify_job(job_id, **kwargs)
-            logging.info(f"任务 {job_id} 已修改")
+            old_job = self.scheduler.get_job(job_id)
+            if not old_job:
+                logging.error(f"任务 {job_id} 不存在")
+                return False
+
+            logging.info(f"修改前任务 {job_id} 触发器: {old_job.trigger}")
+            logging.info(f"修改前任务 {job_id} 下次执行: {old_job.next_run_time}")
+
+            # 提取时间字段
+            trigger_fields = ['year', 'month', 'day', 'day_of_week', 'hour', 'minute', 'second']
+            cron_kwargs = {k: v for k, v in kwargs.items() if k in trigger_fields}
+
+            # --------------------------
+            # 核心：reschedule_job + 强制计算下次运行时间
+            # --------------------------
+            if cron_kwargs:
+                from apscheduler.triggers.cron import CronTrigger
+                trigger = CronTrigger(**cron_kwargs)
+
+                # 手动计算最近的下一次执行时间（解决 None 问题）
+                now = datetime.now(self.scheduler.timezone)
+                next_run_time = trigger.get_next_fire_time(None, now)
+
+                # 直接修改任务（官方底层最终方案）
+                self.scheduler.modify_job(
+                    job_id,
+                    trigger=trigger,
+                    next_run_time=next_run_time  # 强制写入！
+                )
+
+            # 修改其他参数
+            other_kwargs = {k: v for k, v in kwargs.items() if k not in trigger_fields}
+            if other_kwargs:
+                self.scheduler.modify_job(job_id, **other_kwargs)
+
+            # 最终验证
+            new_job = self.scheduler.get_job(job_id)
+            logging.info(f"修改后任务 {job_id} 触发器: {new_job.trigger}")
+            logging.info(f"修改后任务 {job_id} 下次执行: {new_job.next_run_time}")
+            logging.info(f"任务 {job_id} 修改成功 ✅")
+            return True
+
         except Exception as e:
-            logging.info(f"修改任务 {job_id} 失败: {e}")
+            logging.error(f"修改任务失败: {e}", exc_info=True)
+            raise
 
     def get_all_jobs(self):
         """获取所有定时任务"""
@@ -210,27 +261,18 @@ class DjangoTaskScheduler:
             return []
 
     def get_job(self, job_id):
-        """获取指定任务（修正版）"""
+        """获取指定任务"""
         try:
             job = self.scheduler.get_job(job_id)
-            if not job:
-                return "任务不存在"
             if job:
                 logging.info(f"获取任务 {job_id} 成功")
-                # 直接从 job 对象获取参数（无需手动反序列化 job_state）
-                args = job.args  # 位置参数
-                kwargs = job.kwargs  # 关键字参数
-                func_name = job.func.__name__  # 任务函数名
-                func_module = job.func.__module__  # 任务函数所在模块
-                logging.info(f"任务函数: {func_module}.{func_name}")
-                logging.info(f"位置参数: {args}")
-                logging.info(f"关键字参数: {kwargs}")
                 return job
             else:
                 logging.info(f"任务 {job_id} 不存在")
                 return None
         except Exception as e:
-            logging.info(f"获取任务 {job_id} 失败: {e}")
+            logging.error(f"获取任务 {job_id} 失败: {e}")
+            return None
 
     def delete_job(self, job_id):
         """删除定时任务"""
@@ -244,6 +286,8 @@ class DjangoTaskScheduler:
 # 初始化调度器
 scheduler = DjangoTaskScheduler()
 scheduler.start()
+
+logger.info("调度器启动完成，等待任务注册")
 
 def user_stat_task(user_id, task_desc):
     """用户统计任务函数"""

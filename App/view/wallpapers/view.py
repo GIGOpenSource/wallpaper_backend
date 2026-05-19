@@ -184,7 +184,7 @@ class WallpapersListSerializer(serializers.ModelSerializer):
             'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
             'has_watermark', 'is_live', 'is_hd', 'hot_score', 'like_count',
             'collect_count', 'download_count', 'view_count', 'created_at',
-            'aspect_ratio','audit_status'
+            'aspect_ratio','audit_status','exposure_count'
         ]
         read_only_fields = fields
 
@@ -710,7 +710,17 @@ class WallpapersViewSet(BaseViewSet):
             result_data = self._handle_normal_order(
                 page_num, page_size, customer_id, request, base_queryset, order
             )
-        
+
+        print("=== result_data 结构 ===")
+        print(json.dumps(result_data, ensure_ascii=False, indent=2))
+
+        wallpaper_list = result_data.get("results", [])
+        wallpaper_ids = [item["id"] for item in wallpaper_list if "id" in item]
+
+        if wallpaper_ids:
+            Wallpapers.objects.filter(id__in=wallpaper_ids).update(
+                exposure_count=F("exposure_count") + 1
+            )
         # 统一构造API响应
         return ApiResponse(
             data=result_data,

@@ -89,7 +89,7 @@ def build_cold_pool(platform, order):
     """
     try:
         # 获取冷启动壁纸（策略壁纸或热门壁纸）
-        cold_ids = get_cold_start_wallpaper_ids(platform, limit=600)
+        cold_ids = get_cold_start_wallpaper_ids(platform, order,limit=600)
         
         # 存入Redis
         redis_key = f"{COLD_POOL_PREFIX}{platform}:{order}"

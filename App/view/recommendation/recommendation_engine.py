@@ -11,7 +11,7 @@ from App.view.recommendation.ctr_filter_algorithm import get_ctr_filtered_wallpa
 from App.view.recommendation.layered_weight_algorithm import get_layered_weighted_wallpaper_ids
 
 
-def get_recommended_wallpaper_ids(unique_id, platform='all', limit=20):
+def get_recommended_wallpaper_ids(unique_id, order, platform='all', limit=20):
     """
     Core recommendation function called by _list_for_customer
     
@@ -33,7 +33,7 @@ def get_recommended_wallpaper_ids(unique_id, platform='all', limit=20):
     
     if not top_tags:
         # Cold start: use strategy-based recommendations
-        return get_cold_start_wallpaper_ids(platform,limit)
+        return get_cold_start_wallpaper_ids(platform,order,limit)
     
     # Personalized recommendations
     # Currently using tag-based algorithm
