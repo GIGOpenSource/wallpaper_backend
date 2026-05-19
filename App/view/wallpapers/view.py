@@ -1731,11 +1731,130 @@ class WallpapersViewSet(BaseViewSet):
             user_tags = get_user_top_tags(unique_id, top_n=10, sync_from_track=True)
             
             if not user_tags:
-                # 如果用户没有标签，返回空列表或热门壁纸
-                return ApiResponse(
-                    data=[],
-                    message="暂无个性化推荐，请先浏览一些壁纸吧~"
-                )
+                # 如果用户没有标签，返回当前壁纸所在标签中的热门壁纸
+                logger.info(f"用户 {unique_id} 无兴趣标签，使用当前壁纸标签推荐")
+                
+                if not wallpaper_id:
+                    return ApiResponse(
+                        data=[],
+                        message="暂无个性化推荐，请先浏览一些壁纸吧~"
+                    )
+                
+                try:
+                    current_wallpaper = Wallpapers.objects.get(id=int(wallpaper_id))
+                    # 获取当前壁纸的标签
+                    current_tags = list(current_wallpaper.tags.all())
+                    
+                    if not current_tags:
+                        return ApiResponse(
+                            data=[],
+                            message="当前壁纸无标签，无法推荐"
+                        )
+                    
+                    recommended_ids = []
+                    seen_ids = set()
+                    per_tag_count = max(2, limit // len(current_tags))  # 每个标签至少2张
+                    
+                    # 从每个标签中抽取热门壁纸
+                    for tag in current_tags:
+                        tag_wallpapers = Wallpapers.objects.filter(
+                            tags=tag,
+                            audit_status='approved'
+                        ).exclude(
+                            id=current_wallpaper.id
+                        ).exclude(
+                            id__in=seen_ids
+                        ).order_by(
+                            '-hot_score'
+                        ).values_list('id', flat=True)[:per_tag_count]
+                        
+                        for wid in tag_wallpapers:
+                            if wid not in seen_ids:
+                                recommended_ids.append(wid)
+                                seen_ids.add(wid)
+                        
+                        # 如果已经够了，提前退出
+                        if len(recommended_ids) >= limit:
+                            break
+                    
+                    # 如果不够，从 CTR 热门标签中补充
+                    if len(recommended_ids) < limit:
+                        from App.view.recommendation.ctr_filter_algorithm import get_high_ctr_tags
+                        
+                        # 获取高 CTR 的标签
+                        high_ctr_tags = get_high_ctr_tags(top_n=10)
+                        
+                        for tag_id in high_ctr_tags:
+                            if len(recommended_ids) >= limit:
+                                break
+                            
+                            # 跳过当前壁纸已有的标签
+                            if tag_id in [t.id for t in current_tags]:
+                                continue
+                            
+                            tag_wallpapers = Wallpapers.objects.filter(
+                                tags__id=tag_id,
+                                audit_status='approved'
+                            ).exclude(
+                                id=current_wallpaper.id
+                            ).exclude(
+                                id__in=seen_ids
+                            ).order_by(
+                                '-hot_score'
+                            ).values_list('id', flat=True)[:2]
+                            
+                            for wid in tag_wallpapers:
+                                if wid not in seen_ids and len(recommended_ids) < limit:
+                                    recommended_ids.append(wid)
+                                    seen_ids.add(wid)
+                    
+                    if not recommended_ids:
+                        return ApiResponse(
+                            data=[],
+                            message="暂无相关壁纸推荐"
+                        )
+                    
+                    # 截取指定数量
+                    recommended_ids = recommended_ids[:limit]
+                    
+                    # 获取壁纸数据
+                    recommended_wallpapers = Wallpapers.objects.filter(
+                        id__in=recommended_ids
+                    ).prefetch_related('tags').only(
+                        'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
+                        'has_watermark', 'is_live', 'is_hd', 'hot_score', 'like_count',
+                        'collect_count', 'download_count', 'view_count', 'created_at', 'audit_status'
+                    )
+                    
+                    # 序列化返回数据
+                    context = self.get_serializer_context()
+                    
+                    # 如果用户已登录，获取点赞/收藏状态
+                    if customer_id:
+                        liked_ids = set(
+                            WallpaperLike.objects.filter(customer_id=customer_id).values_list('wallpaper_id', flat=True)
+                        )
+                        collected_ids = set(
+                            WallpaperCollection.objects.filter(user_id=customer_id).values_list('wallpaper_id', flat=True)
+                        )
+                        context['liked_wallpaper_ids'] = liked_ids
+                        context['collected_wallpaper_ids'] = collected_ids
+                    
+                    serializer = WallpapersListSerializer(recommended_wallpapers, many=True, context=context)
+                    
+                    # CTR 标签曝光统计
+                    from App.view.recommendation.ctr_filter_algorithm import increment_tag_impressions
+                    increment_tag_impressions(recommended_ids)
+                    
+                    return ApiResponse(
+                        data=serializer.data,
+                        message=f"为您推荐{len(serializer.data)}个同标签热门壁纸"
+                    )
+                    
+                except Wallpapers.DoesNotExist:
+                    return ApiResponse(code=404, message="当前壁纸不存在")
+                except (TypeError, ValueError):
+                    return ApiResponse(code=400, message="壁纸ID无效")
             
             # 2. 使用分层评分算法获取推荐壁纸
             recommended_ids = get_layer_score_wallpapers(user_tags, platform, limit=limit * 2)

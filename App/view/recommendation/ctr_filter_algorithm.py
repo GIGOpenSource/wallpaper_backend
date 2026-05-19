@@ -72,6 +72,28 @@ def increment_tag_clicks(wallpaper_id):
         return
 
 
+def get_high_ctr_tags(top_n=10):
+    """
+    获取高 CTR 的标签 ID 列表
+    
+    Args:
+        top_n: 返回前 N 个标签
+        
+    Returns:
+        list: 标签 ID 列表，按 CTR 降序排列
+    """
+    # 计算 CTR 并排序
+    ctr_tags = WallpaperTagCTR.objects.filter(
+        impression_count__gt=0  # 至少有曝光
+    ).annotate(
+        ctr=F('click_count') / F('impression_count')
+    ).order_by(
+        '-ctr', '-impression_count'  # 先按 CTR 降序，再按曝光量降序
+    ).values_list('tag_id', flat=True)[:top_n]
+    
+    return list(ctr_tags)
+
+
 def get_ctr_filtered_wallpaper_ids(unique_id, platform, limit=20):
     """
     CTR-based tag filtering recommendation
