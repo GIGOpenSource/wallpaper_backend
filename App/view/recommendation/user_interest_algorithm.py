@@ -290,96 +290,97 @@ def _classify_interest_level(score):
         return 'potential'
 
 
-def get_cold_start_wallpaper_ids(platform, order,limit=50):
-    """冷启动推荐：使用策略壁纸
-    
-    当新用户没有标签数据时，使用此方法返回推荐壁纸
-    
-    核心流程：
-    1. 查找匹配平台的活跃策略（优先当前语言，其次global）
-    2. 如果找到策略，返回策略关联的壁纸ID
-    3. 如果没有策略，返回热门壁纸
-    
-    Args:
-        platform: 平台类型 'PC' 或 'PHONE'
-        limit: 返回数量（默认50，提供足够的壁纸池）
-        
-    Returns:
-        list: 壁纸ID列表
+def get_cold_start_wallpaper_ids(platform, order, limit=50):
     """
-    from models.models import RecommendStrategy, StrategyWallpaperRelation
+    冷启动推荐：使用策略壁纸
+    当新用户没有标签数据时，使用此方法返回推荐壁纸ID
+
+    匹配优先级（严格）：
+    1. 当前平台 + 当前语言（生效时间内）
+    2. All平台 + 当前语言（生效时间内）
+    3. 无策略 → 返回对应平台热门壁纸
+
+    规则：
+    - 严格校验策略生效时间
+    - 多匹配策略自动合并壁纸（去重+按权重排序）
+    """
+    from models.models import RecommendStrategy, StrategyWallpaperRelation, Wallpapers
+    from django.utils import timezone
     from django.utils.translation import get_language
-    
+
     try:
         now = timezone.now()
         current_language = get_language()
-        
-        platforms_to_try = [platform.lower()] if platform in ['pc', 'phone'] else ['all']
-        if 'all' not in platforms_to_try:
-            platforms_to_try.append('all')
-        
-        matched_strategy = None
-        for p in platforms_to_try:
-            strategies_with_area = RecommendStrategy.objects.filter(
-                platform='all',
-                status='active',
-                apply_area=current_language,
-                strategy_type=order
-            ).order_by('-priority', '-created_at')
-            
-            for strategy in strategies_with_area:
-                if strategy.start_time and now < strategy.start_time:
-                    continue
-                if strategy.end_time and now > strategy.end_time:
-                    continue
-                matched_strategy = strategy
-                break
-            
-            if matched_strategy:
-                break
-                
-            strategies_global = RecommendStrategy.objects.filter(
-                platform='all',
-                status='active',
-                apply_area='global'
-            ).order_by('-priority', '-created_at')
-            
-            for strategy in strategies_global:
-                if strategy.start_time and now < strategy.start_time:
-                    continue
-                if strategy.end_time and now > strategy.end_time:
-                    continue
-                matched_strategy = strategy
-                break
-                
-            if matched_strategy:
-                break
-        
-        if not matched_strategy:
-            queryset = Wallpapers.objects.exclude(audit_status='rejected')
-            if platform == 'PC':
-                queryset = queryset.filter(category__id=1)
-            elif platform == 'PHONE':
-                queryset = queryset.filter(category__id=2)
-            
-            wallpaper_ids = list(queryset.order_by('-hot_score', '-created_at')
-                               .values_list('id', flat=True)[:limit])
-            return wallpaper_ids
-        
-        relation_qs = StrategyWallpaperRelation.objects.filter(
-            strategy=matched_strategy
-        ).order_by('sort_order', '-created_at')
-        
-        if matched_strategy.content_limit and matched_strategy.content_limit > 0:
-            relation_qs = relation_qs[:matched_strategy.content_limit]
-        
-        wallpaper_ids = list(relation_qs.values_list('wallpaper_id', flat=True))
-        
-        if limit and len(wallpaper_ids) > limit:
-            wallpaper_ids = wallpaper_ids[:limit]
-        
-        return wallpaper_ids
-        
+        # 标准化平台（小写）
+        target_platform = platform.lower() if platform.upper() in ['PC', 'PHONE'] else 'all'
+
+        # ========================
+        # 基础固定条件（数据库保证必满足）
+        # ========================
+        base_filters = {
+            "status": "active",
+            "strategy_type": order,
+            "start_time__lte": now,  # 严格：已到开始时间
+            "end_time__gte": now  # 严格：未到结束时间
+        }
+
+        # ========================
+        # 按优先级查询策略
+        # ========================
+        # 1. 第一优先级：当前平台 + 当前语言
+        strategies = RecommendStrategy.objects.filter(
+            **base_filters,
+            platform=target_platform,
+            apply_area=current_language
+        )
+        print("第一优先级：当前平台 + 当前语言")
+        # 2. 第二优先级：all平台 + 当前语言（兜底）
+        if not strategies.exists():
+            strategies = RecommendStrategy.objects.filter(
+                **base_filters,
+                platform="all",
+                apply_area=current_language
+            )
+            print("第二优先级：all平台 + 当前语言（兜底）")
+        # ========================
+        # 合并多策略壁纸（去重+排序）
+        # ========================
+        if strategies.exists():
+            print("成功加载策略")
+            # 获取所有匹配策略的关联壁纸，按权重排序
+            relations = StrategyWallpaperRelation.objects.filter(
+                strategy__in=strategies
+            ).order_by('sort_order', '-created_at')
+
+            # 提取壁纸ID + 自动去重
+            wallpaper_ids = []
+            for rel in relations:
+                if rel.wallpaper_id and rel.wallpaper_id not in wallpaper_ids:
+                    wallpaper_ids.append(rel.wallpaper_id)
+
+            # 应用策略数量限制
+            main_strategy = strategies.first()
+            if main_strategy and main_strategy.content_limit and main_strategy.content_limit > 0:
+                wallpaper_ids = wallpaper_ids[:main_strategy.content_limit]
+
+            # 最终限制返回数量
+            return wallpaper_ids[:limit]
+
+        # ========================
+        # 无匹配策略 → 返回默认热门壁纸
+        # ========================
+        queryset = Wallpapers.objects.exclude(audit_status='rejected')
+        print("成功策略加载失败")
+        if target_platform == 'pc':
+            queryset = queryset.filter(category__id=1)
+        elif target_platform == 'phone':
+            queryset = queryset.filter(category__id=2)
+
+        return list(
+            queryset.order_by('-hot_score', '-created_at')
+            .values_list('id', flat=True)[:limit]
+        )
+
     except Exception as e:
         print(f"[Cold Start Recommendation Failed] platform: {platform}, error: {e}")
         return []
