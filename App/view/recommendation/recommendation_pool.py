@@ -306,8 +306,8 @@ def get_or_build_mixed_pool(unique_id, platform, order):
         # 4. 构建多样性与防滤泡池
         diversity_ids = build_diversity_pool(unique_id, platform, order)
         
-        # 5. 四路混合（45:20:25:10）
-        mixed_ids = merge_four_pools(personal_ids, cold_ids, ctr_ids, diversity_ids, ratio=(0.45, 0.2, 0.25, 0.1))
+        # 5. 四路混合（20:55:15:10）
+        mixed_ids = merge_four_pools(personal_ids, cold_ids, ctr_ids, diversity_ids, ratio=(0.20, 0.55, 0.15, 0.1))
         
         # 6. 存入Redis
         if mixed_ids:
