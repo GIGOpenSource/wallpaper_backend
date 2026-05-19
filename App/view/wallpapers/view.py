@@ -2391,92 +2391,103 @@ class WallpapersViewSet(BaseViewSet):
     def featured(self, request):
         """
         精选壁纸：根据平台返回高质量壁纸，优先应用推荐策略
-        策略匹配顺序：platform -> all -> 默认平台分类
+        策略匹配顺序：当前平台+当前语言 → all平台+当前语言 → 默认平台分类
+        规则：仅返回生效时间内的策略，多策略自动合并壁纸
         """
+        # 1. 校验平台参数
         platform = request.query_params.get("platform", "").upper()
         if platform not in ['PC', 'PHONE', 'ALL']:
             return ApiResponse(code=400, message="平台参数错误，请输入 PC、PHONE 或 ALL")
+
+        # 2. 获取分页限制
         try:
             limit = int(request.query_params.get("limit", 6))
+            limit = max(1, min(limit, 50))  # 限制合理范围
         except (TypeError, ValueError):
             limit = 6
-        from django.utils import timezone
+
         now = timezone.now()
-        matched_strategy = None
+        lang = request.LANGUAGE_CODE
+        ordered_wallpapers = []
+
+        # ========================
+        # 3. 匹配推荐策略（优先级：当前平台 → all平台）
+        # ========================
+        strategy_filters = {
+            "strategy_type": "banner",
+            "status": "active",
+        }
+
+        # 第一步：查询 当前平台 + 当前语言 的有效策略
         if platform in ['PC', 'PHONE']:
-            platform_strategies = RecommendStrategy.objects.filter(
+            strategies = RecommendStrategy.objects.filter(
+                **strategy_filters,
                 platform=platform.lower(),
-                strategy_type="banner",
-                status="active",
-            ).order_by("-priority", "-created_at")
-            for item in platform_strategies:
-                if item.start_time and now < item.start_time:
-                    continue
-                if item.end_time and now > item.end_time:
-                    continue
-                matched_strategy = item
-                break
-            if not matched_strategy:
-                all_strategies = RecommendStrategy.objects.filter(
+                apply_area=lang,
+                start_time__lte=now,  # 已到开始时间
+                end_time__gte=now  # 未到结束时间
+            )
+            # 无结果 → 降级查询 all平台 + 当前语言
+            if not strategies.exists():
+                strategies = RecommendStrategy.objects.filter(
+                    **strategy_filters,
                     platform="all",
-                    strategy_type="banner",
-                    status="active",
-                ).order_by("-priority", "-created_at")
-
-                for item in all_strategies:
-                    if item.start_time and now < item.start_time:
-                        continue
-                    if item.end_time and now > item.end_time:
-                        continue
-                    matched_strategy = item
-                    break
+                    apply_area=lang,
+                    start_time__lte=now,
+                    end_time__gte=now
+                )
         else:
-            all_strategies = RecommendStrategy.objects.filter(
+            # ALL平台 → 直接查 all+当前语言
+            strategies = RecommendStrategy.objects.filter(
+                **strategy_filters,
                 platform="all",
-                strategy_type="banner",
-                status="active",
-            ).order_by("-priority", "-created_at")
+                apply_area=lang,
+                start_time__lte=now,
+                end_time__gte=now
+            )
 
-            for item in all_strategies:
-                if item.start_time and now < item.start_time:
-                    continue
-                if item.end_time and now > item.end_time:
-                    continue
-                matched_strategy = item
-                break
-        if matched_strategy:
-            # 通过关联表查询壁纸，按排序权重排序
+        # ========================
+        # 4. 合并多策略壁纸（按权重排序 + 去重）
+        # ========================
+        if strategies.exists():
+            # 获取所有策略关联的壁纸，按排序权重排序
             relations = StrategyWallpaperRelation.objects.filter(
-                strategy=matched_strategy
+                strategy__in=strategies
             ).select_related('wallpaper').order_by('sort_order', '-created_at')
 
-            # 如果有限制数量
-            if matched_strategy.content_limit and matched_strategy.content_limit > 0:
-                relations = relations[:matched_strategy.content_limit]
+            # 提取壁纸 + 自动去重
+            wallpaper_ids = []
+            for rel in relations:
+                if rel.wallpaper and rel.wallpaper.id not in wallpaper_ids:
+                    wallpaper_ids.append(rel.wallpaper.id)
+                    ordered_wallpapers.append(rel.wallpaper)
 
-            # 提取壁纸对象
-            ordered_wallpapers = [rel.wallpaper for rel in relations if rel.wallpaper]
+            # 应用策略数量限制
+            strategy = strategies.first()
+            if strategy and strategy.content_limit and strategy.content_limit > 0:
+                ordered_wallpapers = ordered_wallpapers[:strategy.content_limit]
 
-            if ordered_wallpapers:
-                serializer = self.get_serializer(ordered_wallpapers, many=True)
-                return ApiResponse(
-                    data=serializer.data,
-                    message="精选壁纸获取成功（来自推荐策略）"
-                )
+        # ========================
+        # 5. 策略有数据 → 返回策略壁纸
+        # ========================
+        if ordered_wallpapers:
+            serializer = self.get_serializer(ordered_wallpapers, many=True)
+            return ApiResponse(
+                data=serializer.data,
+                message="精选壁纸获取成功（来自推荐策略）"
+            )
+
+        # ========================
+        # 6. 无策略 → 返回默认分类壁纸
+        # ========================
+        queryset = Wallpapers.objects.filter(is_hd=True).distinct()
         if platform == 'PC':
-            queryset = Wallpapers.objects.filter(
-                category__id=1,
-                is_hd=True
-            ).distinct().order_by('-hot_score', '-like_count', '-created_at')[:limit]
+            queryset = queryset.filter(category__id=1)
         elif platform == 'PHONE':
-            queryset = Wallpapers.objects.filter(
-                category__id=2,
-                is_hd=True
-            ).distinct().order_by('-hot_score', '-like_count', '-created_at')[:limit]
-        else:
-            queryset = Wallpapers.objects.filter(
-                is_hd=True
-            ).distinct().order_by('-hot_score', '-like_count', '-created_at')[:limit]
+            queryset = queryset.filter(category__id=2)
+
+        # 统一排序 + 限制数量
+        queryset = queryset.order_by('-hot_score', '-like_count', '-created_at')[:limit]
 
         serializer = self.get_serializer(queryset, many=True)
         return ApiResponse(data=serializer.data, message="精选壁纸获取成功")
