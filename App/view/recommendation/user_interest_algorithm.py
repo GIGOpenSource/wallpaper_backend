@@ -448,24 +448,15 @@ def _get_wallpapers_by_tag(tag_level1, tag_level2, platform, count, exclude_ids=
         tag_query = WallpaperTag.objects.filter(name__icontains=tag_level1)
         if tag_level2:
             tag_query = tag_query.filter(name__icontains=tag_level2)
-
         matched_tags = list(tag_query.values_list('id', flat=True))
         if not matched_tags:
             return []
-        wallpaper_ids_in_tag = Wallpapers.tags.through.objects.filter(
-            wallpapertag_id__in=matched_tags
-        ).values_list('wallpapers_id', flat=True)
-
+        # 2. 通过 tags 多对多关系获取壁纸
         queryset = Wallpapers.objects.filter(
-            id__in=wallpaper_ids_in_tag,
-            audit_status='approved'  # 只保留审核通过
+            tags__id__in=matched_tags
+        ).exclude(
+            audit_status='rejected'  # 排除拒绝的，其他都显示（包括 approved、None、pending）
         )
-
-        if platform == 'PC':
-            queryset = queryset.filter(category_id=1)
-        elif platform == 'PHONE':
-            queryset = queryset.filter(category_id=2)
-
         if exclude_ids:
             queryset = queryset.exclude(id__in=exclude_ids)
 
