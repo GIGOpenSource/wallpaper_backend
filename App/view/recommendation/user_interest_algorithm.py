@@ -321,7 +321,7 @@ def get_cold_start_wallpaper_ids(platform, order,limit=50):
         matched_strategy = None
         for p in platforms_to_try:
             strategies_with_area = RecommendStrategy.objects.filter(
-                platform=p, 
+                platform='all',
                 status='active',
                 apply_area=current_language,
                 strategy_type=order
@@ -339,7 +339,7 @@ def get_cold_start_wallpaper_ids(platform, order,limit=50):
                 break
                 
             strategies_global = RecommendStrategy.objects.filter(
-                platform=p, 
+                platform='all',
                 status='active',
                 apply_area='global'
             ).order_by('-priority', '-created_at')
