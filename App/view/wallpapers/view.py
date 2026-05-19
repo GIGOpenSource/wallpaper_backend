@@ -443,7 +443,8 @@ class CollectionItemSerializer(serializers.ModelSerializer):
                              description="排序规则（只能传一个）：latest=最新, views=最多浏览, downloads=最多下载, hot=热度"),
             OpenApiParameter(name="audit_status", type=str, required=False,
                              description="审核状态筛选（仅管理员）：pending/approved/rejected"),
-
+            # 语言参数
+            OpenApiParameter(name="lang", type=str, required=False, description="语言参数es/en/pt/ja/ko/zh/de/fr 不传则全部"),
         ],
         responses={
             200: {

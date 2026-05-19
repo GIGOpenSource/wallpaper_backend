@@ -128,8 +128,8 @@ SPECTACULAR_SETTINGS = {
 }
 
 WSGI_APPLICATION = 'WallPaper.wsgi.application'
-DATABASE_ROUTERS = ['WallPaper.settings.db_router.AppDBRouter']
-POSTGRES_HOST_OLD = "119.45.233.147"  # 老库（只读）
+# DATABASE_ROUTERS = ['WallPaper.settings.db_router.AppDBRouter']
+# POSTGRES_HOST_OLD = "119.45.233.147"  # 老库（只读）
 POSTGRES_HOST_NEW = "101.32.179.223"  # 新库（默认库，可写）
 
 DATABASES = {
@@ -144,17 +144,17 @@ DATABASES = {
             'connect_timeout': 10,
         },
     },
-    'old_db': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'crash_db',
-        'USER': 'crash',
-        'PASSWORD': 'crash',
-        'HOST': POSTGRES_HOST_OLD,
-        'PORT': '5432',
-        'OPTIONS': {
-            'connect_timeout': 10,
-        },
-    }
+    # 'old_db': {
+    #     'ENGINE': 'django.db.backends.postgresql',
+    #     'NAME': 'crash_db',
+    #     'USER': 'crash',
+    #     'PASSWORD': 'crash',
+    #     'HOST': POSTGRES_HOST_OLD,
+    #     'PORT': '5432',
+    #     'OPTIONS': {
+    #         'connect_timeout': 10,
+    #     },
+    # }
 }
 
 STATIC_URL = 'static/'

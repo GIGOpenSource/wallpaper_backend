@@ -79,7 +79,7 @@ class User(models.Model):
         verbose_name = '后台管理员'
         verbose_name_plural = '后台管理员'
         ordering = ['-created_at']
-        managed = False
+        managed = True
 
     def __str__(self):
         return f"{self.username} ({self.get_role_display()})"
