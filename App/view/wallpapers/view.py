@@ -1696,188 +1696,29 @@ class WallpapersViewSet(BaseViewSet):
     @action(detail=False, methods=['get'], url_path='guess_you_like')
     def guess_you_like(self, request):
         """
-        猜你喜欢：基于用户兴趣标签推荐壁纸
-        
-        核心逻辑：
-        1. 获取用户的 unique_id（从 header 或 customer_id）
-        2. 获取用户 TOP 标签
-        3. 使用分层评分算法推荐壁纸
-        4. 排除当前壁纸 ID（如果提供）
+        猜你喜欢：基于当前壁纸标签和用户兴趣标签推荐
         """
-        from App.view.recommendation.user_interest_algorithm import get_user_top_tags, get_layer_score_wallpapers
+        from App.view.recommendation.user_interest_algorithm import get_user_top_tags
         
-        # 获取参数
-        wallpaper_id = request.query_params.get("wallpaper_id")  # 可选，用于排除当前壁纸
+        wallpaper_id = request.query_params.get("wallpaper_id")
         limit = int(request.query_params.get("limit", 10))
-        platform = request.query_params.get("platform", "PC").upper()  # PC 或 PHONE
-        # 获取用户唯一标识
         unique_id = request.META.get("HTTP_UNIQUE_ID", "").strip()
         customer_id = getattr(request.user, 'id', None) if hasattr(request, 'user') else None
-        # 如果 unique_id 为空，使用 customer_id 或生成临时ID
-        if not unique_id:
-            if customer_id:
-                unique_id = f"customer_{customer_id}"
-            else:
-                # 未登录且无 unique_id，使用 IP + User-Agent 的哈希值
-                import hashlib
-                ip = request.META.get('REMOTE_ADDR', 'unknown')
-                ua = request.META.get('HTTP_USER_AGENT', '')
-                unique_id = hashlib.md5(f"{ip}:{ua}".encode()).hexdigest()[:16]
+        
+        if not unique_id and customer_id:
+            unique_id = f"customer_{customer_id}"
         
         try:
-            # 1. 获取用户 TOP 标签
-            user_tags = get_user_top_tags(unique_id, top_n=10, sync_from_track=True)
-            
-            if not user_tags:
-                # 用户无兴趣标签，从当前壁纸标签和 CTR 热门标签中获取
-                logger.info(f"用户 {unique_id} 无兴趣标签，使用标签推荐")
-                
-                if not wallpaper_id:
-                    return ApiResponse(
-                        data=[],
-                        message="暂无个性化推荐，请先浏览一些壁纸吧~"
-                    )
-                
-                try:
-                    current_wallpaper = Wallpapers.objects.get(id=int(wallpaper_id))
-                    current_tags = list(current_wallpaper.tags.all())
-                    
-                    if not current_tags:
-                        return ApiResponse(
-                            data=[],
-                            message="当前壁纸无标签，无法推荐"
-                        )
-                    
-                    candidate_ids = []
-                    seen_ids = set()
-                    
-                    # 1. 从当前壁纸的标签中获取候选（取5张）
-                    for tag in current_tags:
-                        if len(candidate_ids) >= 5:
-                            break
-                        
-                        tag_ids = Wallpapers.objects.filter(
-                            tags=tag
-                        ).exclude(
-                            audit_status='rejected'
-                        ).exclude(
-                            id=current_wallpaper.id
-                        ).exclude(
-                            id__in=seen_ids
-                        ).order_by('-hot_score').values_list('id', flat=True)[:2]
-                        
-                        for wid in tag_ids:
-                            if wid not in seen_ids:
-                                candidate_ids.append(wid)
-                                seen_ids.add(wid)
-                    
-                    # 2. 从 CTR 热门标签补充（取5张）
-                    from App.view.recommendation.ctr_filter_algorithm import get_high_ctr_tags
-                    high_ctr_tags = get_high_ctr_tags(top_n=10)
-                    
-                    current_tag_ids = [t.id for t in current_tags]
-                    for tag_id in high_ctr_tags:
-                        if len(candidate_ids) >= 10:
-                            break
-                        
-                        if tag_id in current_tag_ids:
-                            continue
-                        
-                        tag_ids = Wallpapers.objects.filter(
-                            tags__id=tag_id
-                        ).exclude(
-                            audit_status='rejected'
-                        ).exclude(
-                            id=current_wallpaper.id
-                        ).exclude(
-                            id__in=seen_ids
-                        ).order_by('-hot_score').values_list('id', flat=True)[:2]
-                        
-                        for wid in tag_ids:
-                            if wid not in seen_ids:
-                                candidate_ids.append(wid)
-                                seen_ids.add(wid)
-                    
-                    if not candidate_ids:
-                        return ApiResponse(
-                            data=[],
-                            message="暂无相关壁纸推荐"
-                        )
-                    
-                    # 3. 截取指定数量
-                    candidate_ids = candidate_ids[:limit]
-                    
-                    # 4. 获取壁纸数据（保持原有顺序）
-                    recommended_wallpapers = Wallpapers.objects.filter(
-                        id__in=candidate_ids
-                    ).prefetch_related('tags').only(
-                        'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
-                        'has_watermark', 'is_live', 'is_hd', 'hot_score', 'like_count',
-                        'collect_count', 'download_count', 'view_count', 'created_at', 'audit_status'
-                    )
-                    
-                    # 按 candidate_ids 的顺序重新排列
-                    wallpaper_dict = {w.id: w for w in recommended_wallpapers}
-                    ordered_wallpapers = [wallpaper_dict[wid] for wid in candidate_ids if wid in wallpaper_dict]
-                    
-                    if not ordered_wallpapers:
-                        return ApiResponse(
-                            data=[],
-                            message="暂无相关壁纸推荐"
-                        )
-                    
-                    # 序列化返回数据
-                    context = self.get_serializer_context()
-                    
-                    if customer_id:
-                        liked_ids = set(
-                            WallpaperLike.objects.filter(customer_id=customer_id).values_list('wallpaper_id', flat=True)
-                        )
-                        collected_ids = set(
-                            WallpaperCollection.objects.filter(user_id=customer_id).values_list('wallpaper_id', flat=True)
-                        )
-                        context['liked_wallpaper_ids'] = liked_ids
-                        context['collected_wallpaper_ids'] = collected_ids
-                    
-                    serializer = WallpapersListSerializer(ordered_wallpapers, many=True, context=context)
-                    
-                    # CTR 标签曝光统计
-                    from App.view.recommendation.ctr_filter_algorithm import increment_tag_impressions
-                    increment_tag_impressions(candidate_ids)
-                    
-                    return ApiResponse(
-                        data=serializer.data,
-                        message=f"为您推荐{len(serializer.data)}个同标签热门壁纸"
-                    )
-                    
-                except Wallpapers.DoesNotExist:
-                    return ApiResponse(code=404, message="当前壁纸不存在")
-                except (TypeError, ValueError):
-                    return ApiResponse(code=400, message="壁纸ID无效")
-            
-            # 2. 使用分层评分算法获取推荐壁纸（4张）
-            interest_ids = get_layer_score_wallpapers(user_tags, platform, limit=4)
-            
             candidate_ids = []
             seen_ids = set()
             
-            # 添加兴趣标签推荐的壁纸
-            if interest_ids:
-                for wid in interest_ids:
-                    if wid not in seen_ids:
-                        candidate_ids.append(wid)
-                        seen_ids.add(wid)
-            
-            # 3. 从当前壁纸的标签中获取候选（3张）
-            if wallpaper_id and len(candidate_ids) < 7:
+            # 1. 从当前壁纸的标签中获取（每个标签取5张）
+            if wallpaper_id:
                 try:
                     current_wallpaper = Wallpapers.objects.get(id=int(wallpaper_id))
                     current_tags = list(current_wallpaper.tags.all())
                     
                     for tag in current_tags:
-                        if len(candidate_ids) >= 7:  # 4 + 3
-                            break
-                        
                         tag_ids = Wallpapers.objects.filter(
                             tags=tag
                         ).exclude(
@@ -1886,40 +1727,36 @@ class WallpapersViewSet(BaseViewSet):
                             id=current_wallpaper.id
                         ).exclude(
                             id__in=seen_ids
-                        ).order_by('-hot_score').values_list('id', flat=True)[:1]
+                        ).order_by('?')[:5]  # 随机取5张
                         
-                        for wid in tag_ids:
-                            if wid not in seen_ids:
-                                candidate_ids.append(wid)
-                                seen_ids.add(wid)
+                        for w in tag_ids:
+                            if w.id not in seen_ids:
+                                candidate_ids.append(w.id)
+                                seen_ids.add(w.id)
                 except (Wallpapers.DoesNotExist, TypeError, ValueError):
                     pass
             
-            # 4. 从 CTR 热门标签补充（3张）
-            if len(candidate_ids) < 10:
-                from App.view.recommendation.ctr_filter_algorithm import get_high_ctr_tags
-                high_ctr_tags = get_high_ctr_tags(top_n=10)
+            # 2. 从用户兴趣标签中获取（随机取5张）
+            if unique_id:
+                user_tags = get_user_top_tags(unique_id, top_n=10, sync_from_track=True)
                 
-                current_tag_ids = [t.id for t in current_tags] if 'current_tags' in locals() else []
-                for tag_id in high_ctr_tags:
-                    if len(candidate_ids) >= 10:
-                        break
+                if user_tags:
+                    # 获取用户兴趣标签对应的壁纸ID
+                    interest_tag_ids = [t['tag_id'] for t in user_tags if 'tag_id' in t]
                     
-                    if tag_id in current_tag_ids:
-                        continue
-                    
-                    tag_ids = Wallpapers.objects.filter(
-                        tags__id=tag_id
-                    ).exclude(
-                        audit_status='rejected'
-                    ).exclude(
-                        id__in=seen_ids
-                    ).order_by('-hot_score').values_list('id', flat=True)[:1]
-                    
-                    for wid in tag_ids:
-                        if wid not in seen_ids:
-                            candidate_ids.append(wid)
-                            seen_ids.add(wid)
+                    if interest_tag_ids:
+                        interest_wallpapers = Wallpapers.objects.filter(
+                            tags__id__in=interest_tag_ids
+                        ).exclude(
+                            audit_status='rejected'
+                        ).exclude(
+                            id__in=seen_ids
+                        ).order_by('?')[:5]  # 随机取5张
+                        
+                        for w in interest_wallpapers:
+                            if w.id not in seen_ids:
+                                candidate_ids.append(w.id)
+                                seen_ids.add(w.id)
             
             if not candidate_ids:
                 return ApiResponse(
@@ -1927,24 +1764,10 @@ class WallpapersViewSet(BaseViewSet):
                     message="暂无相关壁纸推荐"
                 )
             
-            # 5. 排除当前壁纸 ID（如果提供）
-            if wallpaper_id:
-                try:
-                    wallpaper_id_int = int(wallpaper_id)
-                    candidate_ids = [wid for wid in candidate_ids if wid != wallpaper_id_int]
-                except (TypeError, ValueError):
-                    pass
-            
-            # 6. 截取指定数量
+            # 3. 截取指定数量
             candidate_ids = candidate_ids[:limit]
             
-            if not candidate_ids:
-                return ApiResponse(
-                    data=[],
-                    message="暂无更多推荐"
-                )
-            
-            # 7. 获取壁纸数据（保持原有顺序）
+            # 4. 获取壁纸数据
             recommended_wallpapers = Wallpapers.objects.filter(
                 id__in=candidate_ids
             ).prefetch_related('tags').only(
@@ -1953,14 +1776,13 @@ class WallpapersViewSet(BaseViewSet):
                 'collect_count', 'download_count', 'view_count', 'created_at', 'audit_status'
             )
             
-            # 按 candidate_ids 的顺序重新排列
+            # 保持顺序
             wallpaper_dict = {w.id: w for w in recommended_wallpapers}
             ordered_wallpapers = [wallpaper_dict[wid] for wid in candidate_ids if wid in wallpaper_dict]
             
-            # 8. 序列化返回数据
+            # 5. 序列化返回
             context = self.get_serializer_context()
             
-            # 如果用户已登录，获取点赞/收藏状态
             if customer_id:
                 liked_ids = set(
                     WallpaperLike.objects.filter(customer_id=customer_id).values_list('wallpaper_id', flat=True)
@@ -1973,13 +1795,9 @@ class WallpapersViewSet(BaseViewSet):
             
             serializer = WallpapersListSerializer(ordered_wallpapers, many=True, context=context)
             
-            # 9. CTR 标签曝光统计
-            from App.view.recommendation.ctr_filter_algorithm import increment_tag_impressions
-            increment_tag_impressions(candidate_ids)
-            
             return ApiResponse(
                 data=serializer.data,
-                message=f"为您找到{len(serializer.data)}个个性化推荐"
+                message=f"为您推荐{len(serializer.data)}个壁纸"
             )
             
         except Exception as e:
@@ -2122,7 +1940,6 @@ class WallpapersViewSet(BaseViewSet):
             }
         }
     )
-    @action(detail=False, methods=['post'], url_path='batch-delete')
     @action(detail=False, methods=['post'], url_path='batch-delete')
     def batch_delete(self, request):
         wallpaper_ids = request.data.get('wallpaper_ids', [])
