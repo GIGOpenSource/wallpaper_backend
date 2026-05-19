@@ -243,7 +243,7 @@ class DjangoTaskScheduler:
             new_job = self.scheduler.get_job(job_id)
             logging.info(f"修改后任务 {job_id} 触发器: {new_job.trigger}")
             logging.info(f"修改后任务 {job_id} 下次执行: {new_job.next_run_time}")
-            logging.info(f"任务 {job_id} 修改成功 ✅")
+            logging.info(f"任务 {job_id} 修改成功. ✅")
             return True
 
         except Exception as e:
