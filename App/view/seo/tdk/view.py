@@ -8,6 +8,7 @@
 @description : 页面TDK管理
 """
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
+from openpyxl.styles.builtins import title
 from rest_framework import serializers
 from rest_framework.decorators import action
 
@@ -123,7 +124,8 @@ class PageTDKViewSet(BaseViewSet):
             queryset = queryset.filter(url__content__icontains=url)
         elif url and not is_admin:
             queryset = queryset.filter(url__content=url)
-
+        if title:
+            queryset = queryset.filter(title__icontains=title)
         return queryset.order_by('-updated_at')
 
     def list(self, request, *args, **kwargs):
