@@ -99,6 +99,11 @@ class PageTDKViewSet(BaseViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        is_admin = False
+        from models.models import User
+        if hasattr(self.request, 'user') and isinstance(self.request.user, User):
+            if self.request.user.role in ['admin', 'operator', 'super_admin']:
+                is_admin = True
         # 按页面类型筛选
         page_type = self.request.query_params.get('page_type')
         if page_type:
@@ -112,8 +117,11 @@ class PageTDKViewSet(BaseViewSet):
         if is_active is not None:
             queryset = queryset.filter(is_active=is_active.lower() == 'true')
         url = self.request.query_params.get('url', '').strip()
-        if url:
+
+        if url and is_admin:
             queryset = queryset.filter(url__content__icontains=url)
+        else:
+            queryset = queryset.filter(url__content=url)
 
         return queryset.order_by('-updated_at')
 
