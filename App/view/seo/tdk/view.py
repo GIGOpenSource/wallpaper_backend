@@ -120,7 +120,7 @@ class PageTDKViewSet(BaseViewSet):
 
         if url and is_admin:
             queryset = queryset.filter(url__content__icontains=url)
-        else:
+        elif url and not is_admin:
             queryset = queryset.filter(url__content=url)
 
         return queryset.order_by('-updated_at')
