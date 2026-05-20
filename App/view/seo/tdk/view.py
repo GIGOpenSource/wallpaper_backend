@@ -62,6 +62,7 @@ class WallpaperDetailSEOSerializer(serializers.ModelSerializer):
             OpenApiParameter(name="pageSize", type=int, required=False, description="每页数量"),
             OpenApiParameter(name="is_template", type=str, required=False, description="是否模板"),
             OpenApiParameter(name="url", type=str, required=False, description="是否模板"),
+            OpenApiParameter(name="title", type=str, required=False, description="标题"),
             OpenApiParameter(name="wallpaper_id", type=int, required=False, description="壁纸id"),
         ],
     ),
