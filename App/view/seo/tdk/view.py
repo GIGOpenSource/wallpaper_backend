@@ -124,8 +124,9 @@ class PageTDKViewSet(BaseViewSet):
             queryset = queryset.filter(url__content__icontains=url)
         elif url and not is_admin:
             queryset = queryset.filter(url__content=url)
-        if title:
-            queryset = queryset.filter(title__icontains=title)
+        q_title = self.request.query_params.get('title')
+        if q_title:
+            queryset = queryset.filter(title__icontains=q_title)
         return queryset.order_by('-updated_at')
 
     def list(self, request, *args, **kwargs):
