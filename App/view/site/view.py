@@ -86,15 +86,9 @@ class RobotsRuleAddSerializer(serializers.Serializer):
 
 class RobotsTestSerializer(serializers.Serializer):
     """Robots 规则测试序列化器"""
-    user_agent = serializers.ChoiceField(
-        choices=[
-            ('Googlebot', 'Googlebot'),
-            ('Googlebot-Image', 'Googlebot-Image'),
-            ('Bingbot', 'Bingbot'),
-            ('Baiduspider', 'Baiduspider'),
-        ],
+    user_agent = serializers.CharField(
         required=True,
-        help_text="User-agent 类型"
+        help_text="User-agent 类型，支持: Googlebot, Googlebot-Image, Bingbot, Baiduspider, 或 * 表示全部"
     )
     url_path = serializers.CharField(
         required=True,
@@ -898,7 +892,23 @@ class SiteConfigViewSet(BaseViewSet):
         # 解析规则
         rules = self._parse_robots_content(content)
         
-        # 测试访问权限
+        # 如果 user_agent 是 *，则遍历所有默认的 user-agent
+        if user_agent == '*':
+            default_agents = ['Googlebot', 'Googlebot-Image', 'Bingbot', 'Baiduspider']
+            results = []
+            for agent in default_agents:
+                result = self._test_access(rules, agent, url_path)
+                results.append({
+                    'user_agent': agent,
+                    'url': full_url,
+                    'result': result['result'],
+                    'matched_rule': result['matched_rule'],
+                    'explanation': result['explanation'],
+                    'status_code': result['status_code']
+                })
+            return ApiResponse(data=results, message="测试完成")
+        
+        # 单个 user-agent 测试
         result = self._test_access(rules, user_agent, url_path)
         
         # 构建返回数据
