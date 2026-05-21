@@ -868,7 +868,7 @@ class KeywordResearchViewSet(BaseViewSet):
         user_id = request.user.id
         
         # 获取操作类型（默认 add）
-        action = request.data.get('action', 'add')
+        action = request.data.get('is_favorite', 'add')
         
         try:
             if action == 'add':
