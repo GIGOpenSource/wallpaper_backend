@@ -868,10 +868,10 @@ class KeywordResearchViewSet(BaseViewSet):
         user_id = request.user.id
         
         # 获取操作类型（默认 add）
-        action = request.data.get('is_favorite', 'add')
+        action = request.data.get('is_favorite')
         
         try:
-            if action == 'add':
+            if action:
                 # 批量添加收藏（使用 bulk_create + ignore_conflicts 避免重复）
                 favorites = [
                     KeywordFavorite(user_id=user_id, keyword_id=kw_id)
