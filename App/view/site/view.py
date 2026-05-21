@@ -912,14 +912,14 @@ class SiteConfigViewSet(BaseViewSet):
         result = self._test_access(rules, user_agent, url_path)
         
         # 构建返回数据
-        response_data = {
+        response_data = [{
             'user_agent': user_agent,
             'url': full_url,
             'result': result['result'],
             'matched_rule': result['matched_rule'],
             'explanation': result['explanation'],
             'status_code':result['status_code']
-        }
+        }]
         
         return ApiResponse(data=response_data, message="测试完成")
 
