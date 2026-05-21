@@ -426,6 +426,7 @@ class CollectionItemSerializer(serializers.ModelSerializer):
         parameters=[
             OpenApiParameter(name="currentPage", type=int, required=False, description="当前页码"),
             OpenApiParameter(name="pageSize", type=int, required=False, description="每页数量"),
+            OpenApiParameter(name="id", type=int, required=False, description="壁纸id"),
             OpenApiParameter(name="name", type=str, required=False, description="壁纸名称搜索"),
             OpenApiParameter(name="tag_id", type=str, required=False,
                              description="标签 ID 查询，支持单个或多个（逗号分隔）"),
@@ -625,7 +626,9 @@ class WallpapersViewSet(BaseViewSet):
         name = request.query_params.get("name", "").strip()
         if name:
             queryset = queryset.filter(name__icontains=name).distinct()
-
+        id = request.query_params.get("id")
+        if id:
+            queryset = queryset.filter(id=id).distinct()
         tag_name = request.query_params.get("tag_name", "").strip()
         if tag_name:
             tag_ids = list(WallpaperTag.objects.filter(name__icontains=tag_name).values_list('id', flat=True))

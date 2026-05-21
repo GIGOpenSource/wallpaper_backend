@@ -23,6 +23,7 @@ from App.view.seo.data_analysis import urls as data_analysis_urls
 from App.view.seo.inspection import urls as inspection_urls
 from App.view.seo.competitor import urls as competitor_urls
 from App.view.seo.keyword import urls as keyword_urls
+from App.view.seo.check import urls as check_urls
 router = DefaultRouter()
 router.register(r'seo_view', SEOViewSet, basename='seo_view')
 router.register(r'detection-log', DetectionLogViewSet, basename='detection_log')
@@ -40,5 +41,6 @@ urlpatterns = [
     path('data_analysis/', include(data_analysis_urls)),
     path('inspection/', include(inspection_urls)),
     path('competitor/', include(competitor_urls)),
-    path('keyword/', include(keyword_urls))
+    path('keyword/', include(keyword_urls)),
+    path('check/', include(check_urls)),
 ]
