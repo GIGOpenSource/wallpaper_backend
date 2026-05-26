@@ -638,11 +638,6 @@ class WallpapersViewSet(BaseViewSet):
         # 构建基础查询集 - 只选择必要字段
         queryset = Wallpapers.objects.exclude(audit_status='rejected')
 
-        # 应用平台筛选
-        if platform == 'PC':
-            queryset = queryset.filter(category__id=1).distinct()
-        elif platform == 'PHONE':
-            queryset = queryset.filter(category__id=2).distinct()
         # 应用标签筛选（优先使用 tag_id，性能更好）
         if tag_id:
             try:
