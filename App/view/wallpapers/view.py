@@ -2623,6 +2623,7 @@ class WallpapersViewSet(BaseViewSet):
                     has_watermark=False,
                     is_hd=is_hd,
                     is_live=is_live,
+                    audit_status='pending'
                 )
                 # 同时添加平台分类和类型分类
                 wp.category.add(platform_cat_id, type_cat_id)
