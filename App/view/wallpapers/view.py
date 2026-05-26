@@ -604,6 +604,12 @@ class WallpapersViewSet(BaseViewSet):
         壁纸列表接口：管理员与普通用户完全分离
         """
         from models.models import User
+        
+        # 检测是否为 Googlebot，如果是则使用快速响应
+        user_agent = request.META.get('HTTP_USER_AGENT', '').lower()
+        if 'googlebot' in user_agent:
+            return self._list_for_googlebot(request)
+        
         is_admin = hasattr(request, 'user') and isinstance(request.user, User) and \
                    request.user.role in ['admin', 'operator', 'super_admin']
         customer_id = self.get_serializer_context().get("customer_id")
@@ -612,6 +618,85 @@ class WallpapersViewSet(BaseViewSet):
             return self._list_for_admin(request, customer_id)
         else:
             return self._list_for_customer(request, customer_id)
+
+    def _list_for_googlebot(self, request):
+        """
+        Googlebot 快速响应接口：直接根据 tag_id 或 tag_name 返回 queryset
+        优化策略：
+        1. 最小化查询字段（只查必要字段）
+        2. 不使用分页，限制最大返回数量
+        3. 不加载关联数据（tags、category等）
+        4. 使用数据库索引优化查询
+        5. 跳过所有业务逻辑（点赞、收藏、推荐算法等）
+        """
+        from django.http import JsonResponse
+        
+        # 获取筛选参数
+        tag_id = request.query_params.get("tag_id", "").strip()
+        tag_name = request.query_params.get("tag_name", "").strip()
+        platform = request.query_params.get("platform", "").upper()
+        
+        # 构建基础查询集 - 只选择必要字段
+        queryset = Wallpapers.objects.filter(
+            audit_status='approved'  # 只返回审核通过的壁纸
+        ).only(
+            'id', 'name', 'url', 'thumb_url', 'width', 'height', 
+            'image_format', 'created_at'
+        )
+        
+        # 应用平台筛选
+        if platform == 'PC':
+            queryset = queryset.filter(category__id=1).distinct()
+        elif platform == 'PHONE':
+            queryset = queryset.filter(category__id=2).distinct()
+        
+        # 应用标签筛选（优先使用 tag_id，性能更好）
+        if tag_id:
+            try:
+                # 支持多个 tag_id，逗号分隔
+                tag_ids = [int(t.strip()) for t in tag_id.split(',') if t.strip().isdigit()]
+                if tag_ids:
+                    queryset = queryset.filter(tags__id__in=tag_ids).distinct()
+            except (ValueError, TypeError):
+                pass
+        elif tag_name:
+            # tag_name 需要额外查询，性能稍差
+            try:
+                tag_objs = WallpaperTag.objects.filter(name__icontains=tag_name).only('id')
+                tag_ids = [tag.id for tag in tag_objs]
+                if tag_ids:
+                    queryset = queryset.filter(tags__id__in=tag_ids).distinct()
+            except Exception:
+                pass
+        
+        # 按创建时间倒序（利用索引）
+        queryset = queryset.order_by('-created_at')
+        
+        # 限制最大返回数量，防止过多数据影响性能
+        max_limit = int(request.query_params.get("limit", "100"))
+        max_limit = min(max_limit, 500)  # 最多返回500条
+        queryset = queryset[:max_limit]
+        
+        # 直接执行查询并转换为字典列表（避免序列化器开销）
+        results = list(queryset.values(
+            'id', 'name', 'url', 'thumb_url', 'width', 'height', 
+            'image_format', 'created_at'
+        ))
+        
+        # 格式化 created_at 为字符串
+        for item in results:
+            if item['created_at']:
+                item['created_at'] = item['created_at'].isoformat()
+        
+        # 使用 ApiResponse 统一返回格式（与 admin 接口保持一致）
+        return ApiResponse(
+            data={
+                'count': len(results),
+                'results': results
+            },
+            message="列表获取成功"
+        )
+
 
     def _list_for_admin(self, request, customer_id):
         """管理员列表逻辑：包含完整字段、不应用策略，按参数直接排序"""
@@ -715,7 +800,7 @@ class WallpapersViewSet(BaseViewSet):
             )
 
         print("=== result_data 结构 ===")
-        print(json.dumps(result_data, ensure_ascii=False, indent=2))
+        # print(json.dumps(result_data, ensure_ascii=False, indent=2))
 
         wallpaper_list = result_data.get("results", [])
         wallpaper_ids = [item["id"] for item in wallpaper_list if "id" in item]

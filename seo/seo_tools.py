@@ -42,9 +42,9 @@ class GoogleSearchConsoleTool:
             with open(key_file, 'r', encoding='utf-8') as f:
                 import json
                 key_data = json.load(f)
-                print(f"✅ 成功读取密钥文件: {key_file}")
-                print(f"📋 项目ID: {key_data.get('project_id', 'N/A')}")
-                print(f"📧 客户端邮箱: {key_data.get('client_email', 'N/A')}")
+                # print(f"✅ 成功读取密钥文件: {key_file}")
+                # print(f"📋 项目ID: {key_data.get('project_id', 'N/A')}")
+                # print(f"📧 客户端邮箱: {key_data.get('client_email', 'N/A')}")
 
             self.credentials = service_account.Credentials.from_service_account_file(
                 key_file,
