@@ -635,64 +635,37 @@ class WallpapersViewSet(BaseViewSet):
         tag_id = request.query_params.get("tag_id", "").strip()
         tag_name = request.query_params.get("tag_name", "").strip()
         platform = request.query_params.get("platform", "").upper()
-        
         # 构建基础查询集 - 只选择必要字段
-        queryset = Wallpapers.objects.filter(
-            audit_status='approved'  # 只返回审核通过的壁纸
-        ).only(
-            'id', 'name', 'url', 'thumb_url', 'width', 'height', 
-            'image_format', 'created_at'
-        )
-        
+        queryset = Wallpapers.objects.exclude(audit_status='rejected')
+
         # 应用平台筛选
         if platform == 'PC':
             queryset = queryset.filter(category__id=1).distinct()
         elif platform == 'PHONE':
             queryset = queryset.filter(category__id=2).distinct()
-        
         # 应用标签筛选（优先使用 tag_id，性能更好）
         if tag_id:
             try:
-                # 支持多个 tag_id，逗号分隔
                 tag_ids = [int(t.strip()) for t in tag_id.split(',') if t.strip().isdigit()]
                 if tag_ids:
-                    queryset = queryset.filter(tags__id__in=tag_ids).distinct()
+                    queryset = queryset.filter(tags__id__in=tag_ids)
             except (ValueError, TypeError):
                 pass
         elif tag_name:
-            # tag_name 需要额外查询，性能稍差
             try:
-                tag_objs = WallpaperTag.objects.filter(name__icontains=tag_name).only('id')
-                tag_ids = [tag.id for tag in tag_objs]
+                tag_ids = WallpaperTag.objects.filter(
+                    name__icontains=tag_name
+                ).values_list('id', flat=True)
                 if tag_ids:
-                    queryset = queryset.filter(tags__id__in=tag_ids).distinct()
+                    queryset = queryset.filter(tags__id__in=tag_ids)
             except Exception:
                 pass
-        
         # 按创建时间倒序（利用索引）
-        queryset = queryset.order_by('-created_at')
-        
-        # 限制最大返回数量，防止过多数据影响性能
-        max_limit = int(request.query_params.get("limit", "100"))
-        max_limit = min(max_limit, 500)  # 最多返回500条
-        queryset = queryset[:max_limit]
-        
-        # 直接执行查询并转换为字典列表（避免序列化器开销）
-        results = list(queryset.values(
-            'id', 'name', 'url', 'thumb_url', 'width', 'height', 
-            'image_format', 'created_at'
-        ))
-        
-        # 格式化 created_at 为字符串
-        for item in results:
-            if item['created_at']:
-                item['created_at'] = item['created_at'].isoformat()
-        
-        # 使用 ApiResponse 统一返回格式（与 admin 接口保持一致）
+        queryset = queryset.order_by('-created_at')[:10]
+        serializer = WallpapersListSerializer(queryset, many=True, context=self.get_serializer_context())
         return ApiResponse(
             data={
-                'count': len(results),
-                'results': results
+                'results': serializer.data
             },
             message="列表获取成功"
         )
