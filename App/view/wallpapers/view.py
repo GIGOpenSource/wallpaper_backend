@@ -606,9 +606,9 @@ class WallpapersViewSet(BaseViewSet):
         from models.models import User
         
         # 检测是否为 Googlebot，如果是则使用快速响应
-        user_agent = request.META.get('HTTP_USER_AGENT', '').lower()
-        if 'googlebot' in user_agent:
-            return self._list_for_googlebot(request)
+        # user_agent = request.META.get('HTTP_USER_AGENT', '').lower()
+        # if 'googlebot' in user_agent:
+        #     return self._list_for_googlebot(request)
         
         is_admin = hasattr(request, 'user') and isinstance(request.user, User) and \
                    request.user.role in ['admin', 'operator', 'super_admin']
@@ -618,59 +618,6 @@ class WallpapersViewSet(BaseViewSet):
             return self._list_for_admin(request, customer_id)
         else:
             return self._list_for_customer(request, customer_id)
-
-    def _list_for_googlebot(self, request):
-        """
-        Googlebot 快速响应接口：直接根据 tag_id 或 tag_name 返回 queryset
-        优化策略：
-        1. 最小化查询字段（只查必要字段）
-        2. 不使用分页，限制最大返回数量
-        3. 不加载关联数据（tags、category等）
-        4. 使用数据库索引优化查询
-        5. 跳过所有业务逻辑（点赞、收藏、推荐算法等）
-        """
-        from django.http import JsonResponse
-        
-        # 获取筛选参数
-        tag_id = request.query_params.get("tag_id", "").strip()
-        tag_name = request.query_params.get("tag_name", "").strip()
-        platform = request.query_params.get("platform", "").upper()
-        # 构建基础查询集 - 只选择必要字段
-        queryset = Wallpapers.objects.exclude(audit_status='rejected')
-
-        # 应用标签筛选（优先使用 tag_id，性能更好）
-        if tag_id:
-            try:
-                tag_ids = [int(t.strip()) for t in tag_id.split(',') if t.strip().isdigit()]
-                if tag_ids:
-                    queryset = queryset.filter(tags__id__in=tag_ids)
-            except (ValueError, TypeError):
-                pass
-        elif tag_name:
-            try:
-                tag_ids = WallpaperTag.objects.filter(
-                    name__icontains=tag_name
-                ).values_list('id', flat=True)
-                if tag_ids:
-                    queryset = queryset.filter(tags__id__in=tag_ids)
-            except Exception:
-                pass
-        # 按创建时间倒序（利用索引）
-        queryset = queryset.order_by('-created_at')[:10]
-        serializer = WallpapersListSerializer(queryset, many=True, context=self.get_serializer_context())
-        return ApiResponse(
-            data={
-                'pagination': {
-                    'page': 1,
-                    'page_size': 10,
-                    'total': 700000,
-                    'total_pages': (70000 + 9) // 10
-                },
-                'results': serializer.data
-            },
-            message="列表获取成功"
-        )
-
 
     def _list_for_admin(self, request, customer_id):
         """管理员列表逻辑：包含完整字段、不应用策略，按参数直接排序"""
