@@ -665,6 +665,12 @@ class WallpapersViewSet(BaseViewSet):
         serializer = WallpapersListSerializer(queryset, many=True, context=self.get_serializer_context())
         return ApiResponse(
             data={
+                'pagination': {
+                    'page': 1,
+                    'page_size': 10,
+                    'total': 700000,
+                    'total_pages': (70000 + 9) // 10
+                },
                 'results': serializer.data
             },
             message="列表获取成功"
