@@ -12,6 +12,7 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
+from django.db import transaction
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
 from rest_framework import serializers
 from rest_framework.decorators import action
@@ -20,6 +21,7 @@ from models.models import Wallpapers
 from tool.base_views import BaseViewSet
 from tool.permissions import IsAdmin
 from tool.token_tools import _redis
+from tool.tools import logger
 from tool.utils import ApiResponse
 
 
@@ -127,6 +129,29 @@ class WallpaperPoolDeleteSerializer(serializers.Serializer):
             },
             400: {"description": "参数错误"},
             404: {"description": "删除池不存在或已过期"}
+        }
+    ),
+    detect_and_delete_duplicate_urls=extend_schema(
+        summary="检测并删除重复URL壁纸",
+        description="检测数据库中URL重复的壁纸，保留最小ID的记录，删除其他重复记录",
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "integer", "example": 200},
+                    "data": {
+                        "type": "object",
+                        "properties": {
+                            "total_duplicates": {"type": "integer", "description": "发现的重复URL总数"},
+                            "deleted_count": {"type": "integer", "description": "实际删除的壁纸数量"},
+                            "duplicate_groups": {"type": "integer", "description": "重复URL的组数"},
+                            "sample_duplicates": {"type": "array", "items": {"type": "object"}, "description": "重复示例(前10条)"}
+                        }
+                    },
+                    "message": {"type": "string", "example": "检测完成，发现15组重复URL，共删除23个壁纸"}
+                }
+            },
+            500: {"description": "服务器错误"}
         }
     )
 )
@@ -329,3 +354,112 @@ class WallpaperCheckViewSet(BaseViewSet):
         
         message = f"成功删除{deleted_count}个壁纸"
         return ApiResponse(data=response_data, message=message)
+
+    @action(detail=False, methods=['post'], url_path='detect-and-delete-duplicate-urls', name='检测并删除重复URL壁纸')
+    def detect_and_delete_duplicate_urls(self, request):
+        """
+        检测并删除重复URL的壁纸
+        使用SQL查询找出URL重复的记录，保留最小ID，删除其他重复记录
+        """
+        try:
+            from django.db import connection
+            
+            # 第一步：查询所有重复的URL及其对应的ID
+            with connection.cursor() as cursor:
+                # 查询重复URL（出现次数>1）
+                cursor.execute("""
+                    SELECT url, COUNT(*) as count, MIN(id) as min_id, 
+                           GROUP_CONCAT(id ORDER BY id) as all_ids
+                    FROM t_wallpapers
+                    WHERE url IS NOT NULL AND url != ''
+                    GROUP BY url
+                    HAVING count > 1
+                    ORDER BY count DESC
+                """)
+                
+                duplicate_rows = cursor.fetchall()
+            
+            if not duplicate_rows:
+                return ApiResponse(
+                    data={
+                        'total_duplicates': 0,
+                        'deleted_count': 0,
+                        'duplicate_groups': 0,
+                        'sample_duplicates': []
+                    },
+                    message="未发现重复URL的壁纸"
+                )
+            
+            # 第二步：收集需要删除的ID（保留每个URL的最小ID）
+            ids_to_delete = []
+            duplicate_info = []
+            
+            for row in duplicate_rows:
+                url = row[0]
+                count = row[1]
+                min_id = row[2]
+                all_ids_str = row[3]
+                
+                # 解析所有ID
+                all_ids = [int(x) for x in all_ids_str.split(',')]
+                
+                # 除了最小ID，其他都需要删除
+                delete_ids = [wid for wid in all_ids if wid != min_id]
+                ids_to_delete.extend(delete_ids)
+                
+                # 记录重复信息（只记录前10条作为示例）
+                if len(duplicate_info) < 10:
+                    duplicate_info.append({
+                        'url': url[:100],  # 截断URL避免过长
+                        'count': count,
+                        'kept_id': min_id,
+                        'deleted_ids': delete_ids[:10]  # 只保留前10个删除ID
+                    })
+            
+            total_duplicates = sum(row[1] - 1 for row in duplicate_rows)  # 每组重复数-1
+            duplicate_groups = len(duplicate_rows)
+            
+            # 第三步：批量删除重复壁纸
+            deleted_count = 0
+            if ids_to_delete:
+                # 使用事务确保数据一致性
+                with transaction.atomic():
+                    # 先获取这些壁纸关联的用户上传记录，用于更新计数器
+                    from models.models import CustomerWallpaperUpload, CustomerUser
+                    from django.db.models import F
+                    from django.db.models.functions import Greatest
+                    
+                    uploads = CustomerWallpaperUpload.objects.filter(
+                        wallpaper_id__in=ids_to_delete
+                    ).select_related('customer')
+                    
+                    # 统计需要更新的计数器
+                    user_counters = {}
+                    for upload in uploads:
+                        cid = upload.customer_id
+                        if cid not in user_counters:
+                            user_counters[cid] = 0
+                        user_counters[cid] += 1
+                    
+                    # 执行删除
+                    deleted_count, _ = Wallpapers.objects.filter(id__in=ids_to_delete).delete()
+                    
+                    # 更新用户计数
+                    for cid, count in user_counters.items():
+                        CustomerUser.objects.filter(id=cid).update(
+                            upload_count=Greatest(F('upload_count') - count, 0)
+                        )
+            
+            response_data = {
+                'total_duplicates': total_duplicates,
+                'deleted_count': deleted_count,
+                'duplicate_groups': duplicate_groups,
+                'sample_duplicates': duplicate_info,
+            }
+            
+            message = f"检测完成，发现{duplicate_groups}组重复URL，共删除{deleted_count}个壁纸"
+            return ApiResponse(data=response_data, message=message)
+            
+        except Exception as e:
+            logger.error(f"检测并删除重复URL失败: {str(e)}", exc_info=True)
+            return ApiResponse(code=500, message=f"操作失败: {str(e)}")
