@@ -2458,7 +2458,11 @@ class WallpapersViewSet(BaseViewSet):
             "strategy_type": "banner",
             "status": "active",
         }
-
+        lang_fix_mapping = {
+            "zh-hans": "zh-CN",
+            "zh-hant": "zh-TW",
+        }
+        lang = lang_fix_mapping.get(lang, lang)
         # 第一步：查询 当前平台 + 当前语言 的有效策略
         if platform in ['PC', 'PHONE']:
             strategies = RecommendStrategy.objects.filter(
@@ -2486,7 +2490,7 @@ class WallpapersViewSet(BaseViewSet):
                 start_time__lte=now,
                 end_time__gte=now
             )
-
+            print("五平台有语言")
         # ========================
         # 4. 合并多策略壁纸（按权重排序 + 去重）
         # ========================
