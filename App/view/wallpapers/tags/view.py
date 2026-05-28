@@ -183,8 +183,10 @@ class WallpaperTagViewSet(BaseViewSet):
         if q:
             qs = qs.filter(name__icontains=q)
         if platform == 'PC':
+            print("PC==============")
             qs = qs.filter(phone_count__gt=0)
         if platform == 'PHONE':
+            print("PHONE==============")
             qs = qs.filter(pc_count__gt=0)
 
         # 根据平台参数返回不同的字段
@@ -196,6 +198,7 @@ class WallpaperTagViewSet(BaseViewSet):
                 # 重命名字段以便前端使用
                 item['wallpaper_count'] = item.pop('pc_count')
         elif platform == 'PHONE':
+
             data = list(qs.values('id', 'name', 'created_at', 'phone_count'))
             for item in data:
                 if item['created_at']:
