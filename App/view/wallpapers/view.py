@@ -714,6 +714,7 @@ class WallpapersViewSet(BaseViewSet):
             result_data = self._handle_recommendation_order(
                 unique_id, platform, page_num, page_size, customer_id, request, base_queryset, order
             )
+            print("hot home ")
         else:
             # order 为空或其他值，不使用算法，直接返回普通数据
             result_data = self._handle_normal_order(
@@ -917,7 +918,7 @@ class WallpapersViewSet(BaseViewSet):
             dict: 包含 pagination 和 results 的数据字典
         """
         queryset = base_queryset
-        
+        print("_handle_normal_order ")
         # ---- 应用筛选条件 ----
         tag_name = request.query_params.get("tag_name", "").strip()
         if tag_name:
@@ -938,7 +939,9 @@ class WallpapersViewSet(BaseViewSet):
             queryset = queryset.filter(category__id=3).distinct()
             
         resolution = request.query_params.get("resolution", "")
+
         if resolution:
+            print("resolution ")
             from django.db.models import Q
             q = Q()
             for res in resolution.split(','):
@@ -950,7 +953,35 @@ class WallpapersViewSet(BaseViewSet):
                         pass
             if q:
                 queryset = queryset.filter(q).distinct()
-                
+        aspect_ratio_param = request.query_params.get("aspect_ratio", "").strip()
+        print("aspect_ratio_param", aspect_ratio_param)
+        if aspect_ratio_param:
+            from django.db.models import F, Q
+            ratios = [r.strip() for r in aspect_ratio_param.split(",") if r.strip()]
+            q = Q()
+            for ratio in ratios:
+                try:
+                    # 你传入格式：高:宽  例如 21:100
+                    w_ratio, h_ratio = map(int, ratio.split(":"))
+                    print("高比例:", h_ratio, "宽比例:", w_ratio)
+
+                    # ========================
+                    # 核心：容错范围筛选（允许 1% 误差）
+                    # ========================
+                    # 目标比例：height / width ≈ h_ratio / w_ratio
+                    q |= Q(
+                        width__gt=0,
+                        height__gt=0,
+                        height__gte=(F('width') * h_ratio * 0.99) / w_ratio,  # 下限
+                        height__lte=(F('width') * h_ratio * 1.01) / w_ratio,  # 上限
+                    )
+                except:
+                    continue
+
+            if q:
+                queryset = queryset.filter(q).distinct()
+                print("最终筛选SQL:", queryset.query)
+
         # ---- 名称/标签映射筛选 ----
         user_input = request.query_params.get("name", "").strip()
         if user_input:
@@ -1000,6 +1031,7 @@ class WallpapersViewSet(BaseViewSet):
         # ---- 分页 ----
         page = self.paginate_queryset(queryset)
         if page is not None:
+            print("应用分页")
             # CTR标签曝光统计
             from App.view.recommendation.ctr_filter_algorithm import increment_tag_impressions
             page_ids = [item.id for item in page]
@@ -1038,7 +1070,7 @@ class WallpapersViewSet(BaseViewSet):
         context['liked_wallpaper_ids'] = liked_ids
         context['collected_wallpaper_ids'] = collected_ids
         serializer = WallpapersListSerializer(page_data, many=True, context=context)
-        
+        print("未应用分页")
         # 返回数据格式（由 _list_for_customer 统一包装成 ApiResponse）
         return {
             'pagination': {
