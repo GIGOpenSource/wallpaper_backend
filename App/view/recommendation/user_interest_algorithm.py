@@ -312,7 +312,7 @@ def get_cold_start_wallpaper_ids(platform, order, limit=50):
         now = timezone.now()
         current_language = get_language()
         # 标准化平台（小写）
-        target_platform = platform.lower() if platform.upper() in ['PC', 'PHONE'] else 'all'
+        target_platform = platform.lower()
 
         # ========================
         # 基础固定条件（数据库保证必满足）
@@ -334,14 +334,6 @@ def get_cold_start_wallpaper_ids(platform, order, limit=50):
             apply_area=current_language
         )
         print("第一优先级：当前平台 + 当前语言")
-        # 2. 第二优先级：all平台 + 当前语言（兜底）
-        if not strategies.exists():
-            strategies = RecommendStrategy.objects.filter(
-                **base_filters,
-                platform="all",
-                apply_area=current_language
-            )
-            print("第二优先级：all平台 + 当前语言（兜底）")
         # ========================
         # 合并多策略壁纸（去重+排序）
         # ========================
