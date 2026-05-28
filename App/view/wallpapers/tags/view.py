@@ -303,14 +303,14 @@ class WallpaperTagViewSet(BaseViewSet):
 
         # 根据平台参数选择排序字段
         if platform == 'PC':
-            tags = WallpaperTag.objects.order_by('-pc_count')[:limit]
+            tags = WallpaperTag.objects.filter(pc_count__gt=0).order_by('-pc_count')[:limit]
             data = [{
                 'id': tag.id,
                 'name': tag.name,
                 'wallpaper_count': tag.pc_count
             } for tag in tags]
         elif platform == 'PHONE':
-            tags = WallpaperTag.objects.order_by('-phone_count')[:limit]
+            tags = WallpaperTag.objects.filter(phone_count__gt=0).order_by('-phone_count')[:limit]
             data = [{
                 'id': tag.id,
                 'name': tag.name,
@@ -318,7 +318,7 @@ class WallpaperTagViewSet(BaseViewSet):
             } for tag in tags]
         else:
             # 默认按总数排序
-            tags = WallpaperTag.objects.order_by('-wallpaper_count')[:limit]
+            tags = WallpaperTag.objects.filter(wallpaper_count__gt=0).order_by('-wallpaper_count')[:limit]
             data = [{
                 'id': tag.id,
                 'name': tag.name,
