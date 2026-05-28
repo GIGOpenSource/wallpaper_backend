@@ -135,6 +135,27 @@ class DashboardStatsViewSet(BaseViewSet):
                 yesterday = today - timedelta(days=1)
                 if stats_record.stat_date == yesterday:
                     need_refresh = True
+            if not need_refresh:
+                from django.db.models import Sum
+
+                # 实时查询当前关键指标
+                current_total_users = CustomerUser.objects.count()
+                current_total_wallpapers = Wallpapers.objects.count()
+
+                yesterday_time = now - timedelta(hours=24)
+                current_daily_active = CustomerUser.objects.filter(
+                    last_login__gte=yesterday_time
+                ).count()
+
+                # 对比是否发生变化
+                if (current_total_users != stats_record.total_users or
+                        current_total_wallpapers != stats_record.total_wallpapers or
+                        current_daily_active != stats_record.daily_active_users):
+                    need_refresh = True
+                    logger.info(f"检测到数据变化：用户({stats_record.total_users}->{current_total_users}), "
+                                f"壁纸({stats_record.total_wallpapers}->{current_total_wallpapers}), "
+                                f"日活({stats_record.daily_active_users}->{current_daily_active})")
+
             if need_refresh:
                 logger.info(f"刷新今日({today})面板统计数据...")
                 self._calculate_and_save_stats(today, now)
