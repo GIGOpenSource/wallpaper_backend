@@ -323,7 +323,11 @@ def get_cold_start_wallpaper_ids(platform, order, limit=50):
             "start_time__lte": now,  # 严格：已到开始时间
             "end_time__gte": now  # 严格：未到结束时间
         }
-
+        lang_fix_mapping = {
+            "zh-hans": "zh-CN",
+            "zh-hant": "zh-TW",
+        }
+        current_language = lang_fix_mapping.get(current_language, current_language)
         # ========================
         # 按优先级查询策略
         # ========================
