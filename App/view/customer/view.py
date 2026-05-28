@@ -179,6 +179,20 @@ class CustomerUserViewSet(viewsets.ViewSet):
                 target_user = CustomerUser.objects.get(id=current_customer_id)
             except CustomerUser.DoesNotExist:
                 return ApiResponse(message=_("用户不存在"), code=404)
+        # 动态查询上传数和收藏数
+        from models.models import CustomerWallpaperUpload, WallpaperCollection
+        upload_count = CustomerWallpaperUpload.objects.filter(customer_id=target_user.id).count()
+        collection_count = WallpaperCollection.objects.filter(user_id=target_user.id).count()
+        # 检查是否与数据库字段一致，不一致则更新
+        need_update = False
+        if target_user.upload_count != upload_count:
+            target_user.upload_count = upload_count
+            need_update = True
+        if target_user.collection_count != collection_count:
+            target_user.collection_count = collection_count
+            need_update = True
+        if need_update:
+            target_user.save(update_fields=['upload_count', 'collection_count'])
 
         # 计算粉丝数和关注数
         from models.models import UserFollow
@@ -201,8 +215,8 @@ class CustomerUserViewSet(viewsets.ViewSet):
                 "gender": target_user.gender,
                 "avatar_url": target_user.avatar_url,
                 "badge": target_user.badge,
-                "upload_count": target_user.upload_count,
-                "collection_count": target_user.collection_count,
+                "upload_count": upload_count,
+                "collection_count": collection_count,
                 "points": target_user.points,
                 "level": target_user.level,
                 "last_login": target_user.last_login,
