@@ -182,6 +182,10 @@ class WallpaperTagViewSet(BaseViewSet):
         qs = WallpaperTag.objects.all().order_by('-created_at')
         if q:
             qs = qs.filter(name__icontains=q)
+        if platform == 'PC':
+            qs = qs.filter(phone_count__gt=0)
+        if platform == 'PHONE':
+            qs = qs.filter(pc_count__gt=0)
 
         # 根据平台参数返回不同的字段
         if platform == 'PC':
