@@ -2115,7 +2115,6 @@ class WallpapersViewSet(BaseViewSet):
             qs = qs.filter(wallpaper__category__id=1)
         elif platform == 'PHONE':
             qs = qs.filter(wallpaper__category__id=2)
-
         page = self.paginate_queryset(qs)
         if page is not None:
             data = CollectionItemSerializer(
@@ -2373,6 +2372,8 @@ class WallpapersViewSet(BaseViewSet):
         admin_allowed = role and customer_id
         if not (user_allowed or admin_allowed):
             return ApiResponse(code=401, message="客户 Token 无效或已过期")
+        if target_customer_id:
+            customer_id = int(target_customer_id)
         qs = (
             CustomerWallpaperUpload.objects
             .filter(customer_id=customer_id)
