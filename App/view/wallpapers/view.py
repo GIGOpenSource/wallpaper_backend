@@ -2110,11 +2110,11 @@ class WallpapersViewSet(BaseViewSet):
             .order_by("-created_at")
         )
 
-        # platform = request.query_params.get("platform", "").upper()
-        # if platform == 'PC':
-        #     qs = qs.filter(wallpaper__category__id=1)
-        # elif platform == 'PHONE':
-        #     qs = qs.filter(wallpaper__category__id=2)
+        platform = request.query_params.get("platform", "").upper()
+        if platform == 'PC':
+            qs = qs.filter(wallpaper__category__id=1)
+        elif platform == 'PHONE':
+            qs = qs.filter(wallpaper__category__id=2)
 
         page = self.paginate_queryset(qs)
         if page is not None:
