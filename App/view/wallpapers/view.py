@@ -2372,7 +2372,7 @@ class WallpapersViewSet(BaseViewSet):
         admin_allowed = role and customer_id
         if not (user_allowed or admin_allowed):
             return ApiResponse(code=401, message="客户 Token 无效或已过期")
-        if target_customer_id:
+        if target_customer_id and user_allowed:
             customer_id = int(target_customer_id)
         qs = (
             CustomerWallpaperUpload.objects
