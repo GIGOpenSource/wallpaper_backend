@@ -26,6 +26,7 @@ class NotificationSerializer(serializers.ModelSerializer):
     sender_info = serializers.SerializerMethodField()
     content_display = serializers.SerializerMethodField()
     target_content = serializers.SerializerMethodField()
+    target_id = serializers.SerializerMethodField()
 
     class Meta:
         model = Notification
@@ -34,6 +35,17 @@ class NotificationSerializer(serializers.ModelSerializer):
             'target_id', 'target_type', 'target_content', 'extra_data', 'is_read', 'created_at'
         ]
         read_only_fields = fields
+
+    def get_target_id(self, obj):
+        """自定义 target_id 返回逻辑"""
+        from models.models import WallpaperComment
+        try:
+            if obj.target_type == 'comment':
+                comment = WallpaperComment.objects.select_related('wallpaper').get(id=obj.target_id)
+                return comment.wallpaper.id
+        except Exception:
+            pass
+        return obj.target_id
 
     def get_sender_info(self, obj):
         # 系统公告和活动公告不显示发送者，统一显示为系统
@@ -44,8 +56,6 @@ class NotificationSerializer(serializers.ModelSerializer):
 
         if obj.notification_type in ['feature']:
             return {'nickname': '功能通知', 'avatar_url': None}
-
-        
         # 其他类型通知显示实际发送者
         if obj.sender:
             return {
@@ -77,7 +87,7 @@ class NotificationSerializer(serializers.ModelSerializer):
                     'type': 'comment',
                     'content': comment.content[:50],
                     'wallpaper_name': comment.wallpaper.name,
-                    'wallpaper_id': comment.wallpaper.id
+                    'wallpaper_id': comment.wallpaper.id,
                 }
                 if comment.parent:
                     source_obj = comment.parent
