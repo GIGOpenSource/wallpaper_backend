@@ -39,24 +39,32 @@ class NotificationSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_recipient_maps(self, obj):
-        """仅管理员查看系统公告时返回该system_code下的所有接收者ID和名称映射"""
+        """仅管理员查看系统公告时返回该system_code下的所有接收者信息列表"""
         is_admin = self.context.get('is_admin', False)
         if not is_admin or not obj.system_code:
             return None
 
-        # 查询该system_code下的所有接收者，返回 {id: nickname} 格式
+        # 查询该system_code下的所有接收者信息
         recipients = Notification.objects.filter(
             system_code=obj.system_code
-        ).select_related('recipient').values_list(
-            'recipient_id', 'recipient__nickname'
+        ).select_related('recipient').values(
+            'recipient_id',
+            'recipient__nickname',
+            'recipient__avatar_url',
+            'recipient__gender'
         ).distinct()
 
-        # 转换为 {id: name} 字典格式
-        recipient_map = {
-            str(recipient_id): nickname or f"用户{recipient_id}"
-            for recipient_id, nickname in recipients
-        }
-        return recipient_map
+        # 转换为数组格式，每个元素包含完整信息
+        recipient_list = [
+            {
+                'id': item['recipient_id'],
+                'nickname': item['recipient__nickname'] or f"用户{item['recipient_id']}",
+                'avatar_url': item['recipient__avatar_url'],
+                'gender': item['recipient__gender'],
+            }
+            for item in recipients
+        ]
+        return recipient_list
 
     def get_target_id(self, obj):
         """自定义 target_id 返回逻辑"""
