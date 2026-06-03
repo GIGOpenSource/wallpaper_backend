@@ -321,6 +321,42 @@ class NotificationViewSet(BaseViewSet):
         serializer = self.get_serializer(queryset, many=True)
         return ApiResponse(data=serializer.data, message="通知列表获取成功")
 
+    def destroy(self, request, *args, **kwargs):
+        """删除通知（管理员删除带system_code的公告时会批量删除）"""
+        current_user_id = self.get_serializer_context().get('current_user_id')
+        is_admin = self.get_serializer_context().get('is_admin', False)
+
+        if not current_user_id:
+            return ApiResponse(code=401, message="请先登录")
+
+        try:
+            notification = self.get_object()
+        except Notification.DoesNotExist:
+            return ApiResponse(code=404, message="通知不存在")
+
+        # 管理员删除逻辑
+        if is_admin:
+            if notification.system_code:
+                # 有system_code，删除该code下的所有记录
+                deleted_count, _ = Notification.objects.filter(
+                    system_code=notification.system_code
+                ).delete()
+                return ApiResponse(
+                    data={'deleted_count': deleted_count},
+                    message=f"已删除 {deleted_count} 条相关通知"
+                )
+            else:
+                # 无system_code，只删除当前记录
+                notification.delete()
+                return ApiResponse(message="删除成功")
+        else:
+            # 普通用户只能删除自己的通知
+            if notification.recipient_id != current_user_id:
+                return ApiResponse(code=403, message="无权操作此通知")
+            notification.delete()
+            return ApiResponse(message="删除成功")
+
+
     @extend_schema(
         summary="管理员发送系统公告",
         description="send_to：all/specific；notification_type：system/feature/Activity管理员向用户发送系统公告，支持发送给全部用户或指定用户",
@@ -369,7 +405,6 @@ class NotificationViewSet(BaseViewSet):
         if send_to == 'all':
             recipients = CustomerUser.objects.all()
         else:
-            system_code = None
             recipients = CustomerUser.objects.filter(id__in=user_ids)
             # 检查是否有不存在的用户
             if recipients.count() != len(user_ids):
