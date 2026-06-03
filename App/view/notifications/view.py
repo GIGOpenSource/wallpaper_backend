@@ -28,25 +28,17 @@ class NotificationSerializer(serializers.ModelSerializer):
     target_content = serializers.SerializerMethodField()
     target_id = serializers.SerializerMethodField()
     recipient_maps = serializers.SerializerMethodField()
-    unread_count = serializers.SerializerMethodField()
+
 
     class Meta:
         model = Notification
         fields = [
             'id', 'sender_info', 'notification_type', 'content_display',
             'target_id', 'target_type', 'target_content', 'extra_data', 'is_read', 'created_at',
-            'recipient_maps','unread_count'
+            'recipient_maps'
         ]
         read_only_fields = fields
-    def get_unread_count(self, obj):
-        """获取未读消息数量"""
-        is_admin = self.context.get('is_admin', False)
-        if is_admin:
-            return None
-        return Notification.objects.filter(
-            recipient=obj.recipient,
-            is_read=False
-        ).count()
+
 
     def get_recipient_maps(self, obj):
         """仅管理员查看系统公告时返回该system_code下的所有接收者信息列表"""
@@ -548,11 +540,12 @@ class NotificationViewSet(BaseViewSet):
             excluded_types.append('follow')
 
         queryset = Notification.objects.filter(recipient_id=current_user_id, is_read=False)
+        actual_count = queryset.count()
         if excluded_types:
             queryset = queryset.exclude(notification_type__in=excluded_types)
 
         count = queryset.count()
-        return ApiResponse(data={'count': count})
+        return ApiResponse(data={'count': count,'actual_count':actual_count})
 
     @extend_schema(
         summary="获取通知设置",
