@@ -34,7 +34,7 @@ class NotificationCenter:
             return None
 
         # 检查用户的通知设置（仅针对需要屏蔽的类型）
-        if notification_type in ['like', 'comment', 'reply', 'follow']:
+        if notification_type in ['like', 'comment', 'reply', 'follow','wallpaper_like']:
             try:
                 settings = UserNotificationSettings.objects.get(user_id=recipient_id)
                 # 根据类型检查是否开启通知
