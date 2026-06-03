@@ -1935,6 +1935,18 @@ class WallpapersViewSet(BaseViewSet):
                         collection_count=F("collection_count") + 1
                     )
                     collected = True
+                    try:
+                        upload_record = getattr(wp, 'customer_upload', None)
+                        if upload_record and upload_record.customer_id != cid:
+                            from App.view.notifications.notification_center import NotificationCenter
+                            NotificationCenter.send_wallpaper_like(
+                                recipient_id=upload_record.customer_id,
+                                sender_id=cid,
+                                wallpaper_id=wp.id,
+                                wallpaper_name=wp.name[:50]
+                            )
+                    except Exception:
+                        pass
                 else:
                     row.delete()
                     Wallpapers.objects.filter(pk=wp.pk).update(

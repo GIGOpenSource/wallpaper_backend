@@ -97,6 +97,19 @@ class NotificationCenter:
         )
 
     @classmethod
+    def send_wallpaper_like(cls, recipient_id, sender_id, wallpaper_id, wallpaper_name):
+        """点赞通知"""
+        return cls.send(
+            recipient_id=recipient_id,
+            notification_type='wallpaper_like',
+            content=f"赞了你的壁纸",
+            sender_id=sender_id,
+            target_id=wallpaper_id,
+            target_type='wallpaper',
+            extra_data={'wallpaper_name': wallpaper_name}
+        )
+
+    @classmethod
     def send_comment(cls, recipient_id, sender_id, wallpaper_id, wallpaper_name, comment_content):
         """评论通知"""
         return cls.send(
