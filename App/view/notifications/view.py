@@ -41,7 +41,7 @@ class NotificationSerializer(serializers.ModelSerializer):
     def get_unread_count(self, obj):
         """获取未读消息数量"""
         is_admin = self.context.get('is_admin', False)
-        if not is_admin:
+        if is_admin:
             return None
         return Notification.objects.filter(
             recipient=obj.recipient,
