@@ -356,46 +356,39 @@ class DashboardStatsViewSet(BaseViewSet):
             last_login__gte=week_ago
         ).count()
 
-        # === 新增：计算今日新增数据（今天 - 昨天）===
-        today_start = timezone.make_aware(
-            timezone.datetime.combine(stat_date, timezone.datetime.min.time())
-        )
-        yesterday_start = today_start - timedelta(days=1)
+        # === 新增数据计算（当前总数 - 昨天最新记录）===
+        # 获取昨天最新的统计记录
+        yesterday = stat_date - timedelta(days=1)
+        try:
+            yesterday_stats = DashboardStats.objects.filter(
+                stat_date__lte=yesterday
+            ).order_by('-stat_date').first()
 
-        # 今日新增用户数 = 今天创建的用户数 - 昨天创建的用户数
-        users_created_today = CustomerUser.objects.filter(
-            created_at__gte=today_start
-        ).count()
-        users_created_yesterday = CustomerUser.objects.filter(
-            created_at__gte=yesterday_start,
-            created_at__lt=today_start
-        ).count()
-        new_users_today = max(0, users_created_today - users_created_yesterday)
+            if yesterday_stats:
+                # 新增用户数 = 当前总用户数 - 昨天记录的总用户数
+                new_users_today = max(0, total_users - yesterday_stats.total_users)
 
-        # 今日新增壁纸数 = 今天创建的壁纸数 - 昨天创建的壁纸数
-        wallpapers_created_today = Wallpapers.objects.filter(
-            created_at__gte=today_start
-        ).count()
-        wallpapers_created_yesterday = Wallpapers.objects.filter(
-            created_at__gte=yesterday_start,
-            created_at__lt=today_start
-        ).count()
-        new_wallpapers_today = max(0, wallpapers_created_today - wallpapers_created_yesterday)
+                # 新增壁纸数 = 当前总壁纸数 - 昨天记录的总壁纸数
+                new_wallpapers_today = max(0, total_wallpapers - yesterday_stats.total_wallpapers)
 
-        # 今日新增日活跃用户数 = 今天的日活 - 昨天的日活
-        # 今天的日活：从今天0点到现在有登录的用户
-        daily_active_today = CustomerUser.objects.filter(
-            last_login__gte=today_start
-        ).count()
-        # 昨天的日活：从昨天0点到今天0点有登录的用户
-        daily_active_yesterday = CustomerUser.objects.filter(
-            last_login__gte=yesterday_start,
-            last_login__lt=today_start
-        ).count()
-        new_daily_active_users = max(0, daily_active_today - daily_active_yesterday)
+                # 新增日活数 = 当前日活 - 昨天记录的日活
+                new_daily_active_users = max(0, daily_active_users - yesterday_stats.daily_active_users)
 
-        # 今日新增周活跃用户数 = 今日新增日活跃 * 7（简化计算）
-        new_weekly_active_users = new_daily_active_users * 7
+                # 新增周活数 = 当前周活 - 昨天记录的周活
+                new_weekly_active_users = max(0, weekly_active_users - yesterday_stats.weekly_active_users)
+            else:
+                # 没有昨天的记录，新增数据等于当前总数
+                new_users_today = total_users
+                new_wallpapers_today = total_wallpapers
+                new_daily_active_users = daily_active_users
+                new_weekly_active_users = weekly_active_users
+        except Exception as e:
+            logger.error(f"计算新增数据失败: {e}")
+            # 异常情况下使用0作为默认值
+            new_users_today = 0
+            new_wallpapers_today = 0
+            new_daily_active_users = 0
+            new_weekly_active_users = 0
 
         # 保存或更新统计数据
         stats_record, created = DashboardStats.objects.update_or_create(
@@ -415,7 +408,9 @@ class DashboardStatsViewSet(BaseViewSet):
                 'new_weekly_active_users': new_weekly_active_users,
             }
         )
-        logger.info(f"统计数据已保存: {stat_date}, 创建: {created}")
+        logger.info(f"统计数据已保存: {stat_date}, 创建: {created}, "
+                    f"新增用户:{new_users_today}, 新增壁纸:{new_wallpapers_today}")
+
 
 class CustomerUserSerializer(serializers.ModelSerializer):
     """客户用户序列化器（管理员使用）"""

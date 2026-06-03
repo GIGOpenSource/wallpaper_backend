@@ -167,7 +167,7 @@ class TrackViewSet(BaseViewSet):
                 device_type = 'mobile'
             elif 'harmonyos' in ua:
                 device_type = 'mobile'
-            # 其他情况默认为 pc（桌面端）
+            # 其他情况默认为 pc（桌面端）·
 
         # 2. 识别浏览器/应用
         if 'micromessenger' in ua:
