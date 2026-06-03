@@ -27,27 +27,36 @@ class NotificationSerializer(serializers.ModelSerializer):
     content_display = serializers.SerializerMethodField()
     target_content = serializers.SerializerMethodField()
     target_id = serializers.SerializerMethodField()
-    recipient_ids = serializers.SerializerMethodField()
+    recipient_maps = serializers.SerializerMethodField()
 
     class Meta:
         model = Notification
         fields = [
             'id', 'sender_info', 'notification_type', 'content_display',
             'target_id', 'target_type', 'target_content', 'extra_data', 'is_read', 'created_at',
-            'recipient_ids'
+            'recipient_maps'
         ]
         read_only_fields = fields
 
-    def get_recipient_ids(self, obj):
-        """仅管理员查看系统公告时返回该system_code下的所有接收者ID列表"""
+    def get_recipient_maps(self, obj):
+        """仅管理员查看系统公告时返回该system_code下的所有接收者ID和名称映射"""
         is_admin = self.context.get('is_admin', False)
         if not is_admin or not obj.system_code:
             return None
-        # 查询该system_code下的所有接收者ID
-        recipient_ids = Notification.objects.filter(
+
+        # 查询该system_code下的所有接收者，返回 {id: nickname} 格式
+        recipients = Notification.objects.filter(
             system_code=obj.system_code
-        ).values_list('recipient_id', flat=True).distinct()
-        return list(recipient_ids)
+        ).select_related('recipient').values_list(
+            'recipient_id', 'recipient__nickname'
+        ).distinct()
+
+        # 转换为 {id: name} 字典格式
+        recipient_map = {
+            str(recipient_id): nickname or f"用户{recipient_id}"
+            for recipient_id, nickname in recipients
+        }
+        return recipient_map
 
     def get_target_id(self, obj):
         """自定义 target_id 返回逻辑"""
