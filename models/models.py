@@ -392,6 +392,7 @@ class Notification(models.Model):
     extra_data = models.JSONField(blank=True, null=True, default=dict, verbose_name="扩展数据")
     is_read = models.BooleanField(default=False, verbose_name="是否已读")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    system_code = models.CharField(max_length=64, blank=True, null=True, db_index=True, verbose_name="系统通知唯一标识")
 
     class Meta:
         db_table = 't_notification'

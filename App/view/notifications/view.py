@@ -27,14 +27,27 @@ class NotificationSerializer(serializers.ModelSerializer):
     content_display = serializers.SerializerMethodField()
     target_content = serializers.SerializerMethodField()
     target_id = serializers.SerializerMethodField()
+    recipient_ids = serializers.SerializerMethodField()
 
     class Meta:
         model = Notification
         fields = [
             'id', 'sender_info', 'notification_type', 'content_display',
-            'target_id', 'target_type', 'target_content', 'extra_data', 'is_read', 'created_at'
+            'target_id', 'target_type', 'target_content', 'extra_data', 'is_read', 'created_at',
+            'recipient_ids'
         ]
         read_only_fields = fields
+
+    def get_recipient_ids(self, obj):
+        """仅管理员查看系统公告时返回该system_code下的所有接收者ID列表"""
+        is_admin = self.context.get('is_admin', False)
+        if not is_admin or not obj.system_code:
+            return None
+        # 查询该system_code下的所有接收者ID
+        recipient_ids = Notification.objects.filter(
+            system_code=obj.system_code
+        ).values_list('recipient_id', flat=True).distinct()
+        return list(recipient_ids)
 
     def get_target_id(self, obj):
         """自定义 target_id 返回逻辑"""
@@ -272,6 +285,10 @@ class NotificationViewSet(BaseViewSet):
         title = request.query_params.get('title', '').strip()
         if title:
             queryset = queryset.filter(extra_data__title__icontains=title)
+
+        if is_admin and (n_type == 'announcement' or notification_type in ['system', 'feature', 'Activity']):
+            queryset = queryset.order_by('system_code', '-created_at').distinct('system_code')
+
         queryset = queryset.order_by('-created_at')
         page = self.paginate_queryset(queryset)
         if page is not None:
@@ -310,6 +327,8 @@ class NotificationViewSet(BaseViewSet):
         - 支持发送给全部用户或指定用户
         - 自动记录发送人（管理员）
         """
+        import hashlib
+        import time
         # 验证请求数据
         serializer = AnnouncementSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -319,6 +338,8 @@ class NotificationViewSet(BaseViewSet):
         send_to = serializer.validated_data['send_to']
         user_ids = serializer.validated_data.get('user_ids', [])
         notification_type = serializer.validated_data.get('notification_type', 'system')
+        timestamp = str(int(time.time() * 1000))
+        system_code = hashlib.md5(timestamp.encode('utf-8')).hexdigest()
 
         # 确定接收者列表
         if send_to == 'all':
@@ -346,7 +367,8 @@ class NotificationViewSet(BaseViewSet):
                         'content': content,
                         'sent_by_admin': request.user.username if hasattr(request, 'user') else 'system',
                         'notification_type': notification_type,
-                        'send_to':send_to
+                        'send_to':send_to,
+                        'system_code': system_code
                     }
                 )
             )
