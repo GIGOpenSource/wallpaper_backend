@@ -35,7 +35,7 @@ class NotificationSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'sender_info', 'notification_type', 'content_display',
             'target_id', 'target_type', 'target_content', 'extra_data', 'is_read', 'created_at',
-            'recipient_maps'
+            'recipient_maps','unread_count'
         ]
         read_only_fields = fields
     def get_unread_count(self, obj):
