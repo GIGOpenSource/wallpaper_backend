@@ -106,6 +106,9 @@ class UserViewSet(viewsets.ViewSet):
             return ApiResponse(message=_('管理员名重复'),code=400)
 
         if verify_password(password, user.password):  # 注意参数顺序：原始密码在前，哈希密码在后
+            from django.utils import timezone
+            user.last_login = timezone.now()
+            user.save(update_fields=['last_login'])
             token = generate_is_user_token(request,user)
             return ApiResponse(
                 {"token": token, "user_id": user.id, "username": user.username},
