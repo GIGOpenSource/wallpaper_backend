@@ -28,6 +28,7 @@ class NotificationSerializer(serializers.ModelSerializer):
     target_content = serializers.SerializerMethodField()
     target_id = serializers.SerializerMethodField()
     recipient_maps = serializers.SerializerMethodField()
+    unread_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Notification
@@ -37,6 +38,15 @@ class NotificationSerializer(serializers.ModelSerializer):
             'recipient_maps'
         ]
         read_only_fields = fields
+    def get_unread_count(self, obj):
+        """获取未读消息数量"""
+        is_admin = self.context.get('is_admin', False)
+        if not is_admin:
+            return None
+        return Notification.objects.filter(
+            recipient=obj.recipient,
+            is_read=False
+        ).count()
 
     def get_recipient_maps(self, obj):
         """仅管理员查看系统公告时返回该system_code下的所有接收者信息列表"""
@@ -526,6 +536,7 @@ class NotificationViewSet(BaseViewSet):
             return ApiResponse(data={'count': count})
 
         excluded_types = []
+        # 设置按钮默认是true 开启状态
         if not settings.enable_like_notification:
             excluded_types.append('like')
             excluded_types.append('wallpaper_like')

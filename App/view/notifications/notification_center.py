@@ -27,7 +27,7 @@ class NotificationCenter:
         :param sender_id: 发送者用户ID (系统通知可不传)
         :param target_id: 关联对象ID (如壁纸ID、评论ID)
         :param target_type: 关联对象类型 (wallpaper, comment, user等)
-        :param extra_data: 额外扩展数据 (dict)
+        :param extra_data: 额外扩展数据 (dictu)
         :return: Notification 实例
         """
         if not recipient_id:
