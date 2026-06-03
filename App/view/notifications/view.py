@@ -528,6 +528,7 @@ class NotificationViewSet(BaseViewSet):
         excluded_types = []
         if not settings.enable_like_notification:
             excluded_types.append('like')
+            excluded_types.append('wallpaper_like')
         if not settings.enable_comment_notification:
             excluded_types.append('comment')
         if not settings.enable_reply_notification:
