@@ -386,8 +386,8 @@ class NotificationViewSet(BaseViewSet):
                         'sent_by_admin': request.user.username if hasattr(request, 'user') else 'system',
                         'notification_type': notification_type,
                         'send_to':send_to,
-                        'system_code': system_code
-                    }
+                    },
+                    system_code=system_code
                 )
             )
         Notification.objects.bulk_create(notifications, batch_size=100)
