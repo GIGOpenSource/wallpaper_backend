@@ -222,7 +222,7 @@ class DashboardStatsViewSet(BaseViewSet):
     def user_growth_trend(self, request):
         """
         获取用户增长趋势
-        返回最近N天的每日新增用户数
+        返回最近N天的每日新增用户数（自动补全缺失日期）
         """
         # 获取查询天数，默认30天
         days = request.query_params.get('days', 30)
@@ -232,22 +232,29 @@ class DashboardStatsViewSet(BaseViewSet):
                 days = 30
         except (ValueError, TypeError):
             days = 30
-        # 计算起始日期
+
+        # 计算起始日期和结束日期
         end_date = timezone.now().date()
         start_date = end_date - timedelta(days=days - 1)
+
         # 查询指定日期范围内的统计数据
         stats_records = DashboardStats.objects.filter(
             stat_date__gte=start_date,
             stat_date__lte=end_date
         ).order_by('stat_date')
 
-        # 构建趋势数据
+        # 将查询结果转换为字典 {date: new_users}
+        stats_dict = {record.stat_date: record.new_users_today for record in stats_records}
+
+        # 构建完整的趋势数据（补全缺失日期）
         trend_data = []
-        for record in stats_records:
+        current_date = start_date
+        while current_date <= end_date:
             trend_data.append({
-                'date': record.stat_date.strftime('%Y-%m-%d'),
-                'new_users': record.new_users_today
+                'date': current_date.strftime('%Y-%m-%d'),
+                'new_users': stats_dict.get(current_date, 0)  # 缺失日期填充0
             })
+            current_date += timedelta(days=1)
 
         return ApiResponse(
             data=trend_data,
@@ -325,24 +332,17 @@ class DashboardStatsViewSet(BaseViewSet):
         """
         from django.db.models import Q
 
-        # 总用户数量
+        # === 基础统计数据（直接查询当前值）===
         total_users = CustomerUser.objects.count()
-
-        # 总壁纸数量
         total_wallpapers = Wallpapers.objects.count()
 
-        # 总浏览量
         total_views_result = Wallpapers.objects.aggregate(total=Sum('view_count'))
         total_views = total_views_result['total'] or 0
 
-        # 总下载量
         total_downloads_result = Wallpapers.objects.aggregate(total=Sum('download_count'))
         total_downloads = total_downloads_result['total'] or 0
 
-        # 总点赞数
         total_likes = WallpaperLike.objects.count()
-
-        # 总收藏数
         total_collections = WallpaperCollection.objects.count()
 
         # 日活跃用户（最近24小时内有登录记录的用户）
@@ -357,8 +357,23 @@ class DashboardStatsViewSet(BaseViewSet):
             last_login__gte=week_ago
         ).count()
 
-        # === 新增数据计算（当前总数 - 昨天最新记录）===
-        # 获取昨天最新的统计记录
+        # === 新增数据计算（按 created_at 统计今日新增）===
+        # 计算今天的起始时间（今天0点）
+        today_start = timezone.make_aware(
+            timezone.datetime.combine(stat_date, timezone.datetime.min.time())
+        )
+
+        # 今日新增用户数 = 今天创建的用户数
+        new_users_today = CustomerUser.objects.filter(
+            created_at__gte=today_start
+        ).count()
+
+        # 今日新增壁纸数 = 今天创建的壁纸数
+        new_wallpapers_today = Wallpapers.objects.filter(
+            created_at__gte=today_start
+        ).count()
+
+        # 新增日活数 = 当前日活 - 昨天记录的日活
         yesterday = stat_date - timedelta(days=1)
         try:
             yesterday_stats = DashboardStats.objects.filter(
@@ -366,28 +381,13 @@ class DashboardStatsViewSet(BaseViewSet):
             ).order_by('-stat_date').first()
 
             if yesterday_stats:
-                # 新增用户数 = 当前总用户数 - 昨天记录的总用户数
-                new_users_today = max(0, total_users - yesterday_stats.total_users)
-
-                # 新增壁纸数 = 当前总壁纸数 - 昨天记录的总壁纸数
-                new_wallpapers_today = max(0, total_wallpapers - yesterday_stats.total_wallpapers)
-
-                # 新增日活数 = 当前日活 - 昨天记录的日活
                 new_daily_active_users = max(0, daily_active_users - yesterday_stats.daily_active_users)
-
-                # 新增周活数 = 当前周活 - 昨天记录的周活
                 new_weekly_active_users = max(0, weekly_active_users - yesterday_stats.weekly_active_users)
             else:
-                # 没有昨天的记录，新增数据等于当前总数
-                new_users_today = total_users
-                new_wallpapers_today = total_wallpapers
                 new_daily_active_users = daily_active_users
                 new_weekly_active_users = weekly_active_users
         except Exception as e:
             logger.error(f"计算新增数据失败: {e}")
-            # 异常情况下使用0作为默认值
-            new_users_today = 0
-            new_wallpapers_today = 0
             new_daily_active_users = 0
             new_weekly_active_users = 0
 
@@ -411,6 +411,7 @@ class DashboardStatsViewSet(BaseViewSet):
         )
         logger.info(f"统计数据已保存: {stat_date}, 创建: {created}, "
                     f"新增用户:{new_users_today}, 新增壁纸:{new_wallpapers_today}")
+
 
 
 class CustomerUserSerializer(serializers.ModelSerializer):
