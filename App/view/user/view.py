@@ -153,9 +153,20 @@ def deactivate_user_and_delete_posters(open_id):
 
 #用户角色序列化器
 class RoleSerializer(serializers.ModelSerializer):
+    user_count = serializers.SerializerMethodField()
+
     class Meta:
         model = Role
         fields = '__all__'
+
+    def get_user_count(self, obj):
+        """根据角色code从不同表统计用户数量"""
+        if obj.code == 'customer':
+            # customer 角色从 CustomerUser 表统计
+            return CustomerUser.objects.count()
+        else:
+            # 其他角色从 User 表按 role 字段统计
+            return User.objects.filter(role=obj.code).count()
 
 @extend_schema(tags=["角色管理"])
 @extend_schema_view(
@@ -191,40 +202,18 @@ class RoleViewSet(BaseViewSet):
 
     def list(self, request, *args, **kwargs):
         """
-        管理员获取所有角色列表（含用户数量统计）
+        管理员获取所有评论列表
         """
         queryset = self.filter_queryset(self.get_queryset())
         queryset = queryset.order_by('-created_at')
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
 
-        # 遍历角色，统计用户数量
-        roles_data = []
-        for role in queryset:
-            # 根据 code 判断从哪个表统计
-            if role.code == 'customer':
-                # customer 角色从 CustomerUser 表统计
-                user_count = CustomerUser.objects.count()
-            else:
-                # 其他角色从 User 表按 role 字段统计
-                user_count = User.objects.filter(role=role.code).count()
+        serializer = self.get_serializer(queryset, many=True)
 
-            # 构建角色数据
-            role_data = {
-                'id': role.id,
-                'name': role.name,
-                'code': role.code,
-                'description': role.description,
-                'user_type': role.user_type,
-                'user_count': user_count,
-                'is_active': role.is_active,
-                'sort_order': role.sort_order,
-                'permissions': role.permissions,
-                'created_at': role.created_at,
-                'updated_at': role.updated_at,
-            }
-            roles_data.append(role_data)
-
-        return ApiResponse(data=roles_data, message="角色列表获取成功")
-
+        return ApiResponse(data=serializer.data, message="角色列表获取成功")
 
     def get_queryset(self):
         queryset = super().get_queryset()
