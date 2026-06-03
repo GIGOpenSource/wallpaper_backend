@@ -538,7 +538,6 @@ class NotificationViewSet(BaseViewSet):
             excluded_types.append('reply')
         if not settings.enable_follow_notification:
             excluded_types.append('follow')
-
         queryset = Notification.objects.filter(recipient_id=current_user_id, is_read=False)
         actual_count = queryset.count()
         if excluded_types:

@@ -191,17 +191,40 @@ class RoleViewSet(BaseViewSet):
 
     def list(self, request, *args, **kwargs):
         """
-        管理员获取所有评论列表
+        管理员获取所有角色列表（含用户数量统计）
         """
         queryset = self.filter_queryset(self.get_queryset())
         queryset = queryset.order_by('-created_at')
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
 
-        serializer = self.get_serializer(queryset, many=True)
-        return ApiResponse(data=serializer.data, message="角色列表获取成功")
+        # 遍历角色，统计用户数量
+        roles_data = []
+        for role in queryset:
+            # 根据 code 判断从哪个表统计
+            if role.code == 'customer':
+                # customer 角色从 CustomerUser 表统计
+                user_count = CustomerUser.objects.count()
+            else:
+                # 其他角色从 User 表按 role 字段统计
+                user_count = User.objects.filter(role=role.code).count()
+
+            # 构建角色数据
+            role_data = {
+                'id': role.id,
+                'name': role.name,
+                'code': role.code,
+                'description': role.description,
+                'user_type': role.user_type,
+                'user_count': user_count,
+                'is_active': role.is_active,
+                'sort_order': role.sort_order,
+                'permissions': role.permissions,
+                'created_at': role.created_at,
+                'updated_at': role.updated_at,
+            }
+            roles_data.append(role_data)
+
+        return ApiResponse(data=roles_data, message="角色列表获取成功")
+
 
     def get_queryset(self):
         queryset = super().get_queryset()
