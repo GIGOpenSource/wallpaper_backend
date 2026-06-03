@@ -128,6 +128,8 @@ class NotificationSerializer(serializers.ModelSerializer):
         nickname = obj.sender.nickname if obj.sender else "系统"
         if obj.notification_type == 'like':
             return f"{nickname} 赞了你的帖子"
+        if obj.notification_type == 'wallpaper_like':
+            return f"{nickname} 赞了你的壁纸"
         elif obj.notification_type == 'comment':
             return f"{nickname} 评论了你的帖子"
         elif obj.notification_type == 'reply':

@@ -38,7 +38,7 @@ class NotificationCenter:
             try:
                 settings = UserNotificationSettings.objects.get(user_id=recipient_id)
                 # 根据类型检查是否开启通知
-                if notification_type == 'like' and not settings.enable_like_notification:
+                if 'like' in notification_type and not settings.enable_like_notification:
                     return None
                 elif notification_type == 'comment' and not settings.enable_comment_notification:
                     return None
