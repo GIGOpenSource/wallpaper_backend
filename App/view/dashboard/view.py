@@ -135,6 +135,7 @@ class DashboardStatsViewSet(BaseViewSet):
                 yesterday = today - timedelta(days=1)
                 if stats_record.stat_date == yesterday:
                     need_refresh = True
+            need_refresh = True
             if not need_refresh:
                 from django.db.models import Sum
 
