@@ -293,7 +293,13 @@ class NotificationViewSet(BaseViewSet):
 
             # 对有system_code的记录进行去重
             if has_code_queryset.exists():
-                has_code_queryset = has_code_queryset.order_by('system_code', '-created_at').distinct('system_code')
+                # 获取每个system_code的最新记录ID
+                from django.db.models import Max
+                latest_ids = has_code_queryset.values('system_code').annotate(
+                    latest_id=Max('id')
+                ).values_list('latest_id', flat=True)
+
+                has_code_queryset = Notification.objects.filter(id__in=latest_ids)
 
             # 合并两个查询集（先去重的，再未去重的）
             if has_code_queryset.exists() and no_code_queryset.exists():
