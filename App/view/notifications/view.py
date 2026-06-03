@@ -287,36 +287,28 @@ class NotificationViewSet(BaseViewSet):
             queryset = queryset.filter(extra_data__title__icontains=title)
 
         if is_admin and (n_type == 'announcement' or notification_type in ['system', 'feature', 'Activity']):
-            # 分离 send_to='all' 和 send_to='specific' 的记录
-            all_recipients = queryset.filter(extra_data__send_to='all')
-            specific_recipients = queryset.filter(extra_data__send_to='specific')
+            # 分离有system_code和没有system_code的记录
+            has_code_queryset = queryset.exclude(system_code__isnull=True).exclude(system_code='')
+            no_code_queryset = queryset.filter(system_code__isnull=True) | queryset.filter(system_code='')
 
-            # 对 send_to='all' 的记录按 system_code 去重
-            if all_recipients.exists():
-                has_code = all_recipients.exclude(system_code__isnull=True).exclude(system_code='')
-                no_code = all_recipients.filter(system_code__isnull=True) | all_recipients.filter(system_code='')
+            # 对有system_code的记录进行去重
+            if has_code_queryset.exists():
+                # 获取每个system_code的最新记录ID
+                from django.db.models import Max
+                latest_ids = has_code_queryset.values('system_code').annotate(
+                    latest_id=Max('id')
+                ).values_list('latest_id', flat=True)
 
-                if has_code.exists():
-                    from django.db.models import Max
-                    latest_ids = has_code.values('system_code').annotate(
-                        latest_id=Max('id')
-                    ).values_list('latest_id', flat=True)
-                    all_recipients = Notification.objects.filter(id__in=latest_ids)
+                has_code_queryset = Notification.objects.filter(id__in=latest_ids)
 
-                if has_code.exists() and no_code.exists():
-                    combined_ids = list(has_code.values_list('id', flat=True)) + \
-                                   list(no_code.values_list('id', flat=True))
-                    all_recipients = Notification.objects.filter(id__in=combined_ids)
-                elif has_code.exists():
-                    all_recipients = has_code
-
-            # 合并所有记录
-            if all_recipients.exists() and specific_recipients.exists():
-                combined_ids = list(all_recipients.values_list('id', flat=True)) + \
-                               list(specific_recipients.values_list('id', flat=True))
+            # 合并两个查询集（先去重的，再未去重的）
+            if has_code_queryset.exists() and no_code_queryset.exists():
+                # 使用Union合并，但需要先转为list再排序
+                combined_ids = list(has_code_queryset.values_list('id', flat=True)) + \
+                               list(no_code_queryset.values_list('id', flat=True))
                 queryset = Notification.objects.filter(id__in=combined_ids)
-            elif all_recipients.exists():
-                queryset = all_recipients
+            elif has_code_queryset.exists():
+                queryset = has_code_queryset
             # 如果只有没有code的记录，保持原样
 
             # queryset = queryset.order_by('system_code', '-created_at').distinct('system_code')
@@ -377,6 +369,7 @@ class NotificationViewSet(BaseViewSet):
         if send_to == 'all':
             recipients = CustomerUser.objects.all()
         else:
+            system_code = None
             recipients = CustomerUser.objects.filter(id__in=user_ids)
             # 检查是否有不存在的用户
             if recipients.count() != len(user_ids):
