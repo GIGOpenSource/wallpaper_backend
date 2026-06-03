@@ -1311,6 +1311,9 @@ class WallpapersViewSet(BaseViewSet):
                     "has_watermark": {"type": "boolean", "description": "是否有水印"},
                     "is_hd": {"type": "boolean", "description": "是否高清"},
                     "is_live": {"type": "boolean", "description": "是否动态壁纸"},
+                    "download_count": {"type": "boolean", "description": "下载量"},
+                    "view_count": {"type": "boolean", "description": "浏览数"},
+                    "hot_score": {"type": "boolean", "description": "热度"},
                     "category_ids": {
                         "type": "string",
                         "description": "分类ID列表，逗号分隔，如 '1,3'"
@@ -1468,6 +1471,15 @@ class WallpapersViewSet(BaseViewSet):
                 audit_status = request.data.get("audit_status")
                 audit_remark = request.data.get("audit_remark")
 
+                hot_score = request.data.get("hot_score")
+                download_count = request.data.get("download_count")
+                view_count = request.data.get("view_count")
+                if hot_score is not None:
+                    instance.hot_score = int(hot_score)
+                if download_count is not None:
+                    instance.download_count = int(download_count)
+                if view_count is not None:
+                    instance.view_count = int(view_count)
                 if name is not None:
                     instance.name = str(name)[:200]
                 if description is not None:
