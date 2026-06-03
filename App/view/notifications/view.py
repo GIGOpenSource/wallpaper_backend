@@ -287,7 +287,25 @@ class NotificationViewSet(BaseViewSet):
             queryset = queryset.filter(extra_data__title__icontains=title)
 
         if is_admin and (n_type == 'announcement' or notification_type in ['system', 'feature', 'Activity']):
-            queryset = queryset.order_by('system_code', '-created_at').distinct('system_code')
+            # 分离有system_code和没有system_code的记录
+            has_code_queryset = queryset.exclude(system_code__isnull=True).exclude(system_code='')
+            no_code_queryset = queryset.filter(system_code__isnull=True) | queryset.filter(system_code='')
+
+            # 对有system_code的记录进行去重
+            if has_code_queryset.exists():
+                has_code_queryset = has_code_queryset.order_by('system_code', '-created_at').distinct('system_code')
+
+            # 合并两个查询集（先去重的，再未去重的）
+            if has_code_queryset.exists() and no_code_queryset.exists():
+                # 使用Union合并，但需要先转为list再排序
+                combined_ids = list(has_code_queryset.values_list('id', flat=True)) + \
+                               list(no_code_queryset.values_list('id', flat=True))
+                queryset = Notification.objects.filter(id__in=combined_ids)
+            elif has_code_queryset.exists():
+                queryset = has_code_queryset
+            # 如果只有没有code的记录，保持原样
+
+            # queryset = queryset.order_by('system_code', '-created_at').distinct('system_code')
 
         queryset = queryset.order_by('-created_at')
         page = self.paginate_queryset(queryset)
