@@ -814,9 +814,6 @@ class KeywordResearchViewSet(BaseViewSet):
                     else:
                         update_count += 1
 
-                    # 如果已存在，也算成功（更新）
-                    success_count += 1
-                        
                 except Exception as e:
                     errors.append(f"第{row_num}行：{str(e)}")
                     error_count += 1
