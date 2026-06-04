@@ -763,8 +763,10 @@ class KeywordResearchViewSet(BaseViewSet):
                         continue
                     row_dict = {headers[i]: row[i] for i in range(len(headers)) if i < len(row)}
                     rows_data.append(row_dict)
-            
-            success_count = 0
+
+            success_count = 0  # 总成功 = 新增 + 更新
+            create_count = 0  # 新增条数
+            update_count = 0  # 更新条数
             error_count = 0
             errors = []
             
@@ -804,7 +806,14 @@ class KeywordResearchViewSet(BaseViewSet):
                         keyword=keyword,
                         defaults=data
                     )
-                    
+
+                    # 统计：新增 / 更新
+                    success_count += 1
+                    if created:
+                        create_count += 1
+                    else:
+                        update_count += 1
+
                     # 如果已存在，也算成功（更新）
                     success_count += 1
                         
@@ -818,7 +827,7 @@ class KeywordResearchViewSet(BaseViewSet):
                     'error_count': error_count,
                     'errors': errors[:10] if errors else []  # 最多返回10条错误信息
                 },
-                message=f"导入完成：成功 {success_count} 条，失败 {error_count} 条"
+                message=f"导入完成：成功 {success_count} 条（新增 {create_count} 条，更新 {update_count} 条），失败 {error_count} 条"
             )
             
         except UnicodeDecodeError:
