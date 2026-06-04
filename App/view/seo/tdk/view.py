@@ -699,10 +699,10 @@ class PageTDKViewSet(BaseViewSet):
                     
                     # 准备数据
                     tdk_data = {
-                        'title': row.get('标题(Title)', '').strip(),
-                        'description': row.get('描述(Description)', '').strip(),
-                        'keywords': row.get('关键词(Keywords)', '').strip(),
-                        'page_type': row.get('页面类型', 'custom').strip(),
+                        'title': str(row.get('标题(Title)', '')).strip(),
+                        'description': str(row.get('描述(Description)', '')).strip(),
+                        'keywords': str(row.get('关键词(Keywords)', '')).strip(),
+                        'page_type': str(row.get('页面类型', 'custom')).strip(),
                     }
                     
                     # 验证page_type
