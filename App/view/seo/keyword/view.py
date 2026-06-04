@@ -189,11 +189,11 @@ class KeywordResearchViewSet(BaseViewSet):
             # 如果为 false，则返回未收藏的（可选，目前不实现）
         
         # 5. 排序逻辑
-        order_by = request.query_params.get('order_by', 'monthly_search_volume')
+        order_by = request.query_params.get('order_by', 'created_at')
         order_direction = request.query_params.get('order_direction', 'desc')
         
         # 构建排序字段
-        valid_order_fields = ['monthly_search_volume', 'updated_at', 'created_at', 'optimization_difficulty', 'cpc']
+        valid_order_fields = ['created_at','monthly_search_volume', 'updated_at',  'optimization_difficulty', 'cpc']
         if order_by not in valid_order_fields:
             order_by = 'monthly_search_volume'
         
