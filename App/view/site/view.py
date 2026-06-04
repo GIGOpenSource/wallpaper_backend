@@ -516,7 +516,6 @@ class SiteConfigViewSet(BaseViewSet):
             # 统计 Sitemap
             elif line.lower().startswith('sitemap:'):
                 sitemap_count += 1
-                total_rules += 1
             # 统计 User-agent
             elif line.lower().startswith('user-agent:'):
                 agent = line.split(':', 1)[1].strip()
