@@ -689,7 +689,7 @@ class PageTDKViewSet(BaseViewSet):
 
                     # 是否是模板：是 = True，其他 = False
                     is_template = template_str == "是"
-                    if not url_content and is_template:
+                    if not url_content and not is_template:
                         errors.append(f"第{index}行：缺少页面URL")
                         error_count += 1
                         continue
