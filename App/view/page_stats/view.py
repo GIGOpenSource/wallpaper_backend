@@ -26,6 +26,7 @@ def _trigger_seo_update():
     global _seo_counter
     with _lock:
         _seo_counter += 1
+        print("_seo_count分数",str(_seo_counter))
         if _seo_counter >= 6:
             _seo_counter = 0
             t = threading.Thread(target=_perform_seo_update)
