@@ -1105,27 +1105,30 @@ class CompetitorKeywordAnalysisViewSet(BaseViewSet):
     @action(detail=True, methods=['get'], url_path='export')
     def export_detail(self, request, *args, **kwargs):
         """导出竞争对手关键词详情为CSV文件"""
+        from django.utils import timezone
+        import pytz
+
         pk = kwargs.get('pk')
-        
+
         try:
             competitor = Competitor.objects.get(id=pk)
         except Competitor.DoesNotExist:
             return HttpResponse("竞争对手不存在", status=404)
-        
+
         # 获取该竞争对手的所有关键词（按排名排序）
         keywords = WebsiteKeyword.objects.filter(
             competitor=competitor
         ).order_by('rank')
-        
+
         # 创建CSV响应
         response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
         response['Content-Disposition'] = f'attachment; filename="competitor_{competitor.id}_keywords.csv"'
-        
+
         # 写入BOM头，确保Excel正确识别中文
         response.write('\ufeff')
-        
+
         writer = csv.writer(response)
-        
+
         # 写入表头
         writer.writerow([
             '关键词',
@@ -1137,9 +1140,31 @@ class CompetitorKeywordAnalysisViewSet(BaseViewSet):
             '创建时间',
             '更新时间'
         ])
-        
+
+        # 定义本地时区（东八区）
+        local_tz = pytz.timezone('Asia/Shanghai')
+
         # 写入数据行
         for kw in keywords:
+            # 将 UTC 时间转换为本地时区
+            if kw.created_at:
+                if timezone.is_aware(kw.created_at):
+                    created_local = kw.created_at.astimezone(local_tz)
+                else:
+                    created_local = timezone.make_aware(kw.created_at, local_tz)
+                created_str = created_local.strftime('%Y-%m-%d %H:%M:%S')
+            else:
+                created_str = ''
+
+            if kw.updated_at:
+                if timezone.is_aware(kw.updated_at):
+                    updated_local = kw.updated_at.astimezone(local_tz)
+                else:
+                    updated_local = timezone.make_aware(kw.updated_at, local_tz)
+                updated_str = updated_local.strftime('%Y-%m-%d %H:%M:%S')
+            else:
+                updated_str = ''
+
             writer.writerow([
                 kw.keyword,
                 kw.rank,
@@ -1147,8 +1172,9 @@ class CompetitorKeywordAnalysisViewSet(BaseViewSet):
                 kw.bidword_companycount,
                 kw.long_keyword_count,
                 kw.index,
-                kw.created_at.strftime('%Y-%m-%d %H:%M:%S') if kw.created_at else '',
-                kw.updated_at.strftime('%Y-%m-%d %H:%M:%S') if kw.updated_at else ''
+                created_str,
+                updated_str
             ])
-        
+
         return response
+
