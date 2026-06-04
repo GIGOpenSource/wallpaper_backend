@@ -26,23 +26,119 @@ def _trigger_seo_update():
     global _seo_counter
     with _lock:
         _seo_counter += 1
-        if _seo_counter >= 10:
+        if _seo_counter >= 6:
             _seo_counter = 0
             t = threading.Thread(target=_perform_seo_update)
             t.daemon = True
             t.start()
 
+# def _perform_seo_update():
+#     """执行 SEO 评分更新"""
+#     try:
+#         # 获取访问量最高的前 20 个页面进行 SEO 评分更新
+#         top_pages = PageStats.objects.order_by('-visit_count')[:20]
+#         for page in top_pages:
+#             score = seo_analyzer.calculate_seo_score(page.page_path)
+#             page.seo_score = score
+#             page.save(update_fields=['seo_score'])
+#     except Exception as e:
+#         print(f"SEO update error: {e}")
+
 def _perform_seo_update():
-    """执行 SEO 评分更新"""
+    """执行 SEO 评分更新（批量获取 GSC 数据后匹配）"""
     try:
-        # 获取访问量最高的前 20 个页面进行 SEO 评分更新
-        top_pages = PageStats.objects.order_by('-visit_count')[:20]
+        from seo.seo_tools import GoogleSearchConsoleTool
+        from datetime import datetime, timedelta
+        import os
+
+        gsc_tool = GoogleSearchConsoleTool()
+
+        if not gsc_tool.service:
+            print("GSC 服务不可用，跳过 SEO 评分更新")
+            return
+
+        # 1. 获取访问量最高的前 30 个页面（你收录少，多拿点）
+        top_pages = list(PageStats.objects.order_by('-visit_count')[:30])
+        if not top_pages:
+            return
+
+        # 2. 构建 URL
+        base_url = os.getenv('GSC_SITE_URL', 'https://www.markwallpapers.com/')
+        end_date = datetime.now().strftime('%Y-%m-%d')
+        start_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+        site_url = base_url if base_url.endswith('/') else base_url + '/'
+
+        # 3. 获取GSC数据
+        rows = seo_analyzer.gsc_tool.get_search_analytics(
+            site_url, start_date, end_date, dimensions=['page']
+        )
+
+        # 4. URL => 数据映射
+        gsc_data_map = {row['keys'][0]: row for row in rows if row.get('keys')}
+
+        # 5. 计算SEO评分（适合你这种小流量、新收录站点）
         for page in top_pages:
-            score = seo_analyzer.calculate_seo_score(page.page_path)
-            page.seo_score = score
-            page.save(update_fields=['seo_score'])
+            full_url = f"{base_url.rstrip('/')}{page.page_path}"
+            data = gsc_data_map.get(full_url)
+
+            score = 0  # 从0开始算，更真实
+
+            if data:
+                clicks = data['clicks']
+                impressions = data['impressions']
+                ctr = data['ctr']
+                position = data['position']
+
+                # 排名 40分
+                if position <= 5:
+                    score += 40
+                elif position <= 10:
+                    score += 30
+                elif position <= 20:
+                    score += 15
+                elif position <= 30:
+                    score += 5
+
+                # 点击率 25分
+                if ctr >= 0.10:
+                    score += 25
+                elif ctr >= 0.05:
+                    score += 15
+                elif ctr > 0:
+                    score += 5
+
+                # 点击量 20分（适配小站）
+                if clicks >= 10:
+                    score += 20
+                elif clicks >= 3:
+                    score += 15
+                elif clicks >= 1:
+                    score += 10
+
+                # 曝光量 15分
+                if impressions >= 100:
+                    score += 15
+                elif impressions >= 10:
+                    score += 10
+                elif impressions >= 1:
+                    score += 5
+            else:
+                # 无收录 = 极低分
+                score = 5
+
+            # 最终限制 0-100
+            page.seo_score = min(100, max(0, score))
+        # 6. 批量更新 🔥 只执行1次数据库
+        PageStats.objects.bulk_update(
+            top_pages,
+            fields=['seo_score'],
+            batch_size=50
+        )
+        print(f"✅ SEO 评分更新完成，处理 {len(top_pages)} 个页面")
     except Exception as e:
-        print(f"SEO update error: {e}")
+        print(f"❌ SEO update error: {e}")
+
+
 
 def _trigger_aggregate():
     """触发聚合逻辑"""
