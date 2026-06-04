@@ -11,7 +11,7 @@ from tool.utils import ApiResponse, CustomPagination
 from tool.permissions import IsAdmin
 from .serializer import PageStatsSerializer
 from seo.seo_tools import PageSEOAnalyzer
-from django.db.models import Count, Avg, Q
+from django.db.models import Count, Avg, Q, OuterRef, Subquery
 from django.utils import timezone
 import threading
 
@@ -58,45 +58,62 @@ def _trigger_aggregate():
 
 
 def _perform_aggregation():
-    """执行数据库聚合操作"""
     try:
-        # 1. 按页面路径、类型和设备分组统计基础数据
-        # 只统计 page_view 事件作为访问次数
+        # ====================== 第一步：聚合统计（不变）
         stats = TrackEvent.objects.filter(
-            event_type='page_view'
-        ).values('page_path', 'page_type', 'device_type').annotate(
+            event_type='page_stay'
+        ).values(
+            'page_path', 'page_type', 'device_type'
+        ).annotate(
             visit_count=Count('id'),
             avg_stay=Avg('page_stay'),
             bounce_count=Count('id', filter=Q(is_bounce=True))
         )
 
+        # ====================== 第二步：一次性把所有分组的最新 page_name 全部查出来（只查1次）
+        latest_page_name_subquery = TrackEvent.objects.filter(
+            page_path=OuterRef('page_path'),
+            page_type=OuterRef('page_type'),
+            device_type=OuterRef('device_type'),
+            event_type='page_stay',
+            page_name__isnull=False,
+        ).exclude(page_name='').order_by('-created_at').values('page_name')[:1]
+
+        # 给 stats 每条数据直接带上 page_name（无循环！）
+        stats = stats.annotate(
+            page_name=Subquery(latest_page_name_subquery)
+        )
+
+        # ====================== 第三步：准备批量插入/更新数据
+        page_stats_list = []
+
         for item in stats:
             if not item['page_path']:
                 continue
-            # 2. 获取该路径及设备下最近一次上报的 page_name
-            latest_event = TrackEvent.objects.filter(
-                page_path=item['page_path'],
-                page_type=item['page_type'],
-                device_type=item['device_type'],
-                page_name__isnull=False,
-                event_type='page_stay'
-            ).exclude(page_name='').order_by('-created_at').first()
-            page_name = latest_event.page_name if latest_event else None
-            # 3. 计算跳出率
-            bounce_rate = (item['bounce_count'] / item['visit_count'] * 100) if item['visit_count'] > 0 else 0
-            # 4. 更新或创建统计数据
-            PageStats.objects.update_or_create(
+
+            # 跳出率
+            visit_count = item['visit_count']
+            bounce_rate = (item['bounce_count'] / visit_count * 100) if visit_count > 0 else 0
+            # 构建要保存的对象
+            page_stats_list.append(PageStats(
                 page_path=item['page_path'],
                 page_type=item['page_type'] or 'unknown',
                 device_type=item['device_type'] or 'all',
-                defaults={
-                    'page_name': page_name,
-                    'visit_count': item['visit_count'],
-                    'avg_stay_time': item['avg_stay'] or 0,
-                    'bounce_rate': round(bounce_rate, 2),
-                    'last_updated': timezone.now()
-                }
-            )
+                page_name=item['page_name'],
+                visit_count=visit_count,
+                avg_stay_time=item['avg_stay'] or 0,
+                bounce_rate=round(bounce_rate, 2),
+                last_updated=timezone.now()
+            ))
+
+        # ====================== 第四步：批量更新或创建（1次操作完成580条）
+        PageStats.objects.bulk_create(
+            page_stats_list,
+            update_conflicts=True,
+            unique_fields=['page_path', 'page_type', 'device_type'],
+            update_fields=['page_name', 'visit_count', 'avg_stay_time', 'bounce_rate', 'last_updated']
+        )
+
     except Exception as e:
         print(f"Page stats aggregation error: {e}")
 
