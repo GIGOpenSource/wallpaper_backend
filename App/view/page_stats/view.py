@@ -58,7 +58,7 @@ def _perform_seo_update():
             return
 
         # 1. 获取访问量最高的前 30 个页面（你收录少，多拿点）
-        top_pages = list(PageStats.objects.order_by('-visit_count')[:30])
+        top_pages = list(PageStats.objects.order_by('-visit_count')[:80])
         if not top_pages:
             return
 
