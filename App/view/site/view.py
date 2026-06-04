@@ -840,6 +840,7 @@ class SiteConfigViewSet(BaseViewSet):
         
         return result
 
+
     @extend_schema(
         summary="测试 Robots.txt 规则",
         description="测试指定 User-agent 对 URL 路径的访问权限，返回匹配规则和说明",
@@ -873,11 +874,11 @@ class SiteConfigViewSet(BaseViewSet):
 
         user_agent = serializer.validated_data['user_agent']
         url_path = serializer.validated_data['url_path']
-        
+
         # 确保路径以 / 开头
         if not url_path.startswith('/'):
             url_path = '/' + url_path
-        
+
         # 拼接完整URL
         base_url = "https://www.markwallpapers.com"
         full_url = base_url + url_path
@@ -891,7 +892,7 @@ class SiteConfigViewSet(BaseViewSet):
 
         # 解析规则
         rules = self._parse_robots_content(content)
-        
+
         # 如果 user_agent 是 *，则遍历所有默认的 user-agent
         if user_agent == '*':
             default_agents = ['Googlebot', 'Googlebot-Image', 'Bingbot', 'Baiduspider']
@@ -907,10 +908,10 @@ class SiteConfigViewSet(BaseViewSet):
                     'status_code': result['status_code']
                 })
             return ApiResponse(data=results, message="测试完成")
-        
+
         # 单个 user-agent 测试
         result = self._test_access(rules, user_agent, url_path)
-        
+
         # 构建返回数据
         response_data = [{
             'user_agent': user_agent,
@@ -920,149 +921,93 @@ class SiteConfigViewSet(BaseViewSet):
             'explanation': result['explanation'],
             'status_code':result['status_code']
         }]
-        
+
         return ApiResponse(data=response_data, message="测试完成")
 
     def _test_access(self, rules, user_agent, url_path):
         """
-        使用真实 HTTP 请求测试 User-agent 对 URL 路径的访问权限
-        通过 requests 库模拟爬虫请求，直接获取响应结果
+        【正确版 robots 协议解析】
+        1. 先加载 * 通用规则
+        2. 再加载 当前爬虫专属规则（覆盖通用）
+        3. 合并后按 最长匹配原则 判断
+        4. 专属规则不需要重复写通用的 Disallow，自动继承
         """
-        import requests
-        
-        # 拼接完整URL
-        base_url = "https://www.markwallpapers.com"
-        full_url = base_url + url_path
-        
-        # 标准化的 User-Agent 映射
-        user_agent_map = {
-            'Googlebot': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-            'Bingbot': 'Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)',
-            'Baiduspider': 'Mozilla/5.0 (compatible; Baiduspider/2.0; +http://www.baidu.com/search/spider.html)',
-            'YandexBot': 'Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)',
-            'DuckDuckBot': 'DuckDuckBot/1.0; (+http://duckduckgo.com/duckduckbot.html)',
-        }
-        
-        # 使用标准化的 User-Agent，如果没有映射则使用原始值
-        final_user_agent = user_agent_map.get(user_agent, user_agent)
-        
-        # 构建请求头，模拟搜索引擎爬虫
-        headers = {
-            'User-Agent': final_user_agent,
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Accept-Encoding': 'gzip, deflate',
-            'Connection': 'keep-alive',
-        }
-        
-        # 检查是否需要代理
-        use_proxy = os.getenv('USE_PROXY', 'false').lower() == 'true'
-        proxies = None
-        if use_proxy:
-            proxy_host = os.getenv('PROXY_HOST', '127.0.0.1')
-            proxy_port = os.getenv('PROXY_PORT', '7897')
-            proxies = {
-                'http': f'http://{proxy_host}:{proxy_port}',
-                'https': f'http://{proxy_host}:{proxy_port}'
-            }
-        
-        try:
-            # 先尝试 HEAD 请求
-            try:
-                response = requests.head(
-                    full_url, 
-                    headers=headers, 
-                    timeout=10, 
-                    allow_redirects=True,
-                    proxies=proxies,
-                    verify=False  # 忽略 SSL 证书验证
-                )
-            except Exception:
-                # 如果 HEAD 请求失败，尝试 GET 请求
-                response = requests.get(
-                    full_url, 
-                    headers=headers, 
-                    timeout=10, 
-                    allow_redirects=True,
-                    proxies=proxies,
-                    verify=False,
-                    stream=True  # 流式传输，不下载完整内容
-                )
-                # 立即关闭连接，不下载内容
-                response.close()
-            
-            # 根据响应状态码判断访问权限
-            status_code = response.status_code
-            
-            if status_code == 200:
-                return {
-                    'result': 'allowed',
-                    'status_code': status_code,
-                    'matched_rule': f'HTTP {status_code}',
-                    'explanation': f'爬虫 "{user_agent}" 成功访问 "{full_url}"，返回状态码 {status_code}，允许访问'
-                }
-            elif status_code == 403:
-                return {
-                    'result': 'disallowed',
-                    'status_code': status_code,
-                    'matched_rule': f'HTTP {status_code} Forbidden',
-                    'explanation': f'爬虫 "{user_agent}" 访问 "{full_url}" 被拒绝，返回状态码 {status_code}，禁止访问'
-                }
-            elif status_code == 404:
-                return {
-                    'result': 'not_found',
-                    'status_code': status_code,
-                    'matched_rule': f'HTTP {status_code} Not Found',
-                    'explanation': f'路径 "{full_url}" 不存在，返回状态码 {status_code}'
-                }
-            elif status_code == 429:
-                return {
-                    'result': 'rate_limited',
-                    'status_code': status_code,
-                    'matched_rule': f'HTTP {status_code} Too Many Requests',
-                    'explanation': f'爬虫 "{user_agent}" 访问频率过高，被限流，返回状态码 {status_code}'
-                }
-            elif status_code == 301 or status_code == 302:
-                redirect_url = response.headers.get('Location', '未知')
-                return {
-                    'result': 'redirect',
-                    'status_code': status_code,
-                    'matched_rule': f'HTTP {status_code} Redirect',
-                    'explanation': f'爬虫 "{user_agent}" 访问 "{full_url}" 被重定向到 {redirect_url}'
-                }
-            else:
-                return {
-                    'result': 'unknown',
-                    'status_code': status_code,
-                    'matched_rule': f'HTTP {status_code}',
-                    'explanation': f'爬虫 "{user_agent}" 访问 "{full_url}" 返回状态码 {status_code}'
-                }
-                
-        except requests.exceptions.Timeout:
+        user_agent_lower = user_agent.lower()
+
+        # ======================
+        # 第一步：收集所有规则
+        # ======================
+        allow_patterns = []
+        disallow_patterns = []
+
+        # 1. 先加载 通用规则 *
+        for rule_block in rules:
+            block_agent = rule_block.get('user_agent', '').lower()
+            if block_agent == '*':
+                allow_patterns.extend(rule_block.get('allow', []))
+                disallow_patterns.extend(rule_block.get('disallow', []))
+                break
+
+        # 2. 再加载 爬虫自身专属规则（会覆盖/叠加）
+        for rule_block in rules:
+            block_agent = rule_block.get('user_agent', '').lower()
+            if block_agent == user_agent_lower:
+                allow_patterns.extend(rule_block.get('allow', []))
+                disallow_patterns.extend(rule_block.get('disallow', []))
+                break
+
+        # 去重
+        allow_patterns = list(set(allow_patterns))
+        disallow_patterns = list(set(disallow_patterns))
+
+        # ======================
+        # 第二步：最长匹配原则
+        # ======================
+        best_match = None
+        best_type = None
+        max_len = -1
+
+        # 检查 Allow
+        for pat in allow_patterns:
+            if not pat:
+                continue
+            if self._url_matches_pattern(url_path, pat):
+                l = len(pat)
+                if l > max_len:
+                    max_len = l
+                    best_match = pat
+                    best_type = 'allow'
+
+        # 检查 Disallow
+        for pat in disallow_patterns:
+            if not pat:
+                continue
+            if self._url_matches_pattern(url_path, pat):
+                l = len(pat)
+                if l > max_len:
+                    max_len = l
+                    best_match = pat
+                    best_type = 'disallow'
+
+        if best_type == 'disallow':
             return {
-                'result': 'timeout',
-                'status_code': None,
-                'matched_rule': '请求超时',
-                'explanation': f'访问 "{full_url}" 超时（10秒），请检查网络连接或增加超时时间'
+                'result': 'disallowed',
+                'status_code': 403,
+                'matched_rule': f'Disallow: {best_match}',
+                'explanation': f'根据 robots 规则（通用+专属），{user_agent} 禁止访问 {url_path}'
             }
-        except requests.exceptions.ConnectionError as e:
+        else:
             return {
-                'result': 'connection_error',
-                'status_code': None,
-                'matched_rule': '连接错误',
-                'explanation': f'无法连接到 "{full_url}"。可能原因：1) 网络不通 2) 需要配置代理 3) DNS解析失败。错误详情: {str(e)}'
+                'result': 'allowed',
+                'status_code': 200,
+                'matched_rule': f'Allow: {best_match or "/"}',
+                'explanation': f'根据 robots 规则（通用+专属），{user_agent} 允许访问 {url_path}'
             }
-        except requests.exceptions.SSLError:
-            return {
-                'result': 'ssl_error',
-                'status_code': None,
-                'matched_rule': 'SSL证书错误',
-                'explanation': f'访问 "{full_url}" 时SSL证书验证失败，已尝试忽略证书验证'
-            }
-        except Exception as e:
-            return {
-                'result': 'error',
-                'status_code': None,
-                'matched_rule': f'请求异常: {type(e).__name__}',
-                'explanation': f'测试过程中发生错误: {str(e)}'
-            }
+
+    def _url_matches_pattern(self, url_path, pattern):
+        """robots.txt 标准通配符匹配 *"""
+        import re
+        # 转义正则，把 * 变成 .*
+        regex_pattern = re.escape(pattern).replace(r'\*', '.*')
+        # 前缀匹配（robots 标准）
+        return re.match(regex_pattern, url_path) is not None
