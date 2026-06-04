@@ -216,9 +216,12 @@ class KeywordResearchViewSet(BaseViewSet):
     def create(self, request, *args, **kwargs):
         """创建关键词"""
         serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return ApiResponse(data=serializer.data, message="关键词创建成功", code=201)
+        if serializer.is_valid():
+            serializer.save()
+            return ApiResponse(data=serializer.data, message="关键词创建成功", code=201)
+
+        error_msg = next(iter(serializer.errors.values()))[0]
+        return ApiResponse(code=400, message=error_msg)
     
     def retrieve(self, request, *args, **kwargs):
         """获取关键词详情"""
