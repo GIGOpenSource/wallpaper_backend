@@ -93,8 +93,9 @@ class TrackViewSet(BaseViewSet):
             page_stay = int(data.get('page_stay', 0) or 0)
             unique_id = data.get('unique_id')
             page_path = data.get('page_path')
+            event_type = data.get('event_type')
 
-            if event_name == 'page_hide':
+            if event_type == 'page_stay':
                 # 判定规则：停留时间 < 10秒 视为跳出
                 if page_stay < 10:
                     is_bounce = True

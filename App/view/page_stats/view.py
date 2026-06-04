@@ -56,11 +56,15 @@ def _trigger_aggregate():
             t.daemon = True
             t.start()
 
+
 def _perform_aggregation():
     """执行数据库聚合操作"""
     try:
         # 1. 按页面路径、类型和设备分组统计基础数据
-        stats = TrackEvent.objects.values('page_path', 'page_type', 'device_type').annotate(
+        # 只统计 page_view 事件作为访问次数
+        stats = TrackEvent.objects.filter(
+            event_type='page_view'
+        ).values('page_path', 'page_type', 'device_type').annotate(
             visit_count=Count('id'),
             avg_stay=Avg('page_stay'),
             bounce_count=Count('id', filter=Q(is_bounce=True))
@@ -69,20 +73,18 @@ def _perform_aggregation():
         for item in stats:
             if not item['page_path']:
                 continue
-            
             # 2. 获取该路径及设备下最近一次上报的 page_name
             latest_event = TrackEvent.objects.filter(
                 page_path=item['page_path'],
                 page_type=item['page_type'],
                 device_type=item['device_type'],
-                page_name__isnull=False
+                page_name__isnull=False,
+                event_type='page_stay'
             ).exclude(page_name='').order_by('-created_at').first()
-            
             page_name = latest_event.page_name if latest_event else None
-                
+            # 3. 计算跳出率
             bounce_rate = (item['bounce_count'] / item['visit_count'] * 100) if item['visit_count'] > 0 else 0
-            
-            # 3. 更新或创建统计数据
+            # 4. 更新或创建统计数据
             PageStats.objects.update_or_create(
                 page_path=item['page_path'],
                 page_type=item['page_type'] or 'unknown',
@@ -117,6 +119,8 @@ class PageStatsViewSet(BaseViewSet):
     """
     页面统计 ViewSet
     仅支持查看和删除，不支持修改
+    list 数据已经是去重的，但seo得再算，以及平均停留看板数据是直接聚合的
+
     """
     queryset = PageStats.objects.all()
     serializer_class = PageStatsSerializer
@@ -139,7 +143,7 @@ class PageStatsViewSet(BaseViewSet):
         _trigger_aggregate()
         # 每查询 10 次触发一次 SEO 评分更新
         _trigger_seo_update()
-        
+
         queryset = self.filter_queryset(self.get_queryset())
         page = self.paginate_queryset(queryset)
         if page is not None:
