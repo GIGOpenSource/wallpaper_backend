@@ -2380,42 +2380,44 @@ class WallpapersViewSet(BaseViewSet):
     )
     def my_uploads(self, request):
         token = request.headers.get("token")
-        is_valid, token_customer_id = CustomTokenTool.verify_customer_token(token)
+        is_valid, customer_id = CustomTokenTool.verify_customer_token(token)
 
         target_customer_id = request.query_params.get('customer_id')
-        is_admin = False
+        role = False
 
-        # 先判断是否管理员
-        if request.user and hasattr(request.user, 'role'):
-            # 你可以根据自己的角色判断条件改这里
-            is_admin = True
+        # 你原来的管理员判断逻辑 🔒
+        if target_customer_id and request.user and hasattr(request.user, 'role'):
+            role = True
+            try:
+                customer_id = int(target_customer_id)
+            except Exception as e:
+                return ApiResponse(code=400, message="无效的 customer_id")
 
-        # 1. 校验 token 必须有效
-        if not is_valid or not token_customer_id:
+        user_allowed = is_valid and customer_id
+        admin_allowed = role and customer_id
+
+        if not (user_allowed or admin_allowed):
             return ApiResponse(code=401, message="客户 Token 无效或已过期")
 
-        # 2. 处理目标 customer_id
-        if target_customer_id:
-            try:
-                target_customer_id = int(target_customer_id)
-            except:
-                return ApiResponse(code=400, message="无效的 customer_id")
-        else:
-            # 不传 ID 默认查看自己
-            target_customer_id = token_customer_id
+        if target_customer_id and user_allowed:
+            customer_id = int(target_customer_id)
 
-        # ====================== 核心权限判断 ======================
-        is_other_user = (token_customer_id != target_customer_id)
-        view_others_wallpaper = is_other_user and not is_admin
+        # ===================== 核心业务逻辑（你要的3个场景） =====================
+        # 判断是否在查看别人的列表
+        token_customer_id = CustomTokenTool.verify_customer_token(token)[1]
+        is_view_other = (token_customer_id != customer_id)
+        view_others_wallpaper = is_view_other and not role
 
-        # ====================== 构建查询 ======================
-        qs = CustomerWallpaperUpload.objects.filter(
-            customer_id=target_customer_id
-        ).select_related("wallpaper").prefetch_related(
-            "wallpaper__tags", "wallpaper__category"
-        ).order_by("-created_at")
+        # 查询
+        qs = (
+            CustomerWallpaperUpload.objects
+            .filter(customer_id=customer_id)
+            .select_related("wallpaper")
+            .prefetch_related("wallpaper__tags", "wallpaper__category")
+            .order_by("-created_at")
+        )
 
-        # ====================== 场景1：查看别人的上传，过滤审核状态 ======================
+        # 场景1：查看别人 → 只显示 null / 空串 / approved
         if view_others_wallpaper:
             qs = qs.filter(
                 Q(wallpaper__audit_status__isnull=True) |
@@ -2439,7 +2441,6 @@ class WallpapersViewSet(BaseViewSet):
             )
             return self.get_paginated_response(serializer.data)
 
-        # 不分页
         wallpapers = [item.wallpaper for item in qs]
         data = WallpapersSerializer(
             wallpapers, many=True, context=self.get_serializer_context()
