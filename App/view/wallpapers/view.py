@@ -18,6 +18,7 @@ from PIL import Image
 from django.utils import timezone
 
 from App.view.wallpapers.search_models.search_models import TAG_MAPPING
+from App.view.wallpapers.tool.uploader_tool import _image_meta_from_bytes
 from tool.base_views import BaseViewSet
 from tool.middleware import logger
 from tool.permissions import IsCustomerTokenValid, IsOwnerOrAdmin, IsAdmin
@@ -103,13 +104,7 @@ def _person_wallpaper_cos_key(title: str, original_filename: str) -> tuple[str, 
     return f"person_wallpaper/{base}{ext}", ext.lstrip(".").lower()
 
 
-def _image_meta_from_bytes(content: bytes):
-    try:
-        with Image.open(io.BytesIO(content)) as im:
-            fmt = (im.format or "").lower() or None
-            return im.width, im.height, fmt
-    except Exception:
-        return 0, 0, None
+
 
 
 def _decrement_user_counters_on_wallpaper_delete(wallpaper_ids):
@@ -2583,11 +2578,13 @@ class WallpapersViewSet(BaseViewSet):
         description=(
                 "需客户 Token（CToken）。multipart：file、title（文件名主体）；"
                 "可选 description；tag_ids（逗号或 JSON 数组）；tag_names（新标签，逗号或 JSON 数组）。"
+                "传入 id 则为编辑模式，覆盖该壁纸数据。"
         ),
         request={
             "multipart/form-data": {
                 "type": "object",
                 "properties": {
+                    "id": {"type": "integer", "description": "壁纸ID（不传=新增，传=编辑）"},
                     "file": {"type": "string", "format": "binary"},
                     "title": {"type": "string", "description": "展示名/文件名主体（不含扩展名）"},
                     "platform": {"type": "string", "description": "平台：PC 或 PHONE"},
@@ -2595,7 +2592,7 @@ class WallpapersViewSet(BaseViewSet):
                     "tag_ids": {"type": "string", "description": "已有标签 id，如 1,2 或 [1,2]"},
                     "tag_names": {"type": "string", "description": "新标签名称，多个用逗号或 JSON 数组"},
                 },
-                "required": ["file", "title"],
+                "required": ["title"],
             }
         },
     )
@@ -2612,10 +2609,18 @@ class WallpapersViewSet(BaseViewSet):
         if not is_valid or not customer_id:
             return ApiResponse(code=401, message="客户 Token 无效或已过期")
 
-        uploaded_file = request.FILES.get("file")
-        if not uploaded_file:
-            return ApiResponse(code=400, message="请上传文件 file")
+        # ====================== 编辑模式判断 ======================
+        wallpaper_id = request.data.get("id")
+        wallpaper = None
+        if wallpaper_id:
+            wallpaper = Wallpapers.objects.filter(id=wallpaper_id).first()
+            if not wallpaper:
+                return ApiResponse(code=404, message="壁纸不存在")
+            if not CustomerWallpaperUpload.objects.filter(customer_id=customer_id, wallpaper=wallpaper).exists():
+                return ApiResponse(code=403, message="无权限修改此壁纸")
 
+        # ====================== 参数获取 ======================
+        uploaded_file = request.FILES.get("file")
         title = (request.data.get("title") or "").strip()
         if not title:
             return ApiResponse(code=400, message="请提供 title")
@@ -2628,117 +2633,97 @@ class WallpapersViewSet(BaseViewSet):
         tag_ids = _parse_tag_ids(request.data.get("tag_ids"))
         tag_names = _parse_tag_names(request.data.get("tag_names"))
 
-        orig_name = uploaded_file.name or "image.jpg"
-        _, orig_ext = os.path.splitext(orig_name)
-        orig_ext = orig_ext.lower()
+        # 编辑时：不传文件 → 仅更新信息
+        if wallpaper and not uploaded_file:
+            with transaction.atomic():
+                wallpaper.name = title[:200]
+                wallpaper.description = description
+                wallpaper.save()
 
-        token_suffix = token[-8:] if token and len(token) >= 8 else (token or "00000000")[-8:].ljust(8, '0')
-        name_part, ext = os.path.splitext(orig_name)
-        ext = ext.lower()
-        if ext not in (".jpg", ".jpeg", ".png", ".webp", ".gif", ".mp4"):
-            ext = ".jpg"
+                platform_cat_id = 1 if platform == "PC" else 2
+                type_cat_id = 4 if wallpaper.is_live else 3
+                wallpaper.category.set([platform_cat_id, type_cat_id])
 
-        safe_title = (title or "").strip()
-        for ch in '<>:"|?*\\/\x00':
-            safe_title = safe_title.replace(ch, "")
-        safe_title = safe_title.strip(" .")[:180]
-        if not safe_title:
-            safe_title = uuid.uuid4().hex[:12]
+                tag_objs = self._get_tag_objects(tag_ids, tag_names)
+                wallpaper.tags.set(tag_objs)
 
-        unique_base = f"{token_suffix}_{name_part}"
-        cos_key = f"person_wallpaper/{unique_base}{ext}"
-        thumb_cos_key = f"person_wallpaper/{unique_base}_thumb{ext}"
-        _ext_hint = ext.lstrip(".")
+            data = WallpapersSerializer(wallpaper, context=self.get_serializer_context()).data
+            return ApiResponse(data=data, message="编辑成功（无文件更新）")
 
-        try:
-            file_content = bytes_from_uploaded_image(uploaded_file, quality=100)
-        except Exception as e:
-            logger.error(f"读取上传文件失败: {e}", exc_info=True)
-            return ApiResponse(code=400, message=f"读取文件失败：{e}")
+        # 必须有文件（新增 或 编辑替换）
+        if not uploaded_file:
+            return ApiResponse(code=400, message="请上传文件 file")
 
-        cos_ret = upload_image_to_cos(file_content, cos_key)
-        if not cos_ret:
-            return ApiResponse(code=500, message="上传到云存储失败，请检查 COS 配置")
+        # ====================== 公共上传方法（抽离出来了） ======================
+        upload_result = self._upload_and_get_urls(uploaded_file, token)
+        if not upload_result:
+            return ApiResponse(code=500, message="文件上传失败")
+        file_url, thumb_url, w, h, fmt, is_live, cos_key = upload_result
 
-        file_url = cos_ret["url"]
-
-        if ext == ".mp4":
-            thumb_url = ""
-            w, h = 0, 0
-            pil_fmt = "mp4"
-        else:
-            uploaded_file.seek(0)
-            thumb_content = bytes_from_uploaded_image(uploaded_file, quality=10)
-            thumb_ret = upload_image_to_cos(thumb_content, thumb_cos_key)
-            if thumb_ret:
-                thumb_url = thumb_ret["url"]
-            else:
-                thumb_url = file_url.rsplit(".", 1)[0] + "_thumb." + _ext_hint
-            w, h, pil_fmt = _image_meta_from_bytes(file_content)
-
-        fmt = (pil_fmt or _ext_hint or "").lower()
-        if fmt == "jpeg":
-            fmt = "jpg"
+        # ====================== 分类 ======================
+        platform_cat_id = 1 if platform == "PC" else 2
+        type_cat_id = 4 if is_live else 3
         is_hd = w >= 1920 or h >= 1080 if (w and h) else False
 
-        is_live = (ext == ".mp4")
-        # 确定平台分类 (1:电脑, 2:手机)
-        platform_cat_id = 1 if platform == 'PC' else 2
-        # 确定类型分类 (3:静态, 4:动态), 默认 3
-        type_cat_id = 4 if is_live else 3
-
+        # ====================== 保存/更新 ======================
         try:
             with transaction.atomic():
-                wp = Wallpapers.objects.create(
-                    name=title[:200],
-                    url=file_url[:500],
-                    thumb_url=thumb_url[:500] if thumb_url else None,
-                    width=w or 0,
-                    height=h or 0,
-                    image_format=(fmt[:20] if fmt else None),
-                    description=description,
-                    has_watermark=False,
-                    is_hd=is_hd,
-                    is_live=is_live,
-                    audit_status='pending'
-                )
-                # 同时添加平台分类和类型分类
-                wp.category.add(platform_cat_id, type_cat_id)
+                if wallpaper:
+                    # 编辑：覆盖
+                    wallpaper.name = title[:200]
+                    wallpaper.url = file_url[:500]
+                    wallpaper.thumb_url = thumb_url[:500] if thumb_url else None
+                    wallpaper.width = w or 0
+                    wallpaper.height = h or 0
+                    wallpaper.image_format = fmt[:20] if fmt else None
+                    wallpaper.description = description
+                    wallpaper.is_hd = is_hd
+                    wallpaper.is_live = is_live
+                    wallpaper.audit_status = "pending"
+                    wallpaper.save()
 
-                CustomerWallpaperUpload.objects.create(
-                    wallpaper=wp,
-                    customer_id=customer_id,
-                    cos_key=cos_key[:500] if cos_key else None,
-                )
-                CustomerUser.objects.filter(pk=customer_id).update(
-                    upload_count=F("upload_count") + 1
-                )
-                tag_objs = []
-                for tid in tag_ids:
-                    t = WallpaperTag.objects.filter(pk=tid).first()
-                    if t:
-                        tag_objs.append(t)
-                for nm in tag_names:
-                    nm_clean = nm[:50].strip()
-                    if not nm_clean:
-                        continue
-                    t, _ = WallpaperTag.objects.get_or_create(name=nm_clean)
-                    tag_objs.append(t)
-                dedup = list({t.id: t for t in tag_objs}.values())
-                wp.tags.set(dedup)
+                    wallpaper.category.set([platform_cat_id, type_cat_id])
+
+                    cwu = CustomerWallpaperUpload.objects.filter(wallpaper=wallpaper).first()
+                    if cwu:
+                        cwu.cos_key = cos_key[:500]
+                        cwu.save()
+                else:
+                    # 新建
+                    wallpaper = Wallpapers.objects.create(
+                        name=title[:200],
+                        url=file_url[:500],
+                        thumb_url=thumb_url[:500] if thumb_url else None,
+                        width=w or 0,
+                        height=h or 0,
+                        image_format=fmt[:20] if fmt else None,
+                        description=description,
+                        has_watermark=False,
+                        is_hd=is_hd,
+                        is_live=is_live,
+                        audit_status="pending",
+                    )
+                    wallpaper.category.add(platform_cat_id, type_cat_id)
+
+                    CustomerWallpaperUpload.objects.create(
+                        wallpaper=wallpaper,
+                        customer_id=customer_id,
+                        cos_key=cos_key[:500],
+                    )
+                    CustomerUser.objects.filter(pk=customer_id).update(upload_count=F("upload_count") + 1)
+
+                # 统一处理标签
+                tag_objs = self._get_tag_objects(tag_ids, tag_names)
+                wallpaper.tags.set(tag_objs)
+
         except Exception as e:
-            logger.error(f"保存壁纸记录失败: {e}", exc_info=True)
-            return ApiResponse(code=500, message=f"保存壁纸失败：{e}")
-        data = WallpapersSerializer(
-            wp, context=self.get_serializer_context()
-        ).data
+            logger.error(f"保存壁纸失败: {e}", exc_info=True)
+            return ApiResponse(code=500, message=f"保存失败：{str(e)}")
+
+        data = WallpapersSerializer(wallpaper, context=self.get_serializer_context()).data
         return ApiResponse(
-            data={
-                **data,
-                "cos_key": cos_key,
-                "url": file_url,
-            },
-            message="上传成功",
+            data={**data, "cos_key": cos_key, "url": file_url},
+            message="操作成功",
         )
 
     @extend_schema(
