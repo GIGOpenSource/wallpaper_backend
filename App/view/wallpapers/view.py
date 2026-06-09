@@ -12,7 +12,7 @@ import uuid
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
-from django.db.models import F, Case, When, IntegerField
+from django.db.models import F, Case, When, IntegerField, Q
 from django.db.models.functions import Greatest
 from PIL import Image
 from django.utils import timezone
@@ -2380,54 +2380,69 @@ class WallpapersViewSet(BaseViewSet):
     )
     def my_uploads(self, request):
         token = request.headers.get("token")
-        is_valid, customer_id = CustomTokenTool.verify_customer_token(token)
+        is_valid, token_customer_id = CustomTokenTool.verify_customer_token(token)
 
         target_customer_id = request.query_params.get('customer_id')
-        role = False
+        is_admin = False
 
-        if target_customer_id and request.user and hasattr(request.user, 'role'):
-            role = True
-            # 检查是否为管理员（假设 role 字段存在且为 admin 相关角色）
-            try:
-                customer_id = int(target_customer_id)
-            except Exception as e:
-                return ApiResponse(code=400, message="无效的 customer_id")
-        user_allowed = is_valid and customer_id
-        admin_allowed = role and customer_id
-        if not (user_allowed or admin_allowed):
+        # 先判断是否管理员
+        if request.user and hasattr(request.user, 'role'):
+            # 你可以根据自己的角色判断条件改这里
+            is_admin = True
+
+        # 1. 校验 token 必须有效
+        if not is_valid or not token_customer_id:
             return ApiResponse(code=401, message="客户 Token 无效或已过期")
-        if target_customer_id and user_allowed:
-            customer_id = int(target_customer_id)
-        qs = (
-            CustomerWallpaperUpload.objects
-            .filter(customer_id=customer_id)
-            .select_related("wallpaper")
-            .prefetch_related("wallpaper__tags", "wallpaper__category")
-            .order_by("-created_at")
-        )
 
+        # 2. 处理目标 customer_id
+        if target_customer_id:
+            try:
+                target_customer_id = int(target_customer_id)
+            except:
+                return ApiResponse(code=400, message="无效的 customer_id")
+        else:
+            # 不传 ID 默认查看自己
+            target_customer_id = token_customer_id
+
+        # ====================== 核心权限判断 ======================
+        is_other_user = (token_customer_id != target_customer_id)
+        view_others_wallpaper = is_other_user and not is_admin
+
+        # ====================== 构建查询 ======================
+        qs = CustomerWallpaperUpload.objects.filter(
+            customer_id=target_customer_id
+        ).select_related("wallpaper").prefetch_related(
+            "wallpaper__tags", "wallpaper__category"
+        ).order_by("-created_at")
+
+        # ====================== 场景1：查看别人的上传，过滤审核状态 ======================
+        if view_others_wallpaper:
+            qs = qs.filter(
+                Q(wallpaper__audit_status__isnull=True) |
+                Q(wallpaper__audit_status='') |
+                Q(wallpaper__audit_status='approved')
+            )
+
+        # 平台筛选
         platform = request.query_params.get("platform", "").upper()
         if platform == 'PC':
             qs = qs.filter(wallpaper__category__id=1)
         elif platform == 'PHONE':
             qs = qs.filter(wallpaper__category__id=2)
 
+        # 分页
         page = self.paginate_queryset(qs)
         if page is not None:
-            # 序列化壁纸数据
             wallpapers = [item.wallpaper for item in page]
             serializer = WallpapersSerializer(
-                wallpapers,
-                many=True,
-                context=self.get_serializer_context(),
+                wallpapers, many=True, context=self.get_serializer_context()
             )
             return self.get_paginated_response(serializer.data)
 
+        # 不分页
         wallpapers = [item.wallpaper for item in qs]
         data = WallpapersSerializer(
-            wallpapers,
-            many=True,
-            context=self.get_serializer_context(),
+            wallpapers, many=True, context=self.get_serializer_context()
         ).data
         return ApiResponse(data=data, message="获取上传列表成功")
 
