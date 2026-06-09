@@ -1,4 +1,3 @@
-from packaging.utils import _
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.permissions import BasePermission
 
@@ -50,7 +49,7 @@ class IsAdmin(BasePermission):
             else:
                 raise AuthenticationFailed({"code": 401, "message": "管理员role权限不够"})
         except User.DoesNotExist:
-            raise AuthenticationFailed(_('token对应的管理员不存在'))
+            raise AuthenticationFailed(('token对应的管理员不存在'))
 
 class IsTokenValid(BasePermission):
     """
