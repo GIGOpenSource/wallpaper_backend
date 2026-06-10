@@ -2699,7 +2699,7 @@ class WallpapersViewSet(BaseViewSet):
 
                     # 标签：有则更新（传了 tag_ids 或 tag_names 才更新）
                     if tag_ids or tag_names:
-                        tag_objs = self._get_tag_objects(tag_ids, tag_names)
+                        tag_objs = _get_tag_objects(tag_ids, tag_names)
                         wallpaper.tags.set(tag_objs)
 
                 else:
