@@ -586,7 +586,7 @@ class WallpapersViewSet(BaseViewSet):
             if self.request.user.role in ['admin', 'operator', 'super_admin']:
                 is_admin = True
         if not is_admin:
-            queryset = queryset.exclude(audit_status='rejected')
+            queryset = queryset.exclude(audit_status__in=['rejected', 'pending'])
         else:
             audit_status = self.request.query_params.get("audit_status", "").strip()
             if audit_status and audit_status in ['pending', 'approved', 'rejected']:
@@ -1239,16 +1239,23 @@ class WallpapersViewSet(BaseViewSet):
             },
             message="列表获取成功"
         )
-
-
-
-
     def destroy(self, request, *args, **kwargs):
         try:
-            instance = self.get_object()
-            wallpaper_id = instance.id
-            # 在删除前，先扣减相关用户计数
-            _decrement_user_counters_on_wallpaper_delete([wallpaper_id])
+            # 1. 先获取 ID
+            wallpaper_id = kwargs.get('pk')
+
+            # 2. 获取实例（用于日志拿 name）
+            instance = self.queryset.filter(pk=wallpaper_id).first()
+
+            if not instance:
+                return ApiResponse(code=404, message=f"{self.queryset.model.__name__}不存在")
+
+            # 3. 先把要记录的日志信息存下来（删除后就拿不到了）
+            target_name = instance.name
+
+            # 4. 执行删除（会自动删除所有级联表）
+            self.queryset.filter(pk=wallpaper_id).delete()
+
             # 执行物理删除
             self.perform_destroy(instance)
             log_operation(
@@ -1256,8 +1263,8 @@ class WallpapersViewSet(BaseViewSet):
                 module="壁纸管理",
                 operation_type="delete",
                 target_id=wallpaper_id,
-                target_name=instance.name,
-                description=f"删除壁纸：{instance.name}",
+                target_name=target_name,
+                description=f"删除壁纸：{target_name}",
                 request=request
             )
             return ApiResponse(message="删除成功")
