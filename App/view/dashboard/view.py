@@ -24,7 +24,7 @@ from models.models import (
     WallpaperLike,
     WallpaperCollection,
     DashboardStats,
-    WallpaperCategory,
+    WallpaperCategory, CustomerWallpaperUpload,
 )
 
 
@@ -566,6 +566,9 @@ class CustomerUserViewSet(BaseViewSet):
         
         return ApiResponse(data=serializer.data, message="用户信息更新成功")
 
+
+
+
     def list(self, request, *args, **kwargs):
         """
         管理员获取用户列表（支持分页、筛选、排序）
@@ -619,10 +622,17 @@ class CustomerUserViewSet(BaseViewSet):
         return ApiResponse(data=serializer.data, message="用户列表获取成功")
 
     def retrieve(self, request, *args, **kwargs):
-        """
-        获取客户用户详情
-        """
         instance = self.get_object()
+        # 计算：该用户收藏的壁纸总数
+        collect_count = WallpaperCollection.objects.filter(user=instance).exclude(
+            wallpaper__audit_status__in=['rejected', 'pending']
+        ).count()
+        # 计算：该用户上传的壁纸总数
+        upload_count = CustomerWallpaperUpload.objects.filter(customer=instance).exclude(
+            wallpaper__audit_status__in=['rejected', 'pending']
+        ).count()
+        instance.upload_count = upload_count
+        instance.collection_count = collect_count
+        instance.save(update_fields=['upload_count', 'collection_count'])
         serializer = self.get_serializer(instance)
-        return ApiResponse(data=serializer.data, message="用户详情获取成功")
-
+        return ApiResponse(data=serializer.data, message="获取用户详情成功")

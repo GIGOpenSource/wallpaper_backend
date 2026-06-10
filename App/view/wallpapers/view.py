@@ -2041,9 +2041,6 @@ class WallpapersViewSet(BaseViewSet):
             # 删除壁纸本身
             queryset.delete()
 
-        # 3. 扣减相关用户计数（复用通用函数）
-        counter_result = _decrement_user_counters_on_wallpaper_delete(valid_ids)
-
         log_operation(
             operator=request.user,
             module="壁纸管理",
@@ -2053,17 +2050,15 @@ class WallpapersViewSet(BaseViewSet):
             request=request,
             extra_data={
                 "wallpaper_ids": valid_ids,
-                "wallpaper_names": wallpaper_names[:10],  # 只记录前10个名称
-                "affected_users": counter_result['affected_users']
+                "wallpaper_names": wallpaper_names[:10],
             }
         )
         return ApiResponse(
             data={
                 "deleted_count": deleted_count,
                 "wallpaper_ids": valid_ids,
-                "affected_users": counter_result['affected_users']
             },
-            message=f"批量删除成功，共删除 {deleted_count} 条，影响 {counter_result['affected_users']} 个用户"
+            message=f"批量删除成功，共删除 {deleted_count} 条"
         )
 
     @extend_schema(summary="记录一次下载并返回累计下载量（需客户 Token）")
@@ -2387,7 +2382,7 @@ class WallpapersViewSet(BaseViewSet):
         target_customer_id = request.query_params.get('customer_id')
         role = False
 
-        # 你原来的管理员判断逻辑 🔒
+        # 你原来的管理员判断逻辑
         if target_customer_id and request.user and hasattr(request.user, 'role'):
             role = True
             try:
@@ -2421,12 +2416,7 @@ class WallpapersViewSet(BaseViewSet):
 
         # 场景1：查看别人 → 只显示 null / 空串 / approved
         if view_others_wallpaper:
-            qs = qs.filter(
-                Q(wallpaper__audit_status__isnull=True) |
-                Q(wallpaper__audit_status='') |
-                Q(wallpaper__audit_status='approved')
-            )
-
+            qs = qs.exclude(wallpaper__audit_status__in=['rejected', 'pend-ing'])
         # 平台筛选
         platform = request.query_params.get("platform", "").upper()
         if platform == 'PC':
