@@ -18,7 +18,7 @@ from PIL import Image
 from django.utils import timezone
 
 from App.view.wallpapers.search_models.search_models import TAG_MAPPING
-from App.view.wallpapers.tool.uploader_tool import _image_meta_from_bytes
+from App.view.wallpapers.tool.uploader_tool import _image_meta_from_bytes, _upload_and_get_urls, _get_tag_objects
 from tool.base_views import BaseViewSet
 from tool.middleware import logger
 from tool.permissions import IsCustomerTokenValid, IsOwnerOrAdmin, IsAdmin
@@ -2650,7 +2650,7 @@ class WallpapersViewSet(BaseViewSet):
         cos_key = None
 
         if uploaded_file:
-            upload_result = self._upload_and_get_urls(uploaded_file, token)
+            upload_result = _upload_and_get_urls(uploaded_file, token)
             if not upload_result:
                 return ApiResponse(code=500, message="文件上传失败")
             file_url, thumb_url, w, h, fmt, is_live, cos_key = upload_result
@@ -2731,7 +2731,7 @@ class WallpapersViewSet(BaseViewSet):
 
                     # 标签处理
                     if tag_ids or tag_names:
-                        tag_objs = self._get_tag_objects(tag_ids, tag_names)
+                        tag_objs = _get_tag_objects(tag_ids, tag_names)
                         wallpaper.tags.set(tag_objs)
 
         except Exception as e:

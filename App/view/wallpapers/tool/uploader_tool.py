@@ -36,7 +36,7 @@ def _image_meta_from_bytes(content: bytes):
 
 
 # ====================== 抽离的公共上传方法 ======================
-def _upload_and_get_urls(self, uploaded_file, token):
+def _upload_and_get_urls(uploaded_file, token):
     """
     上传图片/视频到 COS，返回：url, thumb_url, w, h, fmt, is_live, cos_key
     """
@@ -87,8 +87,8 @@ def _upload_and_get_urls(self, uploaded_file, token):
     return file_url, thumb_url, w, h, fmt, is_live, cos_key
 
 # ====================== 抽离：标签获取 ======================
-def _get_tag_objects(self, tag_ids, tag_names):
-
+def _get_tag_objects(tag_ids, tag_names):
+    #0
     tag_objs = []
     for tid in tag_ids:
         t = WallpaperTag.objects.filter(pk=tid).first()
