@@ -73,12 +73,62 @@ class WallpaperTagViewSet(BaseViewSet):
         return queryset.order_by("-created_at")
 
     def list(self, request, *args, **kwargs):
+        is_admin = False
         try:
             queryset = self.filter_queryset(self.get_queryset())
             page = self.paginate_queryset(queryset)
             if page is not None:
                 serializer = self.get_serializer(page, many=True)
-                return self.get_paginated_response(serializer.data)  # 关键点
+                data = serializer.data
+            else:
+                serializer = self.get_serializer(queryset, many=True)
+                data = serializer.data
+            if hasattr(request, 'user') and request.user:
+                from models.models import User
+                if isinstance(request.user, User) and request.user.role in ['admin', 'operator', 'super_admin']:
+                    is_admin = True
+            if is_admin:
+                # 获取当前页标签 ID
+                tag_ids = [item['id'] for item in data]
+                if tag_ids:
+                    from django.db.models import Count, Case, When, IntegerField
+
+                    # ==============================================
+                    # 核心优化：一次查询，拿到 total / pc / phone 三种计数
+                    # ==============================================
+                    tag_stats = Wallpapers.objects.filter(
+                        tags__id__in=tag_ids,
+                    ).values('tags__id').annotate(
+                        # 总壁纸数
+                        total_count=Count('id', distinct=True),
+                        # PC 端数量（category_id=1）
+                        pc_count=Count(Case(
+                            When(category__id=1, then='id'),
+                            output_field=IntegerField()
+                        ), distinct=True),
+                        # 手机端数量（category_id=2）
+                        phone_count=Count(Case(
+                            When(category__id=2, then='id'),
+                            output_field=IntegerField()
+                        ), distinct=True)
+                    ).values('tags__id', 'total_count', 'pc_count', 'phone_count')
+                    # 构建映射字典
+                    stat_dict = {
+                        item['tags__id']: {
+                            'wallpaper_count': item['total_count'],
+                            'pc_count': item['pc_count'],
+                            'phone_count': item['phone_count']
+                        }
+                        for item in tag_stats
+                    }
+                    # 覆盖到返回数据
+                    for item in data:
+                        tag_id = item['id']
+                        stats = stat_dict.get(tag_id, {})
+                        item['wallpaper_count'] = stats.get('wallpaper_count', 0)
+                        item['pc_count'] = stats.get('pc_count', 0)
+                        item['phone_count'] = stats.get('phone_count', 0)
+                return self.get_paginated_response(data)
             serializer = self.get_serializer(queryset, many=True)
             return ApiResponse(code=200, data=serializer.data, message="列表获取成功")
         except Exception as e:
