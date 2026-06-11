@@ -14,7 +14,6 @@ services:
   db:
     image: postgres:16-alpine
     container_name: wallpaper_db
-    shm_size: 1g
     environment:
       - POSTGRES_DB=wallpaper_db
       - POSTGRES_USER=wallpaper123
@@ -27,6 +26,10 @@ services:
     networks:
       - wallpaper_net
     restart: unless-stopped
+    shm_size: 1g
+    cpus: '3'
+    mem_limit: 1g
+    mem_reservation: 1g
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U wallpaper123 -d wallpaper_db"]
       interval: 10s
