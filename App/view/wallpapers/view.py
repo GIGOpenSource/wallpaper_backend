@@ -425,7 +425,9 @@ class CollectionItemSerializer(serializers.ModelSerializer):
             OpenApiParameter(name="name", type=str, required=False, description="壁纸名称搜索"),
             OpenApiParameter(name="tag_id", type=str, required=False,
                              description="标签 ID 查询，支持单个或多个（逗号分隔）"),
-            OpenApiParameter(name="tag_name", type=str, required=False,
+            OpenApiParameter(name="tag_name"
+                                  ""
+                                  "", type=str, required=False,
                              description="标签名称搜索"),
             OpenApiParameter(name="category_id", type=str, required=False,
                              description="分类 ID 筛选，支持单个或多个（逗号分隔）"),
