@@ -1,4 +1,4 @@
-from check_wallpapers.KdlProxy import KdlTunnelProxy
+from KdlProxy import KdlTunnelProxy
 class ProxyTester:
     def __init__(self):
         self.proxy = KdlTunnelProxy()

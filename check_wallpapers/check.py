@@ -8,7 +8,7 @@ import logging
 import sys
 from typing import List, Tuple
 
-from check_wallpapers.KdlProxy import KdlTunnelProxy
+from KdlProxy import KdlTunnelProxy
 
 # 导入独立代理类
 
