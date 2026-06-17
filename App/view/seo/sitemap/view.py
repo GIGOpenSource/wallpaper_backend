@@ -560,8 +560,9 @@ class SitemapURLViewSet(BaseViewSet):
             total_wallpapers = stats['total'] or 0
             wallpaper_lastmod = stats['latest_update'].replace(microsecond=0).isoformat() if stats['latest_update'] else ''
 
-            # 每个 sitemap 最多 50000 条
-            sitemap_count = (total_wallpapers + 9999) // 10000
+            # 每个 sitemap 最多 30000 条
+            page_size = 30000
+            sitemap_count = (total_wallpapers + page_size - 1) // page_size
 
             for i in range(1, sitemap_count + 1):
                 url = f"{site_domain}/detail-sitemap-{i:02d}.xml"
@@ -596,59 +597,85 @@ class SitemapURLViewSet(BaseViewSet):
         return HttpResponse(sitemap.content, content_type='application/xml; charset=utf-8')
 
     @extend_schema(
-        summary="获取壁纸详情 Sitemap（动态生成）",
-        description="动态查询数据库生成壁纸详情页 sitemap，每页最多 50000 条",
-        parameters=[
-            OpenApiParameter(name="page", type=int, required=True, description="页码，从1开始"),
-        ],
+        summary="生成壁纸详情 Sitemap 文件",
+        description="批量生成所有详情页 sitemap 静态文件，保存到 /www/project/wallpaper/sitemap_files/ 目录",
         responses={
-            200: "XML 内容",
-            400: "参数错误"
+            200: "生成结果"
         }
     )
-    @action(detail=False, methods=['get'], url_path='get-detail-xml', permission_classes=[])
-    def get_detail_xml(self, request):
-        """动态生成壁纸详情页 Sitemap XML"""
-        from django.http import HttpResponse
+    @action(detail=False, methods=['post'], url_path='generate-detail-sitemaps')
+    def generate_detail_sitemaps(self, request):
+        """批量生成壁纸详情页 Sitemap 静态文件"""
+        import os
         from models.models import Wallpapers
 
-        # 获取页码参数
-        page = request.query_params.get('page', '').strip()
-        if not page or not page.isdigit() or int(page) < 1:
-            return ApiResponse(code=400, message="请提供有效的 page 参数（从1开始）")
-
-        page = int(page)
-        page_size = 10000  # 每个 sitemap 最多 50000 条
-
-        # 计算偏移量
-        start_offset = (page - 1) * page_size
-        end_offset = start_offset + page_size
-
-        # 查询有效的壁纸 ID（按 ID 升序）
-        wallpaper_ids = list(
-            Wallpapers.objects.exclude(
-                audit_status__in=['rejected', 'pending']
-            ).order_by('id').values_list('id', flat=True)[start_offset:end_offset]
-        )
+        # 文件保存目录
+        sitemap_dir = '/www/project/wallpaper/sitemap_files'
+        os.makedirs(sitemap_dir, exist_ok=True)
 
         # 网站域名
         site_domain = 'https://www.markwallpapers.com'
 
-        # 生成 XML
-        xml_content = '<?xml version="1.0" encoding="UTF-8"?>\n'
-        xml_content += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        # 每个 sitemap 最多 30000 条
+        page_size = 30000
 
-        for wallpaper_id in wallpaper_ids:
-            url = f"{site_domain}/markwallpapers/wallpaper/{wallpaper_id}"
-            xml_content += '  <url>\n'
-            xml_content += f'    <loc>{url}</loc>\n'
-            xml_content += '    <changefreq>weekly</changefreq>\n'
-            xml_content += '    <priority>0.6</priority>\n'
-            xml_content += '  </url>\n'
+        # 查询所有有效的壁纸 ID（按 ID 升序）
+        all_ids = list(
+            Wallpapers.objects.exclude(
+                audit_status__in=['rejected', 'pending']
+            ).order_by('id').values_list('id', flat=True)
+        )
 
-        xml_content += '</urlset>'
+        total_count = len(all_ids)
+        if total_count == 0:
+            return ApiResponse(code=400, message="没有有效的壁纸数据")
 
-        return HttpResponse(xml_content, content_type='application/xml; charset=utf-8')
+        # 计算需要多少个 sitemap 文件
+        sitemap_count = (total_count + page_size - 1) // page_size
+
+        generated_files = []
+
+        for page_num in range(1, sitemap_count + 1):
+            start_offset = (page_num - 1) * page_size
+            end_offset = start_offset + page_size
+            wallpaper_ids = all_ids[start_offset:end_offset]
+
+            # 生成 XML
+            xml_content = '<?xml version="1.0" encoding="UTF-8"?>\n'
+            xml_content += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+
+            for wallpaper_id in wallpaper_ids:
+                url = f"{site_domain}/markwallpapers/wallpaper/{wallpaper_id}"
+                xml_content += '  <url>\n'
+                xml_content += f'    <loc>{url}</loc>\n'
+                xml_content += '    <changefreq>weekly</changefreq>\n'
+                xml_content += '    <priority>0.6</priority>\n'
+                xml_content += '  </url>\n'
+
+            xml_content += '</urlset>'
+
+            # 保存文件
+            filename = f'detail-sitemap-{page_num:02d}.xml'
+            filepath = os.path.join(sitemap_dir, filename)
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write(xml_content)
+
+            generated_files.append({
+                'filename': filename,
+                'url_count': len(wallpaper_ids),
+                'file_size': len(xml_content.encode('utf-8'))
+            })
+
+        return ApiResponse(
+            data={
+                'total_wallpapers': total_count,
+                'sitemap_count': sitemap_count,
+                'page_size': page_size,
+                'files': generated_files,
+                'save_dir': sitemap_dir
+            },
+            message=f"成功生成 {sitemap_count} 个 sitemap 文件，共 {total_count} 条壁纸"
+        )
 
 
     @extend_schema(
