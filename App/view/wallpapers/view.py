@@ -760,7 +760,7 @@ class WallpapersViewSet(BaseViewSet):
         total_count = base_queryset.count()
         total_pages = (total_count + page_size - 1) // page_size if page_size > 0 else 0
         
-        # 计算推荐池能覆盖的最大页数（假设推荐池最多2000张）
+        # 计算推荐池能覆盖的最大页数（假设推荐池最多2000张11）
         max_pool_pages = 2000 // page_size
         
         if page_num <= max_pool_pages:
