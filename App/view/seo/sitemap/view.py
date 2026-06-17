@@ -561,7 +561,7 @@ class SitemapURLViewSet(BaseViewSet):
             wallpaper_lastmod = stats['latest_update'].replace(microsecond=0).isoformat() if stats['latest_update'] else ''
 
             # 每个 sitemap 最多 50000 条
-            sitemap_count = (total_wallpapers + 49999) // 50000
+            sitemap_count = (total_wallpapers + 9999) // 10000
 
             for i in range(1, sitemap_count + 1):
                 url = f"{site_domain}/detail-sitemap-{i:02d}.xml"
