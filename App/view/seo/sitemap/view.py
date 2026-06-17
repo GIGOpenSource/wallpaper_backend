@@ -534,9 +534,9 @@ class SitemapURLViewSet(BaseViewSet):
                 if url_path:
                     url = f"{site_domain}{url_path}"
                     lastmod = sitemap_file.created_at
-                    # 格式化为 ISO 8601 格式
+                    # 格式化为 ISO 8601 格式，移除微秒
                     if hasattr(lastmod, 'isoformat'):
-                        lastmod = lastmod.isoformat()
+                        lastmod = lastmod.replace(microsecond=0).isoformat()
                     elif isinstance(lastmod, str):
                         lastmod = lastmod.split('.')[0].replace(' ', 'T')
 
@@ -546,7 +546,6 @@ class SitemapURLViewSet(BaseViewSet):
                     xml_content += '  </sitemap>\n'
 
             # 2. 添加详情页 sitemap（动态计算数量）
-            # 查询有效的壁纸总数
             from models.models import Wallpapers
             from django.db.models import Count, Max
 
@@ -559,7 +558,7 @@ class SitemapURLViewSet(BaseViewSet):
             )
 
             total_wallpapers = stats['total'] or 0
-            wallpaper_lastmod = stats['latest_update'].isoformat() if stats['latest_update'] else ''
+            wallpaper_lastmod = stats['latest_update'].replace(microsecond=0).isoformat() if stats['latest_update'] else ''
 
             # 每个 sitemap 最多 50000 条
             sitemap_count = (total_wallpapers + 49999) // 50000
