@@ -528,25 +528,49 @@ class SitemapURLViewSet(BaseViewSet):
             xml_content = '<?xml version="1.0" encoding="UTF-8"?>\n'
             xml_content += '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
 
+            # 1. 添加常规 sitemap
             for content_type, sitemap_file in type_map.items():
                 url_path = url_path_mapping.get(content_type)
                 if url_path:
                     url = f"{site_domain}{url_path}"
                     lastmod = sitemap_file.created_at
-                    # 格式化为 ISO 8601 格式：2026-06-17T08:25:07+00:00
+                    # 格式化为 ISO 8601 格式
                     if hasattr(lastmod, 'isoformat'):
                         lastmod = lastmod.isoformat()
                     elif isinstance(lastmod, str):
-                        # 移除微秒部分并替换空格为 T
                         lastmod = lastmod.split('.')[0].replace(' ', 'T')
-                        # 确保有时区信息
-                        if '+' not in lastmod and lastmod.endswith('Z'):
-                            lastmod = lastmod[:-1] + '+00:00'
 
                     xml_content += '  <sitemap>\n'
                     xml_content += f'    <loc>{url}</loc>\n'
                     xml_content += f'    <lastmod>{lastmod}</lastmod>\n'
                     xml_content += '  </sitemap>\n'
+
+            # 2. 添加详情页 sitemap（动态计算数量）
+            # 查询有效的壁纸总数
+            from models.models import Wallpapers
+            from django.db.models import Count, Max
+
+            # 一次查询获取总数和最新更新时间
+            stats = Wallpapers.objects.exclude(
+                audit_status__in=['rejected', 'pending']
+            ).aggregate(
+                total=Count('id'),
+                latest_update=Max('updated_at')
+            )
+
+            total_wallpapers = stats['total'] or 0
+            wallpaper_lastmod = stats['latest_update'].isoformat() if stats['latest_update'] else ''
+
+            # 每个 sitemap 最多 50000 条
+            sitemap_count = (total_wallpapers + 49999) // 50000
+
+            for i in range(1, sitemap_count + 1):
+                url = f"{site_domain}/detail-sitemap-{i:02d}.xml"
+                xml_content += '  <sitemap>\n'
+                xml_content += f'    <loc>{url}</loc>\n'
+                if wallpaper_lastmod:
+                    xml_content += f'    <lastmod>{wallpaper_lastmod}</lastmod>\n'
+                xml_content += '  </sitemap>\n'
 
             xml_content += '</sitemapindex>'
 
@@ -571,6 +595,61 @@ class SitemapURLViewSet(BaseViewSet):
             return HttpResponse(empty_xml, content_type='application/xml; charset=utf-8')
 
         return HttpResponse(sitemap.content, content_type='application/xml; charset=utf-8')
+
+    @extend_schema(
+        summary="获取壁纸详情 Sitemap（动态生成）",
+        description="动态查询数据库生成壁纸详情页 sitemap，每页最多 50000 条",
+        parameters=[
+            OpenApiParameter(name="page", type=int, required=True, description="页码，从1开始"),
+        ],
+        responses={
+            200: "XML 内容",
+            400: "参数错误"
+        }
+    )
+    @action(detail=False, methods=['get'], url_path='get-detail-xml', permission_classes=[])
+    def get_detail_xml(self, request):
+        """动态生成壁纸详情页 Sitemap XML"""
+        from django.http import HttpResponse
+        from models.models import Wallpapers
+
+        # 获取页码参数
+        page = request.query_params.get('page', '').strip()
+        if not page or not page.isdigit() or int(page) < 1:
+            return ApiResponse(code=400, message="请提供有效的 page 参数（从1开始）")
+
+        page = int(page)
+        page_size = 50000  # 每个 sitemap 最多 50000 条
+
+        # 计算偏移量
+        start_offset = (page - 1) * page_size
+        end_offset = start_offset + page_size
+
+        # 查询有效的壁纸 ID（按 ID 升序）
+        wallpaper_ids = list(
+            Wallpapers.objects.filter(
+                audit_status__in=[None, 'approved']
+            ).order_by('id').values_list('id', flat=True)[start_offset:end_offset]
+        )
+
+        # 网站域名
+        site_domain = 'https://www.markwallpapers.com'
+
+        # 生成 XML
+        xml_content = '<?xml version="1.0" encoding="UTF-8"?>\n'
+        xml_content += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+
+        for wallpaper_id in wallpaper_ids:
+            url = f"{site_domain}/markwallpapers/wallpaper/{wallpaper_id}"
+            xml_content += '  <url>\n'
+            xml_content += f'    <loc>{url}</loc>\n'
+            xml_content += '    <changefreq>weekly</changefreq>\n'
+            xml_content += '    <priority>0.6</priority>\n'
+            xml_content += '  </url>\n'
+
+        xml_content += '</urlset>'
+
+        return HttpResponse(xml_content, content_type='application/xml; charset=utf-8')
 
 
     @extend_schema(
