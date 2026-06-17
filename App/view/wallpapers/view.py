@@ -2060,11 +2060,11 @@ class WallpapersViewSet(BaseViewSet):
         # 解析 is_hd 和 is_live（可选，不传则自动判断）
         is_hd_param = request.data.get("is_hd")
         is_live_param = request.data.get("is_live")
-        audit_status = request.data.get("audit_status", "pending").strip()
+        # audit_status = request.data.get("audit_status", "pending").strip()
         audit_remark = (request.data.get("audit_remark") or "").strip() or None
         # 验证审核状态
-        if audit_status and audit_status not in ['pending', 'approved', 'rejected']:
-            return ApiResponse(code=400, message="审核状态无效，可选值：pending/approved/rejected")
+        # if audit_status and audit_status not in ['pending', 'approved', 'rejected']:
+        #     return ApiResponse(code=400, message="审核状态无效，可选值：pending/approved/rejected")
         # 解析分类和标签
         category_ids = _parse_tag_ids(request.data.get("category_ids"))
         tag_ids = _parse_tag_ids(request.data.get("tag_ids"))
@@ -2148,9 +2148,10 @@ class WallpapersViewSet(BaseViewSet):
                     has_watermark=has_watermark,
                     is_hd=is_hd,
                     is_live=is_live,
-                    audit_status=audit_status if audit_status else 'pending',
+                    # audit_status=audit_status if audit_status else 'pending',
                     audit_remark=audit_remark,
-                    audited_at=timezone.now() if audit_status in ['approved', 'rejected'] else None
+                    # audited_at=timezone.now() if audit_status in ['approved', 'rejected'] else None
+                    audited_at=timezone.now()
                 )
 
                 # 添加分类（如果提供了）
