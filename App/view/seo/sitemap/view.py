@@ -618,7 +618,7 @@ class SitemapURLViewSet(BaseViewSet):
             return ApiResponse(code=400, message="请提供有效的 page 参数（从1开始）")
 
         page = int(page)
-        page_size = 50000  # 每个 sitemap 最多 50000 条
+        page_size = 10000  # 每个 sitemap 最多 50000 条
 
         # 计算偏移量
         start_offset = (page - 1) * page_size
