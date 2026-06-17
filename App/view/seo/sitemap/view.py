@@ -481,62 +481,89 @@ class SitemapURLViewSet(BaseViewSet):
         )
 
     @extend_schema(
-        summary="获取当前应用的 Sitemap XML",
-        description="获取标记为 applied=True 的 Sitemap XML 内容。添加参数 ?raw=1 可返回纯 XML 格式供 Nginx 代理",
+        summary="获取 Sitemap XML（供 Nginx 代理）",
+        description="返回 Sitemap XML 内容，供 Nginx 代理使用。支持 ?type=article 返回文章sitemap，?index=1 返回 sitemap_index.xml",
         parameters=[
             OpenApiParameter(name="raw", type=int, required=False, description="设置为 1 时返回纯 XML 格式"),
+            OpenApiParameter(name="index", type=int, required=False, description="设置为 1 时返回 sitemap_index.xml"),
+            OpenApiParameter(name="type", type=str, required=False,
+                             description="Sitemap 类型：article/category/tag/page"),
         ],
         responses={
-            200: {
-                "type": "object",
-                "properties": {
-                    "code": {"type": "integer", "example": 200},
-                    "data": {
-                        "type": "object",
-                        "properties": {
-                            "id": {"type": "integer"},
-                            "title": {"type": "string"},
-                            "content": {"type": "string"},
-                            "url_count": {"type": "integer"}
-                        }
-                    },
-                    "message": {"type": "string"}
-                }
-            },
-            404: "未找到已应用的 Sitemap"
+            200: "XML 内容",
+            404: "未找到 Sitemap"
         }
     )
     @action(detail=False, methods=['get'], url_path='get-sitemap-xml', permission_classes=[])
     def get_sitemap_xml(self, request):
-        """获取当前应用的 Sitemap XML（支持 raw 纯文本模式）"""
+        """获取 Sitemap XML（供 Nginx 代理）"""
         from django.http import HttpResponse
 
+        # 网站域名
+        site_domain = 'https://www.markwallpapers.com'
+
+        # ========== 处理 index 模式：返回 sitemap_index.xml ==========
+        if request.query_params.get('index') == '1':
+            # 查询所有已启用的 sitemap_file
+            sitemap_files = SiteConfig.objects.filter(
+                config_type='sitemap_file',
+                is_active=True
+            ).order_by('-created_at')
+
+            # 按 content_type 分组，每种类型只取最新的一个
+            type_map = {}
+            for sf in sitemap_files:
+                ct = sf.config_value.get('content_type')
+                if ct and ct not in type_map:
+                    type_map[ct] = sf
+
+            # URL路径映射
+            url_path_mapping = {
+                'article': '/sitemap-article.xml',
+                'category': '/sitemap-category.xml',
+                'tag': '/sitemap-tag.xml',
+                'page': '/sitemap-page.xml',
+            }
+
+            xml_content = '<?xml version="1.0" encoding="UTF-8"?>\n'
+            xml_content += '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+
+            for content_type, sitemap_file in type_map.items():
+                url_path = url_path_mapping.get(content_type)
+                if url_path:
+                    url = f"{site_domain}{url_path}"
+                    lastmod = sitemap_file.created_at
+                    if isinstance(lastmod, str):
+                        lastmod = lastmod[:19]
+
+                    xml_content += '  <sitemap>\n'
+                    xml_content += f'    <loc>{url}</loc>\n'
+                    xml_content += f'    <lastmod>{lastmod}</lastmod>\n'
+                    xml_content += '  </sitemap>\n'
+
+            xml_content += '</sitemapindex>'
+
+            return HttpResponse(xml_content, content_type='application/xml; charset=utf-8')
+
+        # ========== 处理普通模式：返回具体的 sitemap 文件 ==========
+        sitemap_type = request.query_params.get('type', '').strip().lower()
+
+        if not sitemap_type or sitemap_type not in ['article', 'category', 'tag', 'page']:
+            return ApiResponse(code=400, message="请提供有效的 type 参数（article/category/tag/page）")
+
+        # 查询该类型的最新已启用 sitemap（通过 title 前缀匹配）
         sitemap = SiteConfig.objects.filter(
             config_type='sitemap_file',
-            is_active=True
+            is_active=True,
+            title__startswith=f'{sitemap_type}_'
         ).order_by('-created_at').first()
 
         if not sitemap:
-            # 如果请求 raw，返回空 XML 头
-            if request.query_params.get('raw') == '1':
-                empty_xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>'
-                return HttpResponse(empty_xml, content_type='application/xml; charset=utf-8')
-            return ApiResponse(code=404, message="未找到已应用的 Sitemap")
+            # 返回空 XML
+            empty_xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>'
+            return HttpResponse(empty_xml, content_type='application/xml; charset=utf-8')
 
-        # raw=1 模式：直接返回 XML 内容（供 Nginx 代理）
-        if request.query_params.get('raw') == '1':
-            return HttpResponse(sitemap.content, content_type='application/xml; charset=utf-8')
-
-        # 默认 JSON 模式：供前端调用
-        return ApiResponse(
-            data={
-                'id': sitemap.id,
-                'title': sitemap.title,
-                'content': sitemap.content,
-                'url_count': sitemap.config_value.get('url_count', 0)
-            },
-            message="获取成功"
-        )
+        return HttpResponse(sitemap.content, content_type='application/xml; charset=utf-8')
 
 
     @extend_schema(
@@ -589,17 +616,20 @@ class SitemapURLViewSet(BaseViewSet):
     @action(detail=False, methods=['post'], url_path='generate-xml')
     def generate_xml(self, request):
         """生成 Sitemap XML 并保存到数据库"""
+        from django.conf import settings
+
         content_type = request.data.get('content_type')
         changefreq = request.data.get('changefreq', 'weekly')
         priority = request.data.get('priority', 50)
+
         # 参数验证
         if not content_type or content_type not in ['article', 'category', 'tag', 'page']:
             return ApiResponse(code=400, message="请提供有效的内容类型（article/category/tag/page）")
         if changefreq not in ['always', 'hourly', 'daily', 'weekly', 'monthly', 'yearly', 'never']:
             return ApiResponse(code=400, message="请提供有效的更新频率")
-        # if not isinstance(priority, int) or priority < 0 or priority > 100:
-        #     return ApiResponse(code=400, message="优先级必须在 0-100 之间")
-        priority = priority*10
+
+        priority = priority * 10
+
         # 根据内容类型筛选 sitemap_url 记录
         queryset = SiteConfig.objects.filter(
             config_type='sitemap_url',
@@ -607,44 +637,52 @@ class SitemapURLViewSet(BaseViewSet):
             title=content_type,
             priority=priority
         ).order_by('-priority', '-created_at')
+
         # 生成 XML 内容
         xml_content = '<?xml version="1.0" encoding="UTF-8"?>\n'
         xml_content += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+
         url_count = 0
         for item in queryset:
             url = item.content
             item_changefreq = item.config_value.get('changefreq', changefreq)
             priority_value = item.priority / 10 if item.priority else priority / 10
+
             xml_content += '  <url>\n'
             xml_content += f'    <loc>{url}</loc>\n'
             xml_content += f'    <changefreq>{item_changefreq}</changefreq>\n'
             xml_content += f'    <priority>{priority_value:.1f}</priority>\n'
             xml_content += '  </url>\n'
             url_count += 1
+
         xml_content += '</urlset>'
+
         # 计算文件大小
         file_size = len(xml_content.encode('utf-8'))
-        # 生成文件名：类型_更新频率
-        filename = f"{content_type}_{changefreq}"
-        # 保存到 SiteConfig 表
+
+        # title 格式：类型_更新频率，如 "article_weekly"、"tag_monthly"
+        title = f"{content_type}_{changefreq}"
+
+        # 保存到 SiteConfig 表（config_type 统一为 "sitemap_file"）
         sitemap_config = SiteConfig.objects.create(
             config_type='sitemap_file',
-            title=filename,
+            title=title,
             content=xml_content,
             priority=priority,
             config_value={
                 'changefreq': changefreq,
                 'url_count': url_count,
                 'file_size': file_size,
-                'applied': False,  # 默认未应用
+                'content_type': content_type,
             },
             created_at=timezone.now().isoformat(),
             is_active=True
         )
+
         return ApiResponse(
             data={
                 'id': sitemap_config.id,
-                'title': filename,
+                'title': title,
                 'content_type': content_type,
                 'url_count': url_count,
                 'file_size': file_size
