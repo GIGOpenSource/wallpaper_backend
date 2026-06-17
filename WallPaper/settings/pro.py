@@ -62,7 +62,7 @@ DOWNLOAD_DIR = RESOURCE_DIR / 'downloads'
 if not KEY_DIR.exists():
     KEY_DIR.mkdir()
 if not LOG_DIR.exists():
-    LOG_DIR.mkdir()
+    CurrentDayLog.mkdir(exist_ok=True)
 if not CurrentDayLog.exists():
     CurrentDayLog.mkdir()
 if not RESOURCE_DIR.exists():
