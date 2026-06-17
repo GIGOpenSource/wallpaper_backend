@@ -9,7 +9,7 @@ import io
 import json
 import os
 import uuid
-
+from models.models import User
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
 from django.db.models import F, Case, When, IntegerField, Q
@@ -581,7 +581,6 @@ class WallpapersViewSet(BaseViewSet):
         """
         基础查询集：只处理审核状态过滤（管理员/普通用户通用）
         """
-        from models.models import User
         queryset = super().get_queryset()
         is_admin = False
         if hasattr(self.request, 'user') and isinstance(self.request.user, User):
@@ -600,13 +599,8 @@ class WallpapersViewSet(BaseViewSet):
         """
         壁纸列表接口：管理员与普通用户完全分离
         """
-        from models.models import User
-        
-        # 检测是否为 Googlebot，如果是则使用快速响应
-        # user_agent = request.META.get('HTTP_USER_AGENT', '').lower()
-        # if 'googlebot' in user_agent:
-        #     return self._list_for_googlebot(request)
-        
+
+
         is_admin = hasattr(request, 'user') and isinstance(request.user, User) and \
                    request.user.role in ['admin', 'operator', 'super_admin']
         customer_id = self.get_serializer_context().get("customer_id")
@@ -698,8 +692,8 @@ class WallpapersViewSet(BaseViewSet):
         
         # ---- 先应用平台筛选 ----
         base_queryset = self.filter_queryset(self.get_queryset())
-        base_queryset = base_queryset.exclude(audit_status='rejected')
-        
+        print(base_queryset.query)
+        print(self.get_queryset().count())
         if platform == 'PC':
             base_queryset = base_queryset.filter(category__id=1).distinct()
         elif platform == 'PHONE':
@@ -1370,7 +1364,6 @@ class WallpapersViewSet(BaseViewSet):
         # 如果是非管理员，不允许修改审核相关字段
         is_admin = False
         if hasattr(request, 'user') and request.user:
-            from models.models import User
             if isinstance(request.user, User) and request.user.role in ['admin', 'operator', 'super_admin']:
                 is_admin = True
 
