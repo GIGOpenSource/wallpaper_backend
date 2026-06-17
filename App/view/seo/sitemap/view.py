@@ -626,8 +626,8 @@ class SitemapURLViewSet(BaseViewSet):
 
         # 查询有效的壁纸 ID（按 ID 升序）
         wallpaper_ids = list(
-            Wallpapers.objects.filter(
-                audit_status__in=[None, 'approved']
+            Wallpapers.objects.exclude(
+                audit_status__in=['rejected', 'pending']
             ).order_by('id').values_list('id', flat=True)[start_offset:end_offset]
         )
 
