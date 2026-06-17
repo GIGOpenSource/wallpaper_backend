@@ -607,10 +607,10 @@ class SitemapURLViewSet(BaseViewSet):
     def generate_detail_sitemaps(self, request):
         """批量生成壁纸详情页 Sitemap 静态文件"""
         import os
-        from models.models import Wallpapers
 
-        # 文件保存目录
-        sitemap_dir = '/www/project/wallpaper/sitemap_files'
+        # 文件保存目录：当前 .py 文件所在目录下的 sitemap_files
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        sitemap_dir = os.path.join(current_dir, 'sitemap_files')
         os.makedirs(sitemap_dir, exist_ok=True)
 
         # 网站域名
@@ -620,6 +620,7 @@ class SitemapURLViewSet(BaseViewSet):
         page_size = 30000
 
         # 查询所有有效的壁纸 ID（按 ID 升序）
+        from models.models import Wallpapers
         all_ids = list(
             Wallpapers.objects.exclude(
                 audit_status__in=['rejected', 'pending']
