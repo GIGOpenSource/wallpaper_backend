@@ -809,7 +809,6 @@ class WallpapersViewSet(BaseViewSet):
             
             # 从普通排序中获取补充数据
             supplement_qs = base_queryset.exclude(id__in=page_wallpaper_ids)
-            
             # 应用相同的排序规则
             if order == 'hot':
                 supplement_qs = supplement_qs.order_by('-hot_score', '-like_count', '-created_at')
@@ -817,7 +816,7 @@ class WallpapersViewSet(BaseViewSet):
                 supplement_qs = supplement_qs.order_by('-created_at')
             else:
                 supplement_qs = supplement_qs.order_by('-updated_at', '-created_at', '-hot_score')
-            
+
             # 获取需要的补充数量
             need_count = page_size - len(page_wallpaper_ids)
             supplement_ids = list(supplement_qs.values_list('id', flat=True)[:need_count])
@@ -827,11 +826,8 @@ class WallpapersViewSet(BaseViewSet):
             print(f"[Recommendation Supplement] Added {len(supplement_ids)} wallpapers from normal order")
         
         # 获取壁纸数据（保持推荐顺序）
-        # 关键：必须排除 audit_status='rejected' 的壁纸，否则返回数量会不足
         recommended_qs = Wallpapers.objects.filter(
             id__in=page_wallpaper_ids
-        ).exclude(
-            audit_status='rejected'
         ).prefetch_related('tags').only(
             'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
             'has_watermark', 'is_live', 'is_hd', 'hot_score', 'like_count',
@@ -864,7 +860,7 @@ class WallpapersViewSet(BaseViewSet):
             recommended_qs = Wallpapers.objects.filter(
                 id__in=all_ids
             ).exclude(
-                audit_status='rejected'
+                audit_status__in=['rejected', 'pending']
             ).prefetch_related('tags').only(
                 'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
                 'has_watermark', 'is_live', 'is_hd', 'hot_score', 'like_count',
@@ -1072,169 +1068,7 @@ class WallpapersViewSet(BaseViewSet):
             },
             'results': serializer.data
         }
-    
-    def _get_strategy_wallpaper_ids(self, order, platform):
-        """获取策略关联的壁纸ID列表"""
-        from django.utils import timezone
-        from django.utils.translation import get_language
-        from models.models import RecommendStrategy, StrategyWallpaperRelation
-        
-        now = timezone.now()
-        current_language = get_language()
-        matched_strategy = None
-        
-        # 确定平台筛选范围：优先匹配指定平台，其次是 all
-        platforms = [platform.lower()] if platform in ['PC', 'PHONE'] else ['all']
-        if 'all' not in platforms:
-            platforms.append('all')
-        
-        for p in set(platforms):
-            # 第一步：优先查询有 apply_area 且匹配当前语言的策略
-            strategies_with_area = RecommendStrategy.objects.filter(
-                platform=p, 
-                strategy_type=order, 
-                status='active',
-                apply_area=current_language
-            ).order_by('-priority', '-created_at')
-            
-            for s in strategies_with_area:
-                if s.start_time and now < s.start_time:
-                    continue
-                if s.end_time and now > s.end_time:
-                    continue
-                matched_strategy = s
-                break
-            
-            if matched_strategy:
-                break
-                
-            # 第二步：如果没有找到，查询 apply_area 为 global 的策略
-            strategies_global = RecommendStrategy.objects.filter(
-                platform=p, 
-                strategy_type=order, 
-                status='active',
-                apply_area='global'
-            ).order_by('-priority', '-created_at')
-            
-            for s in strategies_global:
-                if s.start_time and now < s.start_time:
-                    continue
-                if s.end_time and now > s.end_time:
-                    continue
-                matched_strategy = s
-                break
-                
-            if matched_strategy:
-                break
 
-            # 第三步：如果还没有找到，去掉 apply_area 限制再查（兼容旧数据或通用策略）
-            strategies_any_area = RecommendStrategy.objects.filter(
-                platform=p, 
-                strategy_type=order, 
-                status='active'
-            ).order_by('-priority', '-created_at')
-            
-            for s in strategies_any_area:
-                if s.start_time and now < s.start_time:
-                    continue
-                if s.end_time and now > s.end_time:
-                    continue
-                matched_strategy = s
-                break
-                
-            if matched_strategy:
-                break
-        
-        if not matched_strategy:
-            return []
-        
-        strategy_ids = list(
-            StrategyWallpaperRelation.objects.filter(strategy=matched_strategy)
-            .order_by('sort_order', '-created_at')
-            .values_list('wallpaper_id', flat=True)
-        )
-        if matched_strategy.content_limit and matched_strategy.content_limit > 0:
-            strategy_ids = strategy_ids[:matched_strategy.content_limit]
-        
-        return strategy_ids
-    
-    def _return_strategy_with_fallback(self, strategy_ids, page_num, page_size, customer_id, request, base_queryset, order):
-        """返回策略页面数据，如果策略不足一页则从普通数据中补充"""
-        # 计算策略数据的分页
-        start_idx = (page_num - 1) * page_size
-        end_idx = start_idx + page_size
-        page_strategy_ids = strategy_ids[start_idx:end_idx]
-        
-        # 获取策略壁纸数据
-        strategy_qs = Wallpapers.objects.filter(id__in=page_strategy_ids).prefetch_related('tags').only(
-            'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
-            'has_watermark', 'is_live', 'is_hd', 'hot_score', 'like_count',
-            'collect_count', 'download_count', 'view_count', 'created_at', 'audit_status'
-        )
-        
-        # 保持策略中的顺序
-        preserved_order = Case(*[When(id=pk, then=pos) for pos, pk in enumerate(page_strategy_ids)])
-        strategy_qs = strategy_qs.order_by(preserved_order)
-        
-        # 如果策略数据不足一页，从普通数据中补充
-        strategy_count = len(page_strategy_ids)
-        need_fallback = page_size - strategy_count
-        
-        fallback_data = []
-        if need_fallback > 0:
-            # 构建普通数据查询集（排除策略中已展示的壁纸）
-            all_strategy_ids = set(strategy_ids)  # 所有策略ID
-            fallback_queryset = base_queryset.exclude(id__in=all_strategy_ids)
-            
-            # 应用排序
-            if order == 'hot':
-                fallback_queryset = fallback_queryset.order_by('-hot_score', '-created_at')
-            elif order == 'home':
-                fallback_queryset = fallback_queryset.order_by('-created_at')
-            else:
-                fallback_queryset = fallback_queryset.order_by('-updated_at', '-created_at', '-hot_score')
-            
-            # 获取补充数据
-            fallback_qs = fallback_queryset[:need_fallback].prefetch_related('tags').only(
-                'id', 'name', 'url', 'thumb_url', 'width', 'height', 'image_format',
-                'has_watermark', 'is_live', 'is_hd', 'hot_score', 'like_count',
-                'collect_count', 'download_count', 'view_count', 'created_at', 'audit_status'
-            )
-            fallback_data = list(fallback_qs)
-        
-        # 用户互动信息
-        liked_ids = collected_ids = set()
-        if customer_id:
-            liked_ids = set(
-                WallpaperLike.objects.filter(customer_id=customer_id).values_list('wallpaper_id', flat=True))
-            collected_ids = set(
-                WallpaperCollection.objects.filter(user_id=customer_id).values_list('wallpaper_id', flat=True))
-        
-        # 合并策略数据和补充数据
-        combined_data = list(strategy_qs) + fallback_data
-        
-        # 序列化
-        context = self.get_serializer_context()
-        context['liked_wallpaper_ids'] = liked_ids
-        context['collected_wallpaper_ids'] = collected_ids
-        serializer = WallpapersListSerializer(combined_data, many=True, context=context)
-        
-        # 获取策略总数
-        total_strategy_count = len(strategy_ids)
-        
-        # 手动构造分页响应格式（与 get_paginated_response 保持一致）
-        return ApiResponse(
-            data={
-                'pagination': {
-                    'page': page_num,
-                    'page_size': page_size,
-                    'total': total_strategy_count,
-                    'total_pages': (total_strategy_count + page_size - 1) // page_size if page_size > 0 else 0
-                },
-                'results': serializer.data
-            },
-            message="列表获取成功"
-        )
     def destroy(self, request, *args, **kwargs):
         try:
             # 1. 先获取 ID
@@ -1772,7 +1606,7 @@ class WallpapersViewSet(BaseViewSet):
                         tag_ids = Wallpapers.objects.filter(
                             tags=tag
                         ).exclude(
-                            audit_status='rejected'
+                            audit_status__in=['rejected', 'pending']
                         ).exclude(
                             id=current_wallpaper.id
                         ).exclude(
@@ -1798,7 +1632,7 @@ class WallpapersViewSet(BaseViewSet):
                         interest_wallpapers = Wallpapers.objects.filter(
                             tags__id__in=interest_tag_ids
                         ).exclude(
-                            audit_status='rejected'
+                            audit_status__in=['rejected', 'pending']
                         ).exclude(
                             id__in=seen_ids
                         ).order_by('?')[:5]  # 随机取5张

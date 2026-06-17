@@ -373,7 +373,7 @@ def get_cold_start_wallpaper_ids(platform, order, limit=50):
         # ========================
         # 无匹配策略 → 返回默认热门壁纸
         # ========================
-        queryset = Wallpapers.objects.exclude(audit_status='rejected')
+        queryset = Wallpapers.objects.exclude(audit_status__in=['rejected', 'pending'])
         print("成功策略加载失败")
         if target_platform == 'pc':
             queryset = queryset.filter(category__id=1)
@@ -463,7 +463,7 @@ def _get_wallpapers_by_tag(tag_level1, tag_level2, platform, count, exclude_ids=
         queryset = Wallpapers.objects.filter(
             tags__id__in=matched_tags,category__id=platform_id
         ).exclude(
-            audit_status='rejected'  # 排除拒绝的，其他都显示（包括 approved、None、pending）
+            audit_status__in = ['rejected', 'pending']
         )
         if exclude_ids:
             queryset = queryset.exclude(id__in=exclude_ids)
@@ -484,7 +484,7 @@ def _get_wallpapers_by_tag(tag_level1, tag_level2, platform, count, exclude_ids=
 def _get_supplementary_wallpapers(platform, count, exclude_ids=None):
     """Get supplementary wallpapers when tag recommendations are insufficient"""
     try:
-        queryset = Wallpapers.objects.exclude(audit_status='rejected')
+        queryset = Wallpapers.objects.exclude(audit_status__in=['rejected', 'pending'])
         
         if platform == 'PC':
             queryset = queryset.filter(category__id=1)
@@ -826,7 +826,7 @@ def get_ctr_based_wallpapers(user_tags, platform, min_ctr=0.01, limit=200):
             # 获取该标签的壁纸
             queryset = Wallpapers.objects.filter(
                 tags=tag
-            ).exclude(audit_status='rejected')
+            ).exclude(audit_status__in=['rejected', 'pending'])
             
             if platform == 'PC':
                 queryset = queryset.filter(category__id=1)
@@ -894,7 +894,7 @@ def get_diversity_exploration_wallpapers(user_tags, platform, limit=400, explora
             # 获取该标签的壁纸，按热度排序
             queryset = Wallpapers.objects.filter(
                 tags=tag
-            ).exclude(audit_status='rejected')
+            ).exclude(audit_status__in=['rejected', 'pending'])
             
             if platform == 'PC':
                 queryset = queryset.filter(category__id=1)
@@ -919,7 +919,7 @@ def get_diversity_exploration_wallpapers(user_tags, platform, limit=400, explora
             
             global_hot_ids = list(
                 Wallpapers.objects
-                .exclude(audit_status='rejected')
+                .exclude(audit_status__in=['rejected', 'pending'])
                 .exclude(id__in=seen_ids)
                 .filter(
                     category__id=1 if platform == 'PC' else 2
@@ -934,7 +934,7 @@ def get_diversity_exploration_wallpapers(user_tags, platform, limit=400, explora
         # 5. 获取末尾探索内容（全局最热门的壁纸，强制插入）
         exploration_ids = list(
             Wallpapers.objects
-            .exclude(audit_status='rejected')
+            .exclude(audit_status__in=['rejected', 'pending'])
             .exclude(id__in=seen_ids)
             .filter(
                 category__id=1 if platform == 'PC' else 2
