@@ -533,8 +533,15 @@ class SitemapURLViewSet(BaseViewSet):
                 if url_path:
                     url = f"{site_domain}{url_path}"
                     lastmod = sitemap_file.created_at
-                    if isinstance(lastmod, str):
-                        lastmod = lastmod[:19]
+                    # 格式化为 ISO 8601 格式：2026-06-17T08:25:07+00:00
+                    if hasattr(lastmod, 'isoformat'):
+                        lastmod = lastmod.isoformat()
+                    elif isinstance(lastmod, str):
+                        # 移除微秒部分并替换空格为 T
+                        lastmod = lastmod.split('.')[0].replace(' ', 'T')
+                        # 确保有时区信息
+                        if '+' not in lastmod and lastmod.endswith('Z'):
+                            lastmod = lastmod[:-1] + '+00:00'
 
                     xml_content += '  <sitemap>\n'
                     xml_content += f'    <loc>{url}</loc>\n'
