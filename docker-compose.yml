@@ -13,14 +13,7 @@ services:
     networks:
       - app_network
     # ✅ 完整路径调用 venv 里的 gunicorn，避免 PATH 问题
-    command: [
-      "/app/venv/bin/gunicorn",
-      "WallPaper.wsgi:application",
-      "--bind",
-      "0.0.0.0:8000",
-      "--workers",
-      "3"
-    ]
+    command: ["/app/venv/bin/python", "manage.py", "runserver", "0.0.0.0:8000"]
 
   nginx:
     image: nginx:alpine
