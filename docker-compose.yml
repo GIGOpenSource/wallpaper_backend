@@ -11,13 +11,13 @@ services:
       - PYTHONUNBUFFERED=1
       - DJANGO_SETTINGS_MODULE=WallPaper.settings.pro
       # === 外部老数据库配置（务必修改为真实地址信息）===
-      - DB_HOST=你的老数据库IP/域名
-      - DB_PORT=5432
+      - DB_HOST=101.32.179.223
+      - DB_PORT=5436
       - DB_NAME=老数据库名
-      - DB_USER=老数据库账号
-      - DB_PASSWORD=老数据库密码
+      - DB_USER=wallpaper_db
+      - DB_PASSWORD=wallpaper123
       # === 外部老Redis配置（务必修改为真实地址信息）===
-      - REDIS_HOST=你的老RedisIP/域名
+      - REDIS_HOST=101.32.179.223
       - REDIS_PORT=6379
       - REDIS_PASSWORD=老Redis密码
     volumes:
