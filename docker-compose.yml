@@ -1,6 +1,9 @@
 services:
   django_web:
-    build: .
+    build:
+      context: .
+      cache_from:
+        - wallpaper_backend-django_web:latest  # BuildKit镜像缓存
     container_name: wallpaper_django_overseas
     restart: always
     ports:
@@ -8,13 +11,12 @@ services:
     env_file:
       - .env
     volumes:
-      - ./:/app          # ✅ 全挂载 /app，不会影响 /venv（在根目录，不在/app内）
+      # ✅精准挂载可变目录，不要全量挂载 /app
       - ./media:/app/media
       - ./logs:/app/logs
+      - ./resource:/app/resource
     networks:
       - app_network
-    # ✅ 调用 /venv 下的 python，不再用 /app/venv
-    command: ["/venv/bin/python", "manage.py", "runserver", "0.0.0.0:8000"]
 
   nginx:
     image: nginx:alpine
