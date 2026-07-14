@@ -2,6 +2,7 @@ version: '3.8'
 
 services:
   django_web:
+    # ✅ 不再每次 build，改用直接挂载源码 + 使用一次性构建好的镜像（或临时用 build 一次）
     build: .
     container_name: wallpaper_django_overseas
     restart: always
@@ -9,11 +10,14 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    # ✅ 挂载整个项目目录，实现源码热更新，无需反复构建镜像
     volumes:
+      - ./:/app
       - ./media:/app/media
-      - ./staticfiles:/app/staticfiles
     networks:
       - app_network
+    # ✅ 确保命令是正确的 gunicorn（不跑 collectstatic）
+    command: ["gunicorn", "WallPaper.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3"]
 
   nginx:
     image: nginx:alpine
@@ -23,6 +27,7 @@ services:
       - "80:80"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      # ✅ 静态文件由 Nginx 托管（不再依赖 Django collectstatic）
       - ./staticfiles:/usr/share/nginx/html/static:ro
     depends_on:
       - django_web
