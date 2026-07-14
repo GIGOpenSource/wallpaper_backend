@@ -5,11 +5,11 @@ FROM python:3.11-slim AS builder
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# 构建阶段：创建虚拟环境安装依赖
+# 构建阶段：创建虚拟环境安装依赖（放到 /venv，不是 /app/venv）
 WORKDIR /app
 COPY req.txt .
-RUN python -m venv /app/venv && \
-    /app/venv/bin/pip install -r req.txt
+RUN python -m venv /venv && \
+    /venv/bin/pip install -r req.txt
 
 # 运行阶段
 FROM python:3.11-slim
@@ -24,12 +24,13 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY --from=builder /app/venv /app/venv
+# 复制虚拟环境到容器根目录 /venv
+COPY --from=builder /venv /venv
 COPY . .
 
 RUN mkdir -p /app/media /app/logs && \
     chmod -R 755 /app/media /app/logs
 
 EXPOSE 8000
-# 此处CMD仅为默认值，compose command会覆盖它
-CMD ["/app/venv/bin/gunicorn", "WallPaper.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3"]
+# 默认CMD
+CMD ["/venv/bin/gunicorn", "WallPaper.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3"]

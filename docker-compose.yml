@@ -8,13 +8,13 @@ services:
     env_file:
       - .env
     volumes:
-      - ./:/app
+      - ./:/app          # ✅ 全挂载 /app，不会影响 /venv（在根目录，不在/app内）
       - ./media:/app/media
       - ./logs:/app/logs
     networks:
       - app_network
-    # ✅ 完整路径调用 venv 里的 gunicorn，避免 PATH 问题
-    command: ["/app/venv/bin/python", "manage.py", "runserver", "0.0.0.0:8000"]
+    # ✅ 调用 /venv 下的 python，不再用 /app/venv
+    command: ["/venv/bin/python", "manage.py", "runserver", "0.0.0.0:8000"]
 
   nginx:
     image: nginx:alpine
