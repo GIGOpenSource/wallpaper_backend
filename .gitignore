@@ -61,6 +61,7 @@ build/
 resources/
 # Docker (local overrides)
 docker-compose.override.yml
+docker-compose.yml
 *.local.yml
 
 # Node (if present)
