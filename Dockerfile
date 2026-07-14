@@ -30,10 +30,9 @@ WORKDIR /app
 COPY --from=builder /app/venv /app/venv
 COPY . .
 
-RUN mkdir -p /app/staticfiles /app/media && \
-    chmod -R 755 /app/staticfiles /app/media
+RUN mkdir -p /app/media && \
+    chmod -R 755 /app/media
 
 EXPOSE 8000
-# 生产模式用 gunicorn，仅首次部署可执行 migrate，后续可去掉 migrate
-CMD sh -c "python manage.py collectstatic --noinput && \
-    gunicorn WallPaper.wsgi:application --bind 0.0.0.0:8000 --workers 3"
+# ✅ 删除 collectstatic，只运行 gunicorn；migrate 按需单独执行（不要放常驻启动命令）
+CMD ["gunicorn", "WallPaper.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3"]
