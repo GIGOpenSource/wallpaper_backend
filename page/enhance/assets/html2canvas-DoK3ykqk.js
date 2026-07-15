@@ -1,0 +1,1 @@
+import{y as e}from"./index-BpWmbykH.js";export default e();

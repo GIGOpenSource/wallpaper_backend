@@ -1,0 +1,1 @@
+import{t as e}from"./client-CO7pL8yb.js";export default e();
