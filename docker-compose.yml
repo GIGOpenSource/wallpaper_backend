@@ -30,6 +30,7 @@ services:
       # ✅ 挂载两个前端文件夹
       - ./page/markwallpapers:/usr/share/nginx/html/markwallpapers:ro
       - ./page/enhance:/usr/share/nginx/html/enhance:ro
+      - ./page/cert:/etc/nginx/cert:ro
     depends_on:
       - django_web
     networks:
