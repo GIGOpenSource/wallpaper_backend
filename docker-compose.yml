@@ -31,6 +31,7 @@ services:
       - ./page/enhance:/usr/share/nginx/html/enhance:ro
       - ./page/privacy:/usr/share/nginx/html/privacy:ro
       - ./page/cert:/etc/nginx/cert:ro
+      - ./page/agreement:/usr/share/nginx/html/agreement:ro
     depends_on:
       - django_web
     networks:
