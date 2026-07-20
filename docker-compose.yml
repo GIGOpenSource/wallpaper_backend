@@ -12,6 +12,7 @@ services:
       - ./media:/app/media
       - ./logs:/app/logs
       - ./resource:/app/resource
+      - ./App/view/seo/sitemap/sitemap_files:/app/App/view/seo/sitemap/sitemap_files
     networks:
       - app_network
 
@@ -25,7 +26,7 @@ services:
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - ./staticfiles:/usr/share/nginx/html/static:ro
-      - ./App/view/seo/sitemap/sitemap_files:/usr/share/App/view/seo/sitemap/sitemap_files:ro
+      - ./App/view/seo/sitemap/sitemap_files:/usr/share/App/view/seo/sitemap/sitemap_files
       - ./page/markwallpapers:/usr/share/nginx/html/markwallpapers:ro
       - ./page/enhance:/usr/share/nginx/html/enhance:ro
       - ./page/privacy:/usr/share/nginx/html/privacy:ro
