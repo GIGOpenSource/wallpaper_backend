@@ -646,7 +646,7 @@ class SitemapURLViewSet(BaseViewSet):
             xml_content += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
 
             for wallpaper_id in wallpaper_ids:
-                url = f"{site_domain}/markwallpapers/wallpaper/{wallpaper_id}"
+                url = f"{site_domain}/wallpaper/{wallpaper_id}"
                 xml_content += '  <url>\n'
                 xml_content += f'    <loc>{url}</loc>\n'
                 xml_content += '    <changefreq>weekly</changefreq>\n'
