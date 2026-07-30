@@ -169,18 +169,15 @@ class UserViewSet(viewsets.ViewSet):
 
         try:
             # 查询用户
-            user = User.objects.get(id=user_id)
-        except User.DoesNotExist:
+            CustomerUser = CustomerUser.objects.get(id=user_id)
+        except CustomerUser.DoesNotExist:
             return ApiResponse(message=_("用户不存在"), code=404)
-
         try:
             # 删除 Token
             CustomTokenTool.delete_token(token)
-
             # 删除用户
-            user.delete()
-
-            return ApiResponse(message=_("账号注销成功"))
+            CustomerUser.delete()
+            return ApiResponse(message=_("用户账号注销成功"))
         except Exception as e:
             return ApiResponse(code=500, message=_("账号注销失败: {}").format(str(e)))
 
