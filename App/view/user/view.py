@@ -143,11 +143,13 @@ class UserViewSet(viewsets.ViewSet):
 
     @extend_schema(
         responses={200: {"type": "object", "properties": {"message": {"type": "string"}}}},
-        summary=_("管理员注销账号（需有效 Token）")
+        summary=_("用户注销账号（需有效 Token）")
     )
     @action(detail=False, methods=['post'], url_path='deactivate')
     def deactivate(self, request):
-        """注销管理员账号，删除用户并使 Token 失效"""
+        """注销用户账号，删除用户并使 Token 失效"""
+        from django.db import transaction
+
         # 从请求头获取 Token
         token = request.auth
         if not token:
@@ -169,14 +171,19 @@ class UserViewSet(viewsets.ViewSet):
 
         try:
             # 查询用户
-            CustomerUser = CustomerUser.objects.get(id=user_id)
+            customer_user = CustomerUser.objects.get(id=user_id)
         except CustomerUser.DoesNotExist:
             return ApiResponse(message=_("用户不存在"), code=404)
+
         try:
-            # 删除 Token
-            CustomTokenTool.delete_token(token)
-            # 删除用户
-            CustomerUser.delete()
+            # 使用事务确保数据一致性
+            with transaction.atomic():
+                # 删除 Token
+                CustomTokenTool.delete_token(token)
+
+                # 删除用户（关联数据会通过 CASCADE 自动删除）
+                customer_user.delete()
+
             return ApiResponse(message=_("用户账号注销成功"))
         except Exception as e:
             return ApiResponse(code=500, message=_("账号注销失败: {}").format(str(e)))
