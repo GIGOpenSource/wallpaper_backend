@@ -58,6 +58,7 @@ class UserViewSet(viewsets.ViewSet):
         'list': [IsTokenValid],  # 需有效 Token
         'retrieve': [IsTokenValid],  # 需有效 Token
         'destroy': [IsTokenValid, IsOwnerOrAdmin],  # 删除操作需要同时满足两个权限
+        'deactivate': [IsTokenValid],  # 注销账号需要有效 Token
     }
     queryset = User.objects.all()
 
@@ -139,6 +140,36 @@ class UserViewSet(viewsets.ViewSet):
             # 调用工具类删除 Redis 中的 Token
             return ApiResponse(message=_("登出成功，Token 已失效"))
         return ApiResponse(message=_("未提供有效 Token"),code=400)
+
+    @extend_schema(
+        responses={200: {"type": "object", "properties": {"message": {"type": "string"}}}},
+        summary=_("管理员注销账号（需有效 Token）")
+    )
+    @action(detail=False, methods=['post'], url_path='deactivate')
+    def deactivate(self, request):
+        """注销管理员账号，删除用户并使 Token 失效"""
+        # 从请求头获取 Token
+        token = request.auth
+        if not token:
+            return ApiResponse(message=_("未提供有效 Token"), code=400)
+
+        # 获取当前用户
+        user = request.user
+        if not user or not user.is_authenticated:
+            return ApiResponse(message=_("用户未登录"), code=401)
+
+        try:
+            # 删除 Token
+            CustomTokenTool.delete_token(token)
+
+            # 删除用户
+            user_id = user.id
+            username = user.username
+            user.delete()
+
+            return ApiResponse(message=_("账号注销成功"))
+        except Exception as e:
+            return ApiResponse(code=500, message=_("账号注销失败: {}").format(str(e)))
 
 
 def deactivate_user_and_delete_posters(open_id):
