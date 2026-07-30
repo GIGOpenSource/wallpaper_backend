@@ -153,18 +153,31 @@ class UserViewSet(viewsets.ViewSet):
         if not token:
             return ApiResponse(message=_("未提供有效 Token"), code=400)
 
-        # 获取当前用户
-        user = request.user
-        if not user or not user.is_authenticated:
-            return ApiResponse(message=_("用户未登录"), code=401)
+        # 从 Token 中获取用户 ID
+        is_valid, token_user_id = CustomTokenTool.verify_token(token)
+        if not is_valid:
+            return ApiResponse(message=_("Token 无效或已过期"), code=401)
+
+        # 获取前端传来的 user_id
+        user_id = request.data.get('user_id')
+        if not user_id:
+            return ApiResponse(message=_("缺少 user_id 参数"), code=400)
+
+        # 验证前端传来的 user_id 是否与 Token 中的 user_id 一致
+        if int(user_id) != int(token_user_id):
+            return ApiResponse(message=_("无权注销其他用户账号"), code=403)
+
+        try:
+            # 查询用户
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return ApiResponse(message=_("用户不存在"), code=404)
 
         try:
             # 删除 Token
             CustomTokenTool.delete_token(token)
 
             # 删除用户
-            user_id = user.id
-            username = user.username
             user.delete()
 
             return ApiResponse(message=_("账号注销成功"))
