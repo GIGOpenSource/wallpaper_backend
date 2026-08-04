@@ -68,3 +68,5 @@ npm-debug.log*
 # 123
 
 resource/key/search-console-key.json
+
+wallpaper_venv/

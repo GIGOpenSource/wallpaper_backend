@@ -24,7 +24,7 @@ bucket_name = getEnvConfig('TENCENT_COS_BUCKET', 'crashcheck-1256118830')
 
 # 初始化COS客户端
 try:
-    config = CosConfig(Region=region, SecretId=secret_id, SecretKey=secret_key)
+    config = CosConfig(Region=region, SecretId=secret_id, SecretKey=secret_key, Timeout=120)
     cos_client = CosS3Client(config)
     print("COS客户端初始化成功")
 except Exception as e:
