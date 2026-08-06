@@ -9,6 +9,7 @@
 """
 import json
 from typing import List, Dict, Any
+
 from openai import OpenAI
 from tool.tools import getEnvConfig, logger
 

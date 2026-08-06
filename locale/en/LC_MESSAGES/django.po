@@ -1,0 +1,1953 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-08-05 17:56+0800\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: .\App\view\customer\view.py:26 .\App\view\user\view.py:26
+msgid "两次输入的密码不一致"
+msgstr ""
+
+#: .\App\view\customer\view.py:31 .\App\view\user\view.py:34
+msgid "密码长度不能超过72字节"
+msgstr ""
+
+#: .\App\view\customer\view.py:91 .\App\view\customer\view.py:113
+#: .\App\view\customer\view.py:251
+msgid "参数校验失败"
+msgstr ""
+
+#: .\App\view\customer\view.py:96
+msgid "该邮箱已被注册"
+msgstr ""
+
+#: .\App\view\customer\view.py:102
+msgid "注册成功"
+msgstr ""
+
+#: .\App\view\customer\view.py:121
+msgid "邮箱未注册"
+msgstr ""
+
+#: .\App\view\customer\view.py:125
+msgid "账号已被禁用，请联系客服"
+msgstr ""
+
+#: .\App\view\customer\view.py:128
+msgid "邮箱或密码错误"
+msgstr ""
+
+#: .\App\view\customer\view.py:134
+msgid "登录成功"
+msgstr ""
+
+#: .\App\view\customer\view.py:142
+msgid "未提供 Token"
+msgstr ""
+
+#: .\App\view\customer\view.py:144
+msgid "登出成功"
+msgstr ""
+
+#: .\App\view\customer\view.py:167
+msgid "请先登录或提供用户ID"
+msgstr ""
+
+#: .\App\view\customer\view.py:175 .\App\view\customer\view.py:181
+#: .\App\view\customer\view.py:243 .\App\view\user\view.py:176
+#: .\App\view\wechat\view.py:301
+msgid "用户不存在"
+msgstr ""
+
+#: .\App\view\customer\view.py:228
+msgid "获取成功"
+msgstr ""
+
+#: .\App\view\customer\view.py:274
+msgid "保存成功，账号已禁用，token已失效"
+msgstr ""
+
+#: .\App\view\customer\view.py:285
+msgid "保存成功"
+msgstr ""
+
+#: .\App\view\user\view.py:74
+msgid "管理员注册（匿名可访问）"
+msgstr ""
+
+#: .\App\view\user\view.py:100
+msgid "管理员名和密码不能为空"
+msgstr ""
+
+#: .\App\view\user\view.py:105
+msgid "管理员名不存在"
+msgstr ""
+
+#: .\App\view\user\view.py:107
+msgid "管理员名重复"
+msgstr ""
+
+#: .\App\view\user\view.py:117
+msgid "管理员名密码错误"
+msgstr ""
+
+#: .\App\view\user\view.py:127
+msgid "管理员登出（需有效 Token）"
+msgstr ""
+
+#: .\App\view\user\view.py:137 .\App\view\user\view.py:142
+#: .\App\view\user\view.py:156
+msgid "未提供有效 Token"
+msgstr ""
+
+#: .\App\view\user\view.py:141
+msgid "登出成功，Token 已失效"
+msgstr ""
+
+#: .\App\view\user\view.py:146
+msgid "用户注销账号（需有效 Token）"
+msgstr ""
+
+#: .\App\view\user\view.py:161
+msgid "Token 无效或已过期"
+msgstr ""
+
+#: .\App\view\user\view.py:166
+msgid "缺少 user_id 参数"
+msgstr ""
+
+#: .\App\view\user\view.py:170
+msgid "无权注销其他用户账号"
+msgstr ""
+
+#: .\App\view\user\view.py:187
+msgid "用户账号注销成功"
+msgstr ""
+
+#: .\App\view\user\view.py:189
+#, python-brace-format
+msgid "账号注销失败: {}"
+msgstr ""
+
+#: .\App\view\wallpapers\view.py:2704 .\tool\tool_city_code.py:424
+msgid "请上传 Excel 文件"
+msgstr ""
+
+#: .\App\view\wallpapers\view.py:2708 .\tool\tool_city_code.py:428
+msgid "仅支持.xlsx 格式的 Excel 文件"
+msgstr ""
+
+#: .\App\view\wallpapers\view.py:2723
+#, python-format
+msgid "Excel 文件缺少必要字段，需要包含：%(cols)s"
+msgstr ""
+
+#: .\App\view\wallpapers\view.py:2777
+#, python-format
+msgid "导入完成！成功：%(success)d条，失败：%(fail)d条，新增：%(created)d条"
+msgstr ""
+
+#: .\App\view\wallpapers\view.py:2785 .\tool\tool_city_code.py:561
+#, python-format
+msgid "批量导入失败：%(error)s"
+msgstr ""
+
+#: .\App\view\wechat\view.py:137
+msgid "token不能为空"
+msgstr ""
+
+#: .\App\view\wechat\view.py:141
+msgid "token无效或已过期"
+msgstr ""
+
+#: .\App\view\wechat\view.py:339
+msgid "更新失败"
+msgstr ""
+
+#: .\WallPaper\settings\pro.py:25
+msgid "Spanish"
+msgstr ""
+
+#: .\WallPaper\settings\pro.py:26
+msgid "English"
+msgstr ""
+
+#: .\WallPaper\settings\pro.py:27
+msgid "Portuguese"
+msgstr ""
+
+#: .\WallPaper\settings\pro.py:28
+msgid "Japanese"
+msgstr ""
+
+#: .\WallPaper\settings\pro.py:29
+msgid "Korean"
+msgstr ""
+
+#: .\WallPaper\settings\pro.py:30
+msgid "Simplified Chinese"
+msgstr ""
+
+#: .\WallPaper\settings\pro.py:31
+msgid "Traditional Chinese"
+msgstr ""
+
+#: .\WallPaper\settings\pro.py:32
+msgid "German"
+msgstr ""
+
+#: .\WallPaper\settings\pro.py:33
+msgid "French"
+msgstr ""
+
+#: .\tool\authentication.py:34 .\tool\authentication.py:36
+msgid "无效的用户名或密码"
+msgstr ""
+
+#: .\tool\authentication.py:95
+msgid "无效的token"
+msgstr ""
+
+#: .\tool\authentication.py:102
+msgid "管理员用户不存在"
+msgstr ""
+
+#: .\tool\authentication.py:107
+msgid "客户用户不存在"
+msgstr ""
+
+#: .\tool\authentication.py:110
+msgid "token对应的用户不存在"
+msgstr ""
+
+#: .\tool\larg_models_tool.py:34 .\tool\larg_models_tool.py:52
+msgid "用户提问："
+msgstr ""
+
+#: .\tool\larg_models_tool.py:34
+msgid "用户答案："
+msgstr ""
+
+#: .\tool\larg_models_tool.py:34
+msgid ""
+"\n"
+"             # 一、强制输出规则（违反则无效）\n"
+"            1. 输出格式为标准JSON，无任何多余内容（无注释、无换行、无特殊符"
+"号、无代码块），可直接用json.loads解析。\n"
+"            2. 严格遵循以下结构，字段不可缺失、不可新增。\n"
+"            # 二、输出结构（强制要求,正确的结构）\n"
+"                    {\n"
+"                        \"result\": {\n"
+"                            \"key_points\":\"要点\",\n"
+"                            \"summary\": \"展开回答\"\n"
+"                        },\n"
+"                    }\n"
+"            # 三、中文返回结果\n"
+"            "
+msgstr ""
+
+#: .\tool\larg_models_tool.py:48 .\tool\larg_models_tool.py:161
+msgid "请传入至少一个图片地址"
+msgstr ""
+
+#: .\tool\larg_models_tool.py:52
+msgid "用户抽中的牌为："
+msgstr ""
+
+#: .\tool\larg_models_tool.py:52
+msgid ""
+"\n"
+"                         # 一、强制输出规则（违反则无效）\n"
+"                        1. 输出格式为标准JSON，无任何多余内容（无注释、无换"
+"行、无特殊符号、无代码块），可直接用json.loads解析。\n"
+"                        2. 严格遵循以下结构，字段不可缺失、不可新增。\n"
+"                        # 二、输出结构（强制要求,正确的结构）\n"
+"                                {\n"
+"                                    \"result\": {\n"
+"                                        \"summary\": \"核心能量：xxxxx。/n \n"
+"                                        情感人际：xxxxx。/n\n"
+"                                        xxx：xxx。/n \n"
+"                                        使用'/n'换行输出\"\n"
+"                                    },\n"
+"                                }\n"
+"                        # 三、中文返回结果\n"
+"                        "
+msgstr ""
+
+#: .\tool\larg_models_tool.py:68
+msgid ""
+"\n"
+"            # 一、强制输出规则（违反则无效）\n"
+"            1. 输出格式为标准JSON，无任何多余内容（无注释、无换行、无特殊符"
+"号、无代码块），可直接用json.loads解析。\n"
+"            2. 严格遵循以下结构，字段不可缺失、不可新增，数据类型正确（分数为"
+"整数，summary为字符串）。\n"
+"            3. 根据对话判断对方是男或女，不用表述出来，仅在gender数据里。\n"
+"            4. 整数分数0-100分。\n"
+"            # 二、输出结构（强制要求,正确的结构）\n"
+"                    {\n"
+"                        \"result\": {\n"
+"                            \"poster\": {\n"
+"                                \"flags\": {\"关键词1\": 整数分数, \"关键词"
+"2\": 整数分数, \"关键词3\": 整数分数, \"关键词4\": 整数分数},\n"
+"                                \"summary\": \"一句话总结（格式：TA是一个"
+"XXXX，字数20-30字）\"\n"
+"                                \"gender\":\"male或female\"\n"
+"                                },\n"
+"                                \"report\": {\n"
+"                                    \"summary\": \"法医结论行动建议一句话总结"
+"（格式：字数200字）不显示“法医结论字样”\",\n"
+"                                    \"flags\": {\"风险关键词1\": 整数分数, "
+"\"风险关键词2\": 整数分数, \"风险关键词3\": 整数分数, \"风险关键词4\": 整数分"
+"数},\n"
+"                                    \"danger\":\"最隐蔽风险\",\n"
+"                                    \"advise\":\"行动建议\",\n"
+"                                    \"advise_summary\":\"行动建议核心结论"
+"\",\n"
+"                                    \"detail\":\"{\"详细解读段落1\":\"内容\","
+"\"详细解读段落2\":\"内容\",\"详细解读段落3\":\"\",....}\n"
+"                                }\"\n"
+"                            }\"\n"
+"                    }\n"
+"            # 三、输出结构组成示例：\n"
+"                        reslut:{\n"
+"                            poster:{\n"
+"                            “海报要求”\n"
+"                            }\n"
+"                            report:{\n"
+"                            “报告要求”\n"
+"                            }\n"
+"                        }\n"
+"            ### 3.1海报要求：\n"
+"                必须4个关键词，每个关键字的分数根据分析出的结果应为不同数"
+"值：\n"
+"                flags: {\"词1\":分数,\"词2\":分数,\"词3\":分数,\"词4\":分"
+"数}\n"
+"                summary:一句话总结（如“TA是一个XXXX”，字数限制为20-40字）\n"
+"            ### 3.2报告要求：\n"
+"                必须4个风险评分，每个风险评分关键字有分数\n"
+"                summary总结,只包含结果，不含标题\n"
+"                activate行动建议：一句话不分点。\n"
+"                detail内容为字典格式{\"key\":\"value\"}可以有多个\n"
+"            # 四、中文语言返回结果\n"
+"            "
+msgstr ""
+
+#: .\tool\larg_models_tool.py:195
+#, python-brace-format
+msgid ""
+"{nick_name1}的视角；{nick_name1}的事件描述：{question1}；{nick_name1}的问题及"
+"委屈点：{issue_description1}；{nick_name2}的视角；{nick_name2}的事件描述："
+"{question2}；{nick_name2}的问题及委屈点：{issue_description2}；{instructions}"
+msgstr ""
+
+#: .\tool\larg_models_tool.py:205
+msgid ""
+"\n"
+"                            # 一、强制输出规则（违反则无效）\n"
+"                            1. 输出格式为标准JSON，无任何多余内容（无注释、无"
+"换行、无特殊符号、无代码块），可直接用json.loads解析。\n"
+"                            2. 严格遵循JSON结构，字段不可缺失、不可新增、最重"
+"要可直接用json.loads解析。\n"
+"                            3. 参数解读：\n"
+"                                analysis: 问题原因分析是怎么回事。\n"
+"                                percentage:问题占比，用户1占比多少用户2占比多"
+"少 和为100%。\n"
+"                                verdict: 最终判决,虚拟一个《爱情法典》第几章"
+"触犯了什么，不对。\n"
+"                                resolution: 和解方案,谁道歉理解....。\n"
+"                                judge_advice: 本判决自双方签字（或击掌）之日"
+"起生效，给点温馨的话。\n"
+"                                case_name: 案件名，根据事件起个名如2026-"
+"XX-00x号（年-名-号 随机就行）。\n"
+"                                presiding_judge:审判长名称，活泼可爱的名字，"
+"如长耳朵小兔法官等。\n"
+"                                open_court_time:开庭时间名，一个发散的名字，"
+"如一个阳关刚好的下午茶时刻。\n"
+"                            # 二、输出结构（强制要求,正确的结构，不要额外换"
+"行，除了内容）\n"
+"                                {\n"
+"                                    \"result\": {\n"
+"                                        \"analysis\": \".....\",\n"
+"                                        \"percentage\": {\"user1\":xx%,"
+"\"user2\":xx%}\",\n"
+"                                        \"verdict\": \"1、..../n  2、......./"
+"n \" (使用'/n'换行输出\"),\n"
+"                                        \"resolution\": \"1、..../n  "
+"2、......./n (使用'/n'换行输出\")\",\n"
+"                                        \"judge_advice\": \"本判决自双方签字"
+"（或击掌）之日起生效，......(使用'/n'换行输出\")\",\n"
+"                                        \"case_name\":\"xxxx-xxx-xxx号\",\n"
+"                                        \"presiding_judge\":\"审判长名\",\n"
+"                                        \"open_court_time\":\"开庭事件名\"\n"
+"                                    },\n"
+"                                }\n"
+"                            # 三、中文返回结果\n"
+"                            "
+msgstr ""
+
+#: .\tool\larg_models_tool.py:235
+#, python-brace-format
+msgid "用户提问：{question}。用户答案：{answer}{instructions}"
+msgstr ""
+
+#: .\tool\larg_models_tool.py:239
+msgid ""
+"\n"
+"                 # 一、强制输出规则（违反则无效）\n"
+"                1. 输出格式为标准JSON，无任何多余内容（无注释、无换行、无特殊"
+"符号、无代码块），可直接用json.loads解析。\n"
+"                2. 严格遵循以下结构，字段不可缺失、不可新增。\n"
+"                # 二、输出结构（强制要求,正确的结构）\n"
+"                        {\n"
+"                            \"result\": {\n"
+"                                \"key_points\":\"要点\",\n"
+"                                \"summary\": \"展开回答\"\n"
+"                            },\n"
+"                        }\n"
+"                # 三、中文返回结果\n"
+"                "
+msgstr ""
+
+#: .\tool\larg_models_tool.py:254
+#, python-brace-format
+msgid "用户提问：{question}。用户抽中的牌为：{answer}{instructions}"
+msgstr ""
+
+#: .\tool\larg_models_tool.py:258
+msgid ""
+"\n"
+"                    # 一、强制输出规则（违反则无效）\n"
+"                    1. 输出格式为标准JSON，无任何多余内容（无注释、无换行、无"
+"特殊符号、无代码块），可直接用json.loads解析。\n"
+"                    2. 严格遵循以下结构，字段不可缺失、不可新增。\n"
+"                    # 二、输出结构（强制要求,正确的结构）\n"
+"                            {\n"
+"                                \"result\": {\n"
+"                                    \"summary\": \"核心能量：xxxxx。/n \n"
+"                                    情感人际：xxxxx。/n\n"
+"                                    xxx：xxx。/n \n"
+"                                    使用'/n'换行输出\"\n"
+"                                },\n"
+"                            }\n"
+"                    # 三、中文返回结果\n"
+"                "
+msgstr ""
+
+#: .\tool\larg_models_tool.py:275
+msgid ""
+"\n"
+"            # 一、强制输出规则（违反则无效）\n"
+"            1. 输出格式为标准JSON，无任何多余内容（无注释、无换行、无特殊符"
+"号、无代码块），可直接用json.loads解析。\n"
+"            2. 严格遵循以下结构，字段不可缺失、不可新增，数据类型正确（分数为"
+"整数，summary为字符串）。\n"
+"            3. 根据对话判断对方是男或女，不用表述出来，仅在gender数据里。\n"
+"            4. 整数分数0-100分。\n"
+"            # 二、输出结构（强制要求,正确的结构）\n"
+"                    {\n"
+"                        \"result\": {\n"
+"                            \"poster\": {\n"
+"                                \"flags\": {\"关键词1\": 整数分数, \"关键词"
+"2\": 整数分数, \"关键词3\": 整数分数, \"关键词4\": 整数分数},\n"
+"                                \"summary\": \"一句话总结（格式：TA是一个"
+"XXXX，字数20-30字）\"\n"
+"                                \"gender\":\"male或female\"\n"
+"                                },\n"
+"                                \"report\": {\n"
+"                                    \"summary\": \"法医结论行动建议一句话总结"
+"（格式：字数200字）不显示“法医结论字样”\",\n"
+"                                    \"flags\": {\"风险关键词1\": 整数分数, "
+"\"风险关键词2\": 整数分数, \"风险关键词3\": 整数分数, \"风险关键词4\": 整数分"
+"数},\n"
+"                                    \"danger\":\"最隐蔽风险\",\n"
+"                                    \"advise\":\"行动建议\",\n"
+"                                    \"advise_summary\":\"行动建议核心结论"
+"\",\n"
+"                                    \"detail\":\"{\"详细解读段落1\":\"内容\","
+"\"详细解读段落2\":\"内容\",\"详细解读段落3\":\"\",....}\n"
+"                                }\"\n"
+"                            }\"\n"
+"                    }\n"
+"            # 三、输出结构组成示例：\n"
+"                        reslut:{\n"
+"                            poster:{\n"
+"                            \"海报要求\"\n"
+"                            }\n"
+"                            report:{\n"
+"                            \"报告要求\"\n"
+"                            }\n"
+"                        }\n"
+"            ### 3.1海报要求：\n"
+"                必须4个关键词，每个关键字的分数根据分析出的结果应为不同数"
+"值：\n"
+"                flags: {\"词1\":分数,\"词2\":分数,\"词3\":分数,\"词4\":分"
+"数}\n"
+"                summary:一句话总结（如\"TA是一个XXXX\"，字数限制为20-40字）\n"
+"            ### 3.2报告要求：\n"
+"                必须4个风险评分，每个风险评分关键字有分数\n"
+"                summary总结,只包含结果，不含标题\n"
+"                activate行动建议：一句话不分点。\n"
+"                detail内容为字典格式{\"key\":\"value\"}可以有多个\n"
+"            # 四、中文语言返回结果\n"
+"            "
+msgstr ""
+
+#: .\tool\tool_answer.py:208
+msgid "Ai分析："
+msgstr ""
+
+#: .\tool\tool_city_code.py:147 .\tool\tool_city_code.py:190
+#: .\tool\tool_city_code.py:235 .\tool\tool_city_code.py:309
+#: .\tool\tool_city_code.py:359
+msgid "查询成功"
+msgstr ""
+
+#: .\tool\tool_city_code.py:184
+msgid "缺少省份代码参数"
+msgstr ""
+
+#: .\tool\tool_city_code.py:192
+msgid "省份不存在"
+msgstr ""
+
+#: .\tool\tool_city_code.py:229
+msgid "缺少城市代码参数"
+msgstr ""
+
+#: .\tool\tool_city_code.py:237
+msgid "城市不存在"
+msgstr ""
+
+#: .\tool\tool_city_code.py:342
+msgid "缺少区域代码参数"
+msgstr ""
+
+#: .\tool\tool_city_code.py:361
+msgid "区域不存在"
+msgstr ""
+
+#: .\tool\tool_city_code.py:444
+#, python-format
+msgid "Excel 文件缺少必要列，需要包含：%(cols)s"
+msgstr ""
+
+#: .\tool\tool_city_code.py:484
+msgid "Excel 文件中没有有效数据"
+msgstr ""
+
+#: .\tool\tools_star_sign.py:181
+#, python-brace-format
+msgid ""
+"用户星座：{zodiac_name}，用户性别：{gender},今日日期{today}{instructions}"
+msgstr ""
+
+#: .\tool\tools_star_sign.py:187
+msgid ""
+"\n"
+"                # 一、角色\n"
+"                你是一个星座心情表，结合当天的用户星座和用户性别。\n"
+"                # 二、强制输出规则（违反则无效）\n"
+"                1. 输出格式为标准JSON，无任何多余内容（无注释、无换行、无特殊"
+"符号、无代码块），可直接用json.loads解析。\n"
+"                2. 严格遵循以下结构，字段不可缺失、不可新增。\n"
+"                # 三、输出结构（强制要求,正确的结构）\n"
+"                   {\n"
+"                        \"result\": {\n"
+"                        \"encourage_sentence\": \"鼓励今天的该星座的一句话"
+"\",\n"
+"                        \"mood_score\": 26(示例分数，下面的按实际情况的来),\n"
+"                        \"love_score\": 85,\n"
+"                        \"wealth_score\": 00,\n"
+"                        \"career_score\": 00,\n"
+"                        \"study_score\": 98,\n"
+"                        \"contact_score\": 00,\n"
+"                        }\n"
+"                    }\n"
+"                # 三、中文返回结果\n"
+"                "
+msgstr ""
+
+#: .\tool\utils.py:130
+msgid "请求的页面超出范围，返回空结果"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\contrib\messages\apps.py:16
+msgid "Messages"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\contrib\sitemaps\apps.py:8
+msgid "Site Maps"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\contrib\staticfiles\apps.py:9
+msgid "Static Files"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\contrib\syndication\apps.py:7
+msgid "Syndication"
+msgstr ""
+
+#. Translators: String used to replace omitted page numbers in elided page
+#. range generated by paginators, e.g. [1, 2, '…', 5, 6, 7, '…', 9, 10].
+#: .\wallpaper_venv\Lib\site-packages\django\core\paginator.py:30
+msgid "…"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\core\paginator.py:32
+msgid "That page number is not an integer"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\core\paginator.py:33
+msgid "That page number is less than 1"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\core\paginator.py:34
+msgid "That page contains no results"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\core\validators.py:22
+msgid "Enter a valid value."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\core\validators.py:70
+msgid "Enter a valid domain name."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\core\validators.py:153
+#: .\wallpaper_venv\Lib\site-packages\django\forms\fields.py:774
+msgid "Enter a valid URL."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\core\validators.py:200
+msgid "Enter a valid integer."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\core\validators.py:211
+msgid "Enter a valid email address."
+msgstr ""
+
+#. Translators: "letters" means latin letters: a-z and A-Z.
+#: .\wallpaper_venv\Lib\site-packages\django\core\validators.py:289
+msgid ""
+"Enter a valid “slug” consisting of letters, numbers, underscores or hyphens."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\core\validators.py:297
+msgid ""
+"Enter a valid “slug” consisting of Unicode letters, numbers, underscores, or "
+"hyphens."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\core\validators.py:309
+#: .\wallpaper_venv\Lib\site-packages\django\core\validators.py:318
+#: .\wallpaper_venv\Lib\site-packages\django\core\validators.py:332
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:2220
+#, python-format
+msgid "Enter a valid %(protocol)s address."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\core\validators.py:311
+msgid "IPv4"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\core\validators.py:320
+#: .\wallpaper_venv\Lib\site-packages\django\utils\ipv6.py:43
+msgid "IPv6"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\core\validators.py:334
+msgid "IPv4 or IPv6"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\core\validators.py:375
+msgid "Enter only digits separated by commas."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\core\validators.py:381
+#, python-format
+msgid "Ensure this value is %(limit_value)s (it is %(show_value)s)."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\core\validators.py:416
+#, python-format
+msgid "Ensure this value is less than or equal to %(limit_value)s."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\core\validators.py:425
+#, python-format
+msgid "Ensure this value is greater than or equal to %(limit_value)s."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\core\validators.py:434
+#, python-format
+msgid "Ensure this value is a multiple of step size %(limit_value)s."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\core\validators.py:441
+#, python-format
+msgid ""
+"Ensure this value is a multiple of step size %(limit_value)s, starting from "
+"%(offset)s, e.g. %(offset)s, %(valid_value1)s, %(valid_value2)s, and so on."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\core\validators.py:473
+#, python-format
+msgid ""
+"Ensure this value has at least %(limit_value)d character (it has "
+"%(show_value)d)."
+msgid_plural ""
+"Ensure this value has at least %(limit_value)d characters (it has "
+"%(show_value)d)."
+msgstr[0] ""
+msgstr[1] ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\core\validators.py:491
+#, python-format
+msgid ""
+"Ensure this value has at most %(limit_value)d character (it has "
+"%(show_value)d)."
+msgid_plural ""
+"Ensure this value has at most %(limit_value)d characters (it has "
+"%(show_value)d)."
+msgstr[0] ""
+msgstr[1] ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\core\validators.py:514
+#: .\wallpaper_venv\Lib\site-packages\django\forms\fields.py:365
+#: .\wallpaper_venv\Lib\site-packages\django\forms\fields.py:404
+msgid "Enter a number."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\core\validators.py:516
+#, python-format
+msgid "Ensure that there are no more than %(max)s digit in total."
+msgid_plural "Ensure that there are no more than %(max)s digits in total."
+msgstr[0] ""
+msgstr[1] ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\core\validators.py:521
+#, python-format
+msgid "Ensure that there are no more than %(max)s decimal place."
+msgid_plural "Ensure that there are no more than %(max)s decimal places."
+msgstr[0] ""
+msgstr[1] ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\core\validators.py:526
+#, python-format
+msgid ""
+"Ensure that there are no more than %(max)s digit before the decimal point."
+msgid_plural ""
+"Ensure that there are no more than %(max)s digits before the decimal point."
+msgstr[0] ""
+msgstr[1] ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\core\validators.py:597
+#, python-format
+msgid ""
+"File extension “%(extension)s” is not allowed. Allowed extensions are: "
+"%(allowed_extensions)s."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\core\validators.py:659
+msgid "Null characters are not allowed."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\base.py:1600
+#: .\wallpaper_venv\Lib\site-packages\django\forms\models.py:908
+msgid "and"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\base.py:1602
+#, python-format
+msgid "%(model_name)s with this %(field_labels)s already exists."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\constraints.py:22
+#, python-format
+msgid "Constraint “%(name)s” is violated."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:134
+#, python-format
+msgid "Value %(value)r is not a valid choice."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:135
+msgid "This field cannot be null."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:136
+msgid "This field cannot be blank."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:137
+#, python-format
+msgid "%(model_name)s with this %(field_label)s already exists."
+msgstr ""
+
+#. Translators: The 'lookup_type' is one of 'date', 'year' or
+#. 'month'. Eg: "Title must be unique for pub_date year"
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:141
+#, python-format
+msgid ""
+"%(field_label)s must be unique for %(date_field_label)s %(lookup_type)s."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:180
+#, python-format
+msgid "Field of type: %(field_type)s"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:1162
+#, python-format
+msgid "“%(value)s” value must be either True or False."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:1163
+#, python-format
+msgid "“%(value)s” value must be either True, False, or None."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:1165
+msgid "Boolean (Either True or False)"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:1215
+#, python-format
+msgid "String (up to %(max_length)s)"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:1217
+msgid "String (unlimited)"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:1326
+msgid "Comma-separated integers"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:1427
+#, python-format
+msgid ""
+"“%(value)s” value has an invalid date format. It must be in YYYY-MM-DD "
+"format."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:1431
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:1566
+#, python-format
+msgid ""
+"“%(value)s” value has the correct format (YYYY-MM-DD) but it is an invalid "
+"date."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:1435
+msgid "Date (without time)"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:1562
+#, python-format
+msgid ""
+"“%(value)s” value has an invalid format. It must be in YYYY-MM-DD "
+"HH:MM[:ss[.uuuuuu]][TZ] format."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:1570
+#, python-format
+msgid ""
+"“%(value)s” value has the correct format (YYYY-MM-DD HH:MM[:ss[.uuuuuu]]"
+"[TZ]) but it is an invalid date/time."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:1575
+msgid "Date (with time)"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:1702
+#, python-format
+msgid "“%(value)s” value must be a decimal number."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:1704
+msgid "Decimal number"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:1864
+#, python-format
+msgid ""
+"“%(value)s” value has an invalid format. It must be in [DD] "
+"[[HH:]MM:]ss[.uuuuuu] format."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:1868
+msgid "Duration"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:1920
+msgid "Email address"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:1945
+msgid "File path"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:2023
+#, python-format
+msgid "“%(value)s” value must be a float."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:2025
+msgid "Floating point number"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:2065
+#, python-format
+msgid "“%(value)s” value must be an integer."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:2067
+msgid "Integer"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:2163
+msgid "Big (8 byte) integer"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:2180
+msgid "Small integer"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:2188
+msgid "IPv4 address"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:2219
+msgid "IP address"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:2310
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:2311
+#, python-format
+msgid "“%(value)s” value must be either None, True or False."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:2313
+msgid "Boolean (Either True, False or None)"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:2364
+msgid "Positive big integer"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:2379
+msgid "Positive integer"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:2394
+msgid "Positive small integer"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:2410
+#, python-format
+msgid "Slug (up to %(max_length)s)"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:2446
+msgid "Text"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:2526
+#, python-format
+msgid ""
+"“%(value)s” value has an invalid format. It must be in HH:MM[:ss[.uuuuuu]] "
+"format."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:2530
+#, python-format
+msgid ""
+"“%(value)s” value has the correct format (HH:MM[:ss[.uuuuuu]]) but it is an "
+"invalid time."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:2534
+msgid "Time"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:2642
+msgid "URL"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:2666
+msgid "Raw binary data"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:2731
+#, python-format
+msgid "“%(value)s” is not a valid UUID."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:2733
+msgid "Universally unique identifier"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\files.py:244
+msgid "File"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\files.py:420
+msgid "Image"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\json.py:24
+msgid "A JSON object"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\json.py:26
+msgid "Value must be valid JSON."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\related.py:979
+#, python-format
+msgid "%(model)s instance with %(field)s %(value)r is not a valid choice."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\related.py:982
+msgid "Foreign Key (type determined by related field)"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\related.py:1276
+msgid "One-to-one relationship"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\related.py:1333
+#, python-format
+msgid "%(from)s-%(to)s relationship"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\related.py:1335
+#, python-format
+msgid "%(from)s-%(to)s relationships"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\related.py:1383
+msgid "Many-to-many relationship"
+msgstr ""
+
+#. Translators: If found as last label character, these punctuation
+#. characters will prevent the default label_suffix to be appended to the label
+#: .\wallpaper_venv\Lib\site-packages\django\forms\boundfield.py:185
+msgid ":?.!"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\fields.py:94
+msgid "This field is required."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\fields.py:314
+msgid "Enter a whole number."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\fields.py:485
+#: .\wallpaper_venv\Lib\site-packages\django\forms\fields.py:1257
+msgid "Enter a valid date."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\fields.py:508
+#: .\wallpaper_venv\Lib\site-packages\django\forms\fields.py:1258
+msgid "Enter a valid time."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\fields.py:535
+msgid "Enter a valid date/time."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\fields.py:569
+msgid "Enter a valid duration."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\fields.py:570
+#, python-brace-format
+msgid "The number of days must be between {min_days} and {max_days}."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\fields.py:639
+msgid "No file was submitted. Check the encoding type on the form."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\fields.py:640
+msgid "No file was submitted."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\fields.py:641
+msgid "The submitted file is empty."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\fields.py:643
+#, python-format
+msgid "Ensure this filename has at most %(max)d character (it has %(length)d)."
+msgid_plural ""
+"Ensure this filename has at most %(max)d characters (it has %(length)d)."
+msgstr[0] ""
+msgstr[1] ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\fields.py:648
+msgid "Please either submit a file or check the clear checkbox, not both."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\fields.py:716
+msgid ""
+"Upload a valid image. The file you uploaded was either not an image or a "
+"corrupted image."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\fields.py:879
+#: .\wallpaper_venv\Lib\site-packages\django\forms\fields.py:965
+#: .\wallpaper_venv\Lib\site-packages\django\forms\models.py:1592
+#, python-format
+msgid "Select a valid choice. %(value)s is not one of the available choices."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\fields.py:967
+#: .\wallpaper_venv\Lib\site-packages\django\forms\fields.py:1086
+#: .\wallpaper_venv\Lib\site-packages\django\forms\models.py:1590
+msgid "Enter a list of values."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\fields.py:1087
+msgid "Enter a complete value."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\fields.py:1329
+msgid "Enter a valid UUID."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\fields.py:1359
+msgid "Enter a valid JSON."
+msgstr ""
+
+#. Translators: This is the default suffix added to form field labels
+#: .\wallpaper_venv\Lib\site-packages\django\forms\forms.py:97
+msgid ":"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\forms.py:239
+#, python-format
+msgid "(Hidden field %(name)s) %(error)s"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\formsets.py:61
+#, python-format
+msgid ""
+"ManagementForm data is missing or has been tampered with. Missing fields: "
+"%(field_names)s. You may need to file a bug report if the issue persists."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\formsets.py:65
+#, python-format
+msgid "Please submit at most %(num)d form."
+msgid_plural "Please submit at most %(num)d forms."
+msgstr[0] ""
+msgstr[1] ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\formsets.py:70
+#, python-format
+msgid "Please submit at least %(num)d form."
+msgid_plural "Please submit at least %(num)d forms."
+msgstr[0] ""
+msgstr[1] ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\formsets.py:484
+#: .\wallpaper_venv\Lib\site-packages\django\forms\formsets.py:491
+msgid "Order"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\formsets.py:499
+msgid "Delete"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\models.py:901
+#, python-format
+msgid "Please correct the duplicate data for %(field)s."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\models.py:906
+#, python-format
+msgid "Please correct the duplicate data for %(field)s, which must be unique."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\models.py:913
+#, python-format
+msgid ""
+"Please correct the duplicate data for %(field_name)s which must be unique "
+"for the %(lookup)s in %(date_field)s."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\models.py:922
+msgid "Please correct the duplicate values below."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\models.py:1359
+msgid "The inline value did not match the parent instance."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\models.py:1450
+msgid "Select a valid choice. That choice is not one of the available choices."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\models.py:1594
+#, python-format
+msgid "“%(pk)s” is not a valid value."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\utils.py:229
+#, python-format
+msgid ""
+"%(datetime)s couldn’t be interpreted in time zone %(current_timezone)s; it "
+"may be ambiguous or it may not exist."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\widgets.py:527
+msgid "Clear"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\widgets.py:528
+msgid "Currently"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\widgets.py:529
+msgid "Change"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\widgets.py:866
+msgid "Unknown"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\widgets.py:867
+msgid "Yes"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\forms\widgets.py:868
+msgid "No"
+msgstr ""
+
+#. Translators: Please do not add spaces around commas.
+#: .\wallpaper_venv\Lib\site-packages\django\template\defaultfilters.py:873
+msgid "yes,no,maybe"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\template\defaultfilters.py:903
+#: .\wallpaper_venv\Lib\site-packages\django\template\defaultfilters.py:920
+#, python-format
+msgid "%(size)d byte"
+msgid_plural "%(size)d bytes"
+msgstr[0] ""
+msgstr[1] ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\template\defaultfilters.py:922
+#, python-format
+msgid "%s KB"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\template\defaultfilters.py:924
+#, python-format
+msgid "%s MB"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\template\defaultfilters.py:926
+#, python-format
+msgid "%s GB"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\template\defaultfilters.py:928
+#, python-format
+msgid "%s TB"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\template\defaultfilters.py:930
+#, python-format
+msgid "%s PB"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dateformat.py:74
+msgid "p.m."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dateformat.py:75
+msgid "a.m."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dateformat.py:80
+msgid "PM"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dateformat.py:81
+msgid "AM"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dateformat.py:153
+msgid "midnight"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dateformat.py:155
+msgid "noon"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:7
+msgid "Monday"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:8
+msgid "Tuesday"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:9
+msgid "Wednesday"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:10
+msgid "Thursday"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:11
+msgid "Friday"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:12
+msgid "Saturday"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:13
+msgid "Sunday"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:16
+msgid "Mon"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:17
+msgid "Tue"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:18
+msgid "Wed"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:19
+msgid "Thu"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:20
+msgid "Fri"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:21
+msgid "Sat"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:22
+msgid "Sun"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:25
+msgid "January"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:26
+msgid "February"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:27
+msgid "March"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:28
+msgid "April"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:29
+msgid "May"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:30
+msgid "June"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:31
+msgid "July"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:32
+msgid "August"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:33
+msgid "September"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:34
+msgid "October"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:35
+msgid "November"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:36
+msgid "December"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:39
+msgid "jan"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:40
+msgid "feb"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:41
+msgid "mar"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:42
+msgid "apr"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:43
+msgid "may"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:44
+msgid "jun"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:45
+msgid "jul"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:46
+msgid "aug"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:47
+msgid "sep"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:48
+msgid "oct"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:49
+msgid "nov"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:50
+msgid "dec"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:53
+msgctxt "abbrev. month"
+msgid "Jan."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:54
+msgctxt "abbrev. month"
+msgid "Feb."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:55
+msgctxt "abbrev. month"
+msgid "March"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:56
+msgctxt "abbrev. month"
+msgid "April"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:57
+msgctxt "abbrev. month"
+msgid "May"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:58
+msgctxt "abbrev. month"
+msgid "June"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:59
+msgctxt "abbrev. month"
+msgid "July"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:60
+msgctxt "abbrev. month"
+msgid "Aug."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:61
+msgctxt "abbrev. month"
+msgid "Sept."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:62
+msgctxt "abbrev. month"
+msgid "Oct."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:63
+msgctxt "abbrev. month"
+msgid "Nov."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:64
+msgctxt "abbrev. month"
+msgid "Dec."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:67
+msgctxt "alt. month"
+msgid "January"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:68
+msgctxt "alt. month"
+msgid "February"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:69
+msgctxt "alt. month"
+msgid "March"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:70
+msgctxt "alt. month"
+msgid "April"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:71
+msgctxt "alt. month"
+msgid "May"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:72
+msgctxt "alt. month"
+msgid "June"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:73
+msgctxt "alt. month"
+msgid "July"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:74
+msgctxt "alt. month"
+msgid "August"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:75
+msgctxt "alt. month"
+msgid "September"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:76
+msgctxt "alt. month"
+msgid "October"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:77
+msgctxt "alt. month"
+msgid "November"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\dates.py:78
+msgctxt "alt. month"
+msgid "December"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\ipv6.py:20
+msgid "This is not a valid IPv6 address."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\text.py:76
+#, python-format
+msgctxt "String to return when truncating text"
+msgid "%(truncated_text)s…"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\text.py:282
+msgid "or"
+msgstr ""
+
+#. Translators: This string is used as a separator between list elements
+#: .\wallpaper_venv\Lib\site-packages\django\utils\text.py:301
+#: .\wallpaper_venv\Lib\site-packages\django\utils\timesince.py:135
+msgid ", "
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\timesince.py:8
+#, python-format
+msgid "%(num)d year"
+msgid_plural "%(num)d years"
+msgstr[0] ""
+msgstr[1] ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\timesince.py:9
+#, python-format
+msgid "%(num)d month"
+msgid_plural "%(num)d months"
+msgstr[0] ""
+msgstr[1] ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\timesince.py:10
+#, python-format
+msgid "%(num)d week"
+msgid_plural "%(num)d weeks"
+msgstr[0] ""
+msgstr[1] ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\timesince.py:11
+#, python-format
+msgid "%(num)d day"
+msgid_plural "%(num)d days"
+msgstr[0] ""
+msgstr[1] ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\timesince.py:12
+#, python-format
+msgid "%(num)d hour"
+msgid_plural "%(num)d hours"
+msgstr[0] ""
+msgstr[1] ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\utils\timesince.py:13
+#, python-format
+msgid "%(num)d minute"
+msgid_plural "%(num)d minutes"
+msgstr[0] ""
+msgstr[1] ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\views\csrf.py:29
+msgid "Forbidden"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\views\csrf.py:30
+msgid "CSRF verification failed. Request aborted."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\views\csrf.py:34
+msgid ""
+"You are seeing this message because this HTTPS site requires a “Referer "
+"header” to be sent by your web browser, but none was sent. This header is "
+"required for security reasons, to ensure that your browser is not being "
+"hijacked by third parties."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\views\csrf.py:40
+msgid ""
+"If you have configured your browser to disable “Referer” headers, please re-"
+"enable them, at least for this site, or for HTTPS connections, or for “same-"
+"origin” requests."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\views\csrf.py:45
+msgid ""
+"If you are using the <meta name=\"referrer\" content=\"no-referrer\"> tag or "
+"including the “Referrer-Policy: no-referrer” header, please remove them. The "
+"CSRF protection requires the “Referer” header to do strict referer checking. "
+"If you’re concerned about privacy, use alternatives like <a "
+"rel=\"noreferrer\" …> for links to third-party sites."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\views\csrf.py:54
+msgid ""
+"You are seeing this message because this site requires a CSRF cookie when "
+"submitting forms. This cookie is required for security reasons, to ensure "
+"that your browser is not being hijacked by third parties."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\views\csrf.py:60
+msgid ""
+"If you have configured your browser to disable cookies, please re-enable "
+"them, at least for this site, or for “same-origin” requests."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\views\csrf.py:66
+msgid "More information is available with DEBUG=True."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\views\generic\dates.py:44
+msgid "No year specified"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\views\generic\dates.py:64
+#: .\wallpaper_venv\Lib\site-packages\django\views\generic\dates.py:115
+#: .\wallpaper_venv\Lib\site-packages\django\views\generic\dates.py:214
+msgid "Date out of range"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\views\generic\dates.py:94
+msgid "No month specified"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\views\generic\dates.py:147
+msgid "No day specified"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\views\generic\dates.py:194
+msgid "No week specified"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\views\generic\dates.py:353
+#: .\wallpaper_venv\Lib\site-packages\django\views\generic\dates.py:384
+#, python-format
+msgid "No %(verbose_name_plural)s available"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\views\generic\dates.py:680
+#, python-format
+msgid ""
+"Future %(verbose_name_plural)s not available because "
+"%(class_name)s.allow_future is False."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\views\generic\dates.py:720
+#, python-format
+msgid "Invalid date string “%(datestr)s” given format “%(format)s”"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\views\generic\detail.py:56
+#, python-format
+msgid "No %(verbose_name)s found matching the query"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\views\generic\list.py:70
+msgid "Page is not “last”, nor can it be converted to an int."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\views\generic\list.py:77
+#, python-format
+msgid "Invalid page (%(page_number)s): %(message)s"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\views\generic\list.py:173
+#, python-format
+msgid "Empty list and “%(class_name)s.allow_empty” is False."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\views\static.py:49
+msgid "Directory indexes are not allowed here."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\views\static.py:51
+#, python-format
+msgid "“%(path)s” does not exist"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\views\static.py:68
+#: .\wallpaper_venv\Lib\site-packages\django\views\templates\directory_index.html:8
+#: .\wallpaper_venv\Lib\site-packages\django\views\templates\directory_index.html:11
+#, python-format
+msgid "Index of %(directory)s"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\views\templates\default_urlconf.html:7
+#: .\wallpaper_venv\Lib\site-packages\django\views\templates\default_urlconf.html:204
+msgid "The install worked successfully! Congratulations!"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\views\templates\default_urlconf.html:206
+#, python-format
+msgid ""
+"View <a href=\"https://docs.djangoproject.com/en/%(version)s/releases/\" "
+"target=\"_blank\" rel=\"noopener\">release notes</a> for Django %(version)s"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\views\templates\default_urlconf.html:208
+#, python-format
+msgid ""
+"You are seeing this page because <a href=\"https://docs.djangoproject.com/en/"
+"%(version)s/ref/settings/#debug\" target=\"_blank\" "
+"rel=\"noopener\">DEBUG=True</a> is in your settings file and you have not "
+"configured any URLs."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\views\templates\default_urlconf.html:217
+msgid "Django Documentation"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\views\templates\default_urlconf.html:218
+msgid "Topics, references, &amp; how-to’s"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\views\templates\default_urlconf.html:226
+msgid "Tutorial: A Polling App"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\views\templates\default_urlconf.html:227
+msgid "Get started with Django"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\views\templates\default_urlconf.html:235
+msgid "Django Community"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django\views\templates\default_urlconf.html:236
+msgid "Connect, get help, or contribute"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django_apscheduler\admin.py:62
+msgid "Average Duration (sec)"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django_apscheduler\admin.py:81
+#, python-brace-format
+msgid "Could not find job {} in the database! Skipping execution..."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django_apscheduler\admin.py:105
+#, python-brace-format
+msgid ""
+"Maximum runtime of {} seconds exceeded! Not all jobs could be completed "
+"successfully. Pending jobs: {}"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django_apscheduler\admin.py:124
+#, python-brace-format
+msgid "Executed job '{}'!"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django_apscheduler\admin.py:132
+msgid "Run the selected django jobs"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django_apscheduler\admin.py:159
+msgid "Status"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django_apscheduler\admin.py:160
+msgid "Duration (sec)"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django_apscheduler\models.py:18
+msgid "Unique id for this job."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django_apscheduler\models.py:26
+msgid "Date and time at which this job is scheduled to be executed next."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django_apscheduler\models.py:72
+msgid "Unique ID for this job execution."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django_apscheduler\models.py:78
+msgid "The job that this execution relates to."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django_apscheduler\models.py:86
+msgid "The current status of this job execution."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django_apscheduler\models.py:91
+msgid "Date and time at which this job was executed."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django_apscheduler\models.py:101
+msgid "Total run time of this job (in seconds)."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django_apscheduler\models.py:109
+msgid "Timestamp at which this job was finished."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django_apscheduler\models.py:116
+msgid "Details of exception that occurred during job execution (if any)."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\django_apscheduler\models.py:123
+msgid "Traceback of exception that occurred during job execution (if any)."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\drf_spectacular\openapi.py:1446
+#: .\wallpaper_venv\Lib\site-packages\drf_spectacular\openapi.py:1499
+#: .\wallpaper_venv\Lib\site-packages\drf_spectacular\openapi.py:1503
+#: .\wallpaper_venv\Lib\site-packages\drf_spectacular\openapi.py:1507
+msgid "No response body"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\drf_spectacular\openapi.py:1471
+#: .\wallpaper_venv\Lib\site-packages\drf_spectacular\openapi.py:1525
+msgid "Unspecified response body"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\drf_spectacular\plumbing.py:496
+#, python-format
+msgid "Token-based authentication with required prefix \"%s\""
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\drf_spectacular\views.py:45
+msgid ""
+"\n"
+"    OpenApi3 schema for this API. Format can be selected via content "
+"negotiation.\n"
+"\n"
+"    - YAML: application/vnd.oai.openapi\n"
+"    - JSON: application/vnd.oai.openapi+json\n"
+"    "
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\httplib2\__init__.py:409
+#, python-format
+msgid "Content purported to be compressed with %s but failed to decompress."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\httplib2\__init__.py:574
+#, python-format
+msgid "Unsupported value for qop: %s."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\httplib2\__init__.py:578
+#: .\wallpaper_venv\Lib\site-packages\httplib2\__init__.py:656
+#, python-format
+msgid "Unsupported value for algorithm: %s."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\httplib2\__init__.py:651
+msgid "The challenge doesn't contain a server nonce, or this one is empty."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\httplib2\__init__.py:661
+#, python-format
+msgid "Unsupported value for pw-algorithm: %s."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\httplib2\__init__.py:1499
+msgid "Redirected but the response is missing a Location: header."
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\passlib\ext\django\utils.py:1000
+msgid "algorithm"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\sympy\solvers\simplex.py:563
+msgid "x"
+msgstr ""
+
+#: .\wallpaper_venv\Lib\site-packages\sympy\solvers\simplex.py:564
+msgid "y"
+msgstr ""
