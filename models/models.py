@@ -9,32 +9,33 @@
 """
 from django.db import models
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 from tool.password_hasher import hash_password
 
 class CustomerUser(models.Model):
     """
     C 端客户账户（邮箱 + 密码），与后台管理员 User 分离。
     """
-    email = models.EmailField(unique=True, verbose_name="邮箱")
-    password = models.CharField(max_length=256, verbose_name="密码（哈希）")
-    nickname = models.CharField(max_length=50, blank=True, null=True, verbose_name="昵称")
-    gender = models.SmallIntegerField(default=0, choices=[(0, "未知"), (1, "男"), (2, "女")], verbose_name="性别")
-    avatar_url = models.URLField(max_length=500, blank=True, null=True, verbose_name="头像URL")
-    badge = models.JSONField(blank=True, null=True, default=list, verbose_name="用户勋章")
-    last_login = models.DateTimeField(blank=True, null=True, verbose_name="最后登录时间")
-    points = models.IntegerField(default=0, verbose_name="积分")
-    level = models.IntegerField(default=1, verbose_name="等级")
-    upload_count = models.IntegerField(default=0, verbose_name="上传数")
-    collection_count = models.IntegerField(default=0, verbose_name="收藏数")
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
-    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+    email = models.EmailField(unique=True, verbose_name=_("邮箱"))
+    password = models.CharField(max_length=256, verbose_name=_("密码（哈希）"))
+    nickname = models.CharField(max_length=50, blank=True, null=True, verbose_name=_("昵称"))
+    gender = models.SmallIntegerField(default=0, choices=[(0, _("未知")), (1, _("男")), (2, _("女"))], verbose_name=_("性别"))
+    avatar_url = models.URLField(max_length=500, blank=True, null=True, verbose_name=_("头像URL"))
+    badge = models.JSONField(blank=True, null=True, default=list, verbose_name=_("用户勋章"))
+    last_login = models.DateTimeField(blank=True, null=True, verbose_name=_("最后登录时间"))
+    points = models.IntegerField(default=0, verbose_name=_("积分"))
+    level = models.IntegerField(default=1, verbose_name=_("等级"))
+    upload_count = models.IntegerField(default=0, verbose_name=_("上传数"))
+    collection_count = models.IntegerField(default=0, verbose_name=_("收藏数"))
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("创建时间"))
+    updated_at = models.DateTimeField(auto_now=True, verbose_name=_("更新时间"))
     # 用户状态
-    status = models.SmallIntegerField(default=1, choices=[(1, "正常"), (2, "禁用")], verbose_name="用户状态")
+    status = models.SmallIntegerField(default=1, choices=[(1, _("正常")), (2, _("禁用"))], verbose_name=_("用户状态"))
 
     class Meta:
         db_table = 't_customer_user'
-        verbose_name = '客户用户'
-        verbose_name_plural = '客户用户'
+        verbose_name = _('客户用户')
+        verbose_name_plural = _('客户用户')
         ordering = ['-created_at']
 
     def save(self, *args, **kwargs):
