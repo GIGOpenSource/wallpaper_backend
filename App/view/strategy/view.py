@@ -64,8 +64,6 @@ class RecommendStrategySerializer(serializers.ModelSerializer):
         ],
     ),
 )
-# ... existing code ...
-
 class RecommendStrategyViewSet(BaseViewSet):
     """
     推荐策略管理：

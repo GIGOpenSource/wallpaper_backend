@@ -11,7 +11,6 @@ from django.db import models
 from django.utils import timezone
 from tool.password_hasher import hash_password
 
-
 class CustomerUser(models.Model):
     """
     C 端客户账户（邮箱 + 密码），与后台管理员 User 分离。
@@ -1511,4 +1510,39 @@ class WallpaperTagCTR(models.Model):
         ctr = self.click_count / self.impression_count if self.impression_count > 0 else 0
         return f"{self.tag.name} - 曝光:{self.impression_count}, 点击:{self.click_count}, CTR:{ctr:.4f}"
 
+# 勋章模板
+class Medal(models.Model):
+    name = models.CharField(max_length=64, verbose_name="勋章名称")
+    level = models.IntegerField(default=1, verbose_name="勋章等级")
+    desc = models.CharField(max_length=256, blank=True, verbose_name="勋章描述")  # 勋章说明
 
+    class Meta:
+        db_table = 't_medal'
+        verbose_name = "勋章"
+        verbose_name_plural = verbose_name
+        indexes = [
+            models.Index(fields=['level']),
+        ]
+
+    def __str__(self):
+        return self.name
+
+# 用户拥有的勋章关联表
+class UserMedal(models.Model):
+    customer = models.ForeignKey(to="CustomerUser", on_delete=models.CASCADE, verbose_name="用户")
+    medal = models.ForeignKey(Medal, on_delete=models.CASCADE, verbose_name="勋章")
+    create_time = models.DateTimeField(auto_now_add=True, verbose_name="获得时间")
+
+    class Meta:
+        db_table = 't_user_medal'
+        verbose_name = "用户勋章"
+        verbose_name_plural = verbose_name
+        # 同一个用户不能重复拥有同一个勋章
+        unique_together = ('customer', 'medal')
+        indexes = [
+            models.Index(fields=['customer', '-create_time']),
+            models.Index(fields=['medal']),
+        ]
+
+    def __str__(self):
+        return f"{self.customer} - {self.medal.name}"

@@ -11,7 +11,7 @@ from tool.permissions import IsCustomerTokenValid
 from tool.token_tools import CustomTokenTool, generate_is_user_token, _redis
 from tool.utils import ApiResponse
 from django.utils.translation import gettext as _
-
+from django.utils.translation import get_language
 
 class CustomerRegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
@@ -20,6 +20,9 @@ class CustomerRegisterSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomerUser
         fields = ("id", "email", "password", "confirm_password")
+        extra_kwargs = {
+            "email": {"validators": []},
+        }
 
     def validate(self, data):
         if data["password"] != data["confirm_password"]:
@@ -32,7 +35,11 @@ class CustomerRegisterSerializer(serializers.ModelSerializer):
         return value
 
     def validate_email(self, value):
-        return value.strip().lower()
+        value = value.strip().lower()
+        # 新增：注册前校验邮箱是否已存在
+        if CustomerUser.objects.filter(email=value).exists():
+            raise serializers.ValidationError(_("该邮箱已被注册"))
+        return value
 
     def create(self, validated_data):
         validated_data.pop("confirm_password")
@@ -83,23 +90,25 @@ class CustomerUserViewSet(viewsets.ViewSet):
             message_parts = []
             for field, field_errors in errors.items():
                 for error in field_errors:
-                    message_parts.append(error)
+                    message_parts.append(str(error))
             if message_parts:
-                raw_message = message_parts[0]
-                clean_message = raw_message.replace(" ", "").replace("的", "").replace("。", "").replace("，", "")
+                clean_message = message_parts[0]
             else:
-                clean_message = _("参数校验失败")
+                clean_message = str(_("参数校验失败"))
             return ApiResponse(data=errors, message=clean_message, code=400)
+
         try:
             user = ser.save()
         except IntegrityError:
-            return ApiResponse(message=_("该邮箱已被注册"), code=400)
+            # 仅高并发极端情况兜底，正常流程不会走到这里
+            return ApiResponse(message=str(_("该邮箱已被注册")), code=400)
+
         platform = request.data.get("platform", "")
         token = CustomTokenTool.generate_customer_token(user.id, platform=platform)
-
         return ApiResponse(
             data={"token": token, "customer_id": user.id, "email": user.email},
-            message=_("注册成功"),
+            message=str(_("注册成功")),
+            code=200
         )
 
     @extend_schema(
