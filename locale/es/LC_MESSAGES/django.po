@@ -16,75 +16,74 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=3; plural=n == 1 ? 0 : n != 0 && n % 1000000 == 0 ? "
-"1 : 2;\n"
+"Plural-Forms: nplurals=3; plural=n == 1 ? 0 : n != 0 && n % 1000000 == 0 ? 1 : 2;\n"
 
 #: .\App\view\customer\view.py:26 .\App\view\user\view.py:26
 msgid "两次输入的密码不一致"
-msgstr ""
+msgstr "Las dos contraseñas no coinciden"
 
 #: .\App\view\customer\view.py:31 .\App\view\user\view.py:34
 msgid "密码长度不能超过72字节"
-msgstr ""
+msgstr "La contraseña no debe superar los 72 bytes"
 
 #: .\App\view\customer\view.py:91 .\App\view\customer\view.py:113
 #: .\App\view\customer\view.py:251
 msgid "参数校验失败"
-msgstr ""
+msgstr "Error de validación"
 
 #: .\App\view\customer\view.py:96
 msgid "该邮箱已被注册"
-msgstr ""
+msgstr "Este correo ya está registrado"
 
 #: .\App\view\customer\view.py:102
 msgid "注册成功"
-msgstr ""
+msgstr "Registro exitoso"
 
 #: .\App\view\customer\view.py:121
 msgid "邮箱未注册"
-msgstr ""
+msgstr "El correo no está registrado"
 
 #: .\App\view\customer\view.py:125
 msgid "账号已被禁用，请联系客服"
-msgstr ""
+msgstr "Cuenta deshabilitada. Contacte con soporte"
 
 #: .\App\view\customer\view.py:128
 msgid "邮箱或密码错误"
-msgstr ""
+msgstr "Correo o contraseña incorrectos"
 
 #: .\App\view\customer\view.py:134
 msgid "登录成功"
-msgstr ""
+msgstr "Inicio de sesión exitoso"
 
 #: .\App\view\customer\view.py:142
 msgid "未提供 Token"
-msgstr ""
+msgstr "Token no proporcionado"
 
 #: .\App\view\customer\view.py:144
 msgid "登出成功"
-msgstr ""
+msgstr "Cierre de sesión exitoso"
 
 #: .\App\view\customer\view.py:167
 msgid "请先登录或提供用户ID"
-msgstr ""
+msgstr "Inicie sesión o proporcione un ID de usuario"
 
 #: .\App\view\customer\view.py:175 .\App\view\customer\view.py:181
 #: .\App\view\customer\view.py:243 .\App\view\user\view.py:176
 #: .\App\view\wechat\view.py:301
 msgid "用户不存在"
-msgstr ""
+msgstr "El usuario no existe"
 
 #: .\App\view\customer\view.py:228
 msgid "获取成功"
-msgstr ""
+msgstr "Obtenido con éxito"
 
 #: .\App\view\customer\view.py:274
 msgid "保存成功，账号已禁用，token已失效"
-msgstr ""
+msgstr "Guardado. Cuenta deshabilitada y token invalidado"
 
 #: .\App\view\customer\view.py:285
 msgid "保存成功"
-msgstr ""
+msgstr "Guardado con éxito"
 
 #: .\App\view\user\view.py:74
 msgid "管理员注册（匿名可访问）"
@@ -125,7 +124,7 @@ msgstr ""
 
 #: .\App\view\user\view.py:161
 msgid "Token 无效或已过期"
-msgstr ""
+msgstr "Token inválido o expirado"
 
 #: .\App\view\user\view.py:166
 msgid "缺少 user_id 参数"
@@ -169,15 +168,15 @@ msgstr ""
 
 #: .\App\view\wechat\view.py:137
 msgid "token不能为空"
-msgstr ""
+msgstr "El token no puede estar vacío"
 
 #: .\App\view\wechat\view.py:141
 msgid "token无效或已过期"
-msgstr ""
+msgstr "Token inválido o expirado"
 
 #: .\App\view\wechat\view.py:339
 msgid "更新失败"
-msgstr ""
+msgstr "Error al actualizar"
 
 #: .\WallPaper\settings\pro.py:25
 msgid "Spanish"
@@ -217,11 +216,11 @@ msgstr ""
 
 #: .\tool\authentication.py:34 .\tool\authentication.py:36
 msgid "无效的用户名或密码"
-msgstr ""
+msgstr "Usuario o contraseña inválidos"
 
 #: .\tool\authentication.py:95
 msgid "无效的token"
-msgstr ""
+msgstr "Token inválido"
 
 #: .\tool\authentication.py:102
 msgid "管理员用户不存在"
@@ -229,7 +228,7 @@ msgstr ""
 
 #: .\tool\authentication.py:107
 msgid "客户用户不存在"
-msgstr ""
+msgstr "El usuario cliente no existe"
 
 #: .\tool\authentication.py:110
 msgid "token对应的用户不存在"
@@ -247,8 +246,7 @@ msgstr ""
 msgid ""
 "\n"
 "             # 一、强制输出规则（违反则无效）\n"
-"            1. 输出格式为标准JSON，无任何多余内容（无注释、无换行、无特殊符"
-"号、无代码块），可直接用json.loads解析。\n"
+"            1. 输出格式为标准JSON，无任何多余内容（无注释、无换行、无特殊符号、无代码块），可直接用json.loads解析。\n"
 "            2. 严格遵循以下结构，字段不可缺失、不可新增。\n"
 "            # 二、输出结构（强制要求,正确的结构）\n"
 "                    {\n"
@@ -273,8 +271,7 @@ msgstr ""
 msgid ""
 "\n"
 "                         # 一、强制输出规则（违反则无效）\n"
-"                        1. 输出格式为标准JSON，无任何多余内容（无注释、无换"
-"行、无特殊符号、无代码块），可直接用json.loads解析。\n"
+"                        1. 输出格式为标准JSON，无任何多余内容（无注释、无换行、无特殊符号、无代码块），可直接用json.loads解析。\n"
 "                        2. 严格遵循以下结构，字段不可缺失、不可新增。\n"
 "                        # 二、输出结构（强制要求,正确的结构）\n"
 "                                {\n"
@@ -293,34 +290,25 @@ msgstr ""
 msgid ""
 "\n"
 "            # 一、强制输出规则（违反则无效）\n"
-"            1. 输出格式为标准JSON，无任何多余内容（无注释、无换行、无特殊符"
-"号、无代码块），可直接用json.loads解析。\n"
-"            2. 严格遵循以下结构，字段不可缺失、不可新增，数据类型正确（分数为"
-"整数，summary为字符串）。\n"
+"            1. 输出格式为标准JSON，无任何多余内容（无注释、无换行、无特殊符号、无代码块），可直接用json.loads解析。\n"
+"            2. 严格遵循以下结构，字段不可缺失、不可新增，数据类型正确（分数为整数，summary为字符串）。\n"
 "            3. 根据对话判断对方是男或女，不用表述出来，仅在gender数据里。\n"
 "            4. 整数分数0-100分。\n"
 "            # 二、输出结构（强制要求,正确的结构）\n"
 "                    {\n"
 "                        \"result\": {\n"
 "                            \"poster\": {\n"
-"                                \"flags\": {\"关键词1\": 整数分数, \"关键词"
-"2\": 整数分数, \"关键词3\": 整数分数, \"关键词4\": 整数分数},\n"
-"                                \"summary\": \"一句话总结（格式：TA是一个"
-"XXXX，字数20-30字）\"\n"
+"                                \"flags\": {\"关键词1\": 整数分数, \"关键词2\": 整数分数, \"关键词3\": 整数分数, \"关键词4\": 整数分数},\n"
+"                                \"summary\": \"一句话总结（格式：TA是一个XXXX，字数20-30字）\"\n"
 "                                \"gender\":\"male或female\"\n"
 "                                },\n"
 "                                \"report\": {\n"
-"                                    \"summary\": \"法医结论行动建议一句话总结"
-"（格式：字数200字）不显示“法医结论字样”\",\n"
-"                                    \"flags\": {\"风险关键词1\": 整数分数, "
-"\"风险关键词2\": 整数分数, \"风险关键词3\": 整数分数, \"风险关键词4\": 整数分"
-"数},\n"
+"                                    \"summary\": \"法医结论行动建议一句话总结（格式：字数200字）不显示“法医结论字样”\",\n"
+"                                    \"flags\": {\"风险关键词1\": 整数分数, \"风险关键词2\": 整数分数, \"风险关键词3\": 整数分数, \"风险关键词4\": 整数分数},\n"
 "                                    \"danger\":\"最隐蔽风险\",\n"
 "                                    \"advise\":\"行动建议\",\n"
-"                                    \"advise_summary\":\"行动建议核心结论"
-"\",\n"
-"                                    \"detail\":\"{\"详细解读段落1\":\"内容\","
-"\"详细解读段落2\":\"内容\",\"详细解读段落3\":\"\",....}\n"
+"                                    \"advise_summary\":\"行动建议核心结论\",\n"
+"                                    \"detail\":\"{\"详细解读段落1\":\"内容\",\"详细解读段落2\":\"内容\",\"详细解读段落3\":\"\",....}\n"
 "                                }\"\n"
 "                            }\"\n"
 "                    }\n"
@@ -334,10 +322,8 @@ msgid ""
 "                            }\n"
 "                        }\n"
 "            ### 3.1海报要求：\n"
-"                必须4个关键词，每个关键字的分数根据分析出的结果应为不同数"
-"值：\n"
-"                flags: {\"词1\":分数,\"词2\":分数,\"词3\":分数,\"词4\":分"
-"数}\n"
+"                必须4个关键词，每个关键字的分数根据分析出的结果应为不同数值：\n"
+"                flags: {\"词1\":分数,\"词2\":分数,\"词3\":分数,\"词4\":分数}\n"
 "                summary:一句话总结（如“TA是一个XXXX”，字数限制为20-40字）\n"
 "            ### 3.2报告要求：\n"
 "                必须4个风险评分，每个风险评分关键字有分数\n"
@@ -351,47 +337,32 @@ msgstr ""
 #: .\tool\larg_models_tool.py:195
 #, python-brace-format
 msgid ""
-"{nick_name1}的视角；{nick_name1}的事件描述：{question1}；{nick_name1}的问题及"
-"委屈点：{issue_description1}；{nick_name2}的视角；{nick_name2}的事件描述："
-"{question2}；{nick_name2}的问题及委屈点：{issue_description2}；{instructions}"
+"{nick_name1}的视角；{nick_name1}的事件描述：{question1}；{nick_name1}的问题及委屈点：{issue_description1}；{nick_name2}的视角；{nick_name2}的事件描述：{question2}；{nick_name2}的问题及委屈点：{issue_description2}；{instructions}"
 msgstr ""
 
 #: .\tool\larg_models_tool.py:205
 msgid ""
 "\n"
 "                            # 一、强制输出规则（违反则无效）\n"
-"                            1. 输出格式为标准JSON，无任何多余内容（无注释、无"
-"换行、无特殊符号、无代码块），可直接用json.loads解析。\n"
-"                            2. 严格遵循JSON结构，字段不可缺失、不可新增、最重"
-"要可直接用json.loads解析。\n"
+"                            1. 输出格式为标准JSON，无任何多余内容（无注释、无换行、无特殊符号、无代码块），可直接用json.loads解析。\n"
+"                            2. 严格遵循JSON结构，字段不可缺失、不可新增、最重要可直接用json.loads解析。\n"
 "                            3. 参数解读：\n"
 "                                analysis: 问题原因分析是怎么回事。\n"
-"                                percentage:问题占比，用户1占比多少用户2占比多"
-"少 和为100%。\n"
-"                                verdict: 最终判决,虚拟一个《爱情法典》第几章"
-"触犯了什么，不对。\n"
+"                                percentage:问题占比，用户1占比多少用户2占比多少 和为100%。\n"
+"                                verdict: 最终判决,虚拟一个《爱情法典》第几章触犯了什么，不对。\n"
 "                                resolution: 和解方案,谁道歉理解....。\n"
-"                                judge_advice: 本判决自双方签字（或击掌）之日"
-"起生效，给点温馨的话。\n"
-"                                case_name: 案件名，根据事件起个名如2026-"
-"XX-00x号（年-名-号 随机就行）。\n"
-"                                presiding_judge:审判长名称，活泼可爱的名字，"
-"如长耳朵小兔法官等。\n"
-"                                open_court_time:开庭时间名，一个发散的名字，"
-"如一个阳关刚好的下午茶时刻。\n"
-"                            # 二、输出结构（强制要求,正确的结构，不要额外换"
-"行，除了内容）\n"
+"                                judge_advice: 本判决自双方签字（或击掌）之日起生效，给点温馨的话。\n"
+"                                case_name: 案件名，根据事件起个名如2026-XX-00x号（年-名-号 随机就行）。\n"
+"                                presiding_judge:审判长名称，活泼可爱的名字，如长耳朵小兔法官等。\n"
+"                                open_court_time:开庭时间名，一个发散的名字，如一个阳关刚好的下午茶时刻。\n"
+"                            # 二、输出结构（强制要求,正确的结构，不要额外换行，除了内容）\n"
 "                                {\n"
 "                                    \"result\": {\n"
 "                                        \"analysis\": \".....\",\n"
-"                                        \"percentage\": {\"user1\":xx%,"
-"\"user2\":xx%}\",\n"
-"                                        \"verdict\": \"1、..../n  2、......./"
-"n \" (使用'/n'换行输出\"),\n"
-"                                        \"resolution\": \"1、..../n  "
-"2、......./n (使用'/n'换行输出\")\",\n"
-"                                        \"judge_advice\": \"本判决自双方签字"
-"（或击掌）之日起生效，......(使用'/n'换行输出\")\",\n"
+"                                        \"percentage\": {\"user1\":xx%,\"user2\":xx%}\",\n"
+"                                        \"verdict\": \"1、..../n  2、......./n \" (使用'/n'换行输出\"),\n"
+"                                        \"resolution\": \"1、..../n  2、......./n (使用'/n'换行输出\")\",\n"
+"                                        \"judge_advice\": \"本判决自双方签字（或击掌）之日起生效，......(使用'/n'换行输出\")\",\n"
 "                                        \"case_name\":\"xxxx-xxx-xxx号\",\n"
 "                                        \"presiding_judge\":\"审判长名\",\n"
 "                                        \"open_court_time\":\"开庭事件名\"\n"
@@ -410,8 +381,7 @@ msgstr ""
 msgid ""
 "\n"
 "                 # 一、强制输出规则（违反则无效）\n"
-"                1. 输出格式为标准JSON，无任何多余内容（无注释、无换行、无特殊"
-"符号、无代码块），可直接用json.loads解析。\n"
+"                1. 输出格式为标准JSON，无任何多余内容（无注释、无换行、无特殊符号、无代码块），可直接用json.loads解析。\n"
 "                2. 严格遵循以下结构，字段不可缺失、不可新增。\n"
 "                # 二、输出结构（强制要求,正确的结构）\n"
 "                        {\n"
@@ -433,8 +403,7 @@ msgstr ""
 msgid ""
 "\n"
 "                    # 一、强制输出规则（违反则无效）\n"
-"                    1. 输出格式为标准JSON，无任何多余内容（无注释、无换行、无"
-"特殊符号、无代码块），可直接用json.loads解析。\n"
+"                    1. 输出格式为标准JSON，无任何多余内容（无注释、无换行、无特殊符号、无代码块），可直接用json.loads解析。\n"
 "                    2. 严格遵循以下结构，字段不可缺失、不可新增。\n"
 "                    # 二、输出结构（强制要求,正确的结构）\n"
 "                            {\n"
@@ -453,34 +422,25 @@ msgstr ""
 msgid ""
 "\n"
 "            # 一、强制输出规则（违反则无效）\n"
-"            1. 输出格式为标准JSON，无任何多余内容（无注释、无换行、无特殊符"
-"号、无代码块），可直接用json.loads解析。\n"
-"            2. 严格遵循以下结构，字段不可缺失、不可新增，数据类型正确（分数为"
-"整数，summary为字符串）。\n"
+"            1. 输出格式为标准JSON，无任何多余内容（无注释、无换行、无特殊符号、无代码块），可直接用json.loads解析。\n"
+"            2. 严格遵循以下结构，字段不可缺失、不可新增，数据类型正确（分数为整数，summary为字符串）。\n"
 "            3. 根据对话判断对方是男或女，不用表述出来，仅在gender数据里。\n"
 "            4. 整数分数0-100分。\n"
 "            # 二、输出结构（强制要求,正确的结构）\n"
 "                    {\n"
 "                        \"result\": {\n"
 "                            \"poster\": {\n"
-"                                \"flags\": {\"关键词1\": 整数分数, \"关键词"
-"2\": 整数分数, \"关键词3\": 整数分数, \"关键词4\": 整数分数},\n"
-"                                \"summary\": \"一句话总结（格式：TA是一个"
-"XXXX，字数20-30字）\"\n"
+"                                \"flags\": {\"关键词1\": 整数分数, \"关键词2\": 整数分数, \"关键词3\": 整数分数, \"关键词4\": 整数分数},\n"
+"                                \"summary\": \"一句话总结（格式：TA是一个XXXX，字数20-30字）\"\n"
 "                                \"gender\":\"male或female\"\n"
 "                                },\n"
 "                                \"report\": {\n"
-"                                    \"summary\": \"法医结论行动建议一句话总结"
-"（格式：字数200字）不显示“法医结论字样”\",\n"
-"                                    \"flags\": {\"风险关键词1\": 整数分数, "
-"\"风险关键词2\": 整数分数, \"风险关键词3\": 整数分数, \"风险关键词4\": 整数分"
-"数},\n"
+"                                    \"summary\": \"法医结论行动建议一句话总结（格式：字数200字）不显示“法医结论字样”\",\n"
+"                                    \"flags\": {\"风险关键词1\": 整数分数, \"风险关键词2\": 整数分数, \"风险关键词3\": 整数分数, \"风险关键词4\": 整数分数},\n"
 "                                    \"danger\":\"最隐蔽风险\",\n"
 "                                    \"advise\":\"行动建议\",\n"
-"                                    \"advise_summary\":\"行动建议核心结论"
-"\",\n"
-"                                    \"detail\":\"{\"详细解读段落1\":\"内容\","
-"\"详细解读段落2\":\"内容\",\"详细解读段落3\":\"\",....}\n"
+"                                    \"advise_summary\":\"行动建议核心结论\",\n"
+"                                    \"detail\":\"{\"详细解读段落1\":\"内容\",\"详细解读段落2\":\"内容\",\"详细解读段落3\":\"\",....}\n"
 "                                }\"\n"
 "                            }\"\n"
 "                    }\n"
@@ -494,10 +454,8 @@ msgid ""
 "                            }\n"
 "                        }\n"
 "            ### 3.1海报要求：\n"
-"                必须4个关键词，每个关键字的分数根据分析出的结果应为不同数"
-"值：\n"
-"                flags: {\"词1\":分数,\"词2\":分数,\"词3\":分数,\"词4\":分"
-"数}\n"
+"                必须4个关键词，每个关键字的分数根据分析出的结果应为不同数值：\n"
+"                flags: {\"词1\":分数,\"词2\":分数,\"词3\":分数,\"词4\":分数}\n"
 "                summary:一句话总结（如\"TA是一个XXXX\"，字数限制为20-40字）\n"
 "            ### 3.2报告要求：\n"
 "                必须4个风险评分，每个风险评分关键字有分数\n"
@@ -516,7 +474,7 @@ msgstr ""
 #: .\tool\tool_city_code.py:235 .\tool\tool_city_code.py:309
 #: .\tool\tool_city_code.py:359
 msgid "查询成功"
-msgstr ""
+msgstr "Consulta exitosa"
 
 #: .\tool\tool_city_code.py:184
 msgid "缺少省份代码参数"
@@ -553,8 +511,7 @@ msgstr ""
 
 #: .\tool\tools_star_sign.py:181
 #, python-brace-format
-msgid ""
-"用户星座：{zodiac_name}，用户性别：{gender},今日日期{today}{instructions}"
+msgid "用户星座：{zodiac_name}，用户性别：{gender},今日日期{today}{instructions}"
 msgstr ""
 
 #: .\tool\tools_star_sign.py:187
@@ -563,14 +520,12 @@ msgid ""
 "                # 一、角色\n"
 "                你是一个星座心情表，结合当天的用户星座和用户性别。\n"
 "                # 二、强制输出规则（违反则无效）\n"
-"                1. 输出格式为标准JSON，无任何多余内容（无注释、无换行、无特殊"
-"符号、无代码块），可直接用json.loads解析。\n"
+"                1. 输出格式为标准JSON，无任何多余内容（无注释、无换行、无特殊符号、无代码块），可直接用json.loads解析。\n"
 "                2. 严格遵循以下结构，字段不可缺失、不可新增。\n"
 "                # 三、输出结构（强制要求,正确的结构）\n"
 "                   {\n"
 "                        \"result\": {\n"
-"                        \"encourage_sentence\": \"鼓励今天的该星座的一句话"
-"\",\n"
+"                        \"encourage_sentence\": \"鼓励今天的该星座的一句话\",\n"
 "                        \"mood_score\": 26(示例分数，下面的按实际情况的来),\n"
 "                        \"love_score\": 85,\n"
 "                        \"wealth_score\": 00,\n"
@@ -650,8 +605,8 @@ msgstr ""
 
 #: .\wallpaper_venv\Lib\site-packages\django\core\validators.py:297
 msgid ""
-"Enter a valid “slug” consisting of Unicode letters, numbers, underscores, or "
-"hyphens."
+"Enter a valid “slug” consisting of Unicode letters, numbers, underscores, or"
+" hyphens."
 msgstr ""
 
 #: .\wallpaper_venv\Lib\site-packages\django\core\validators.py:309
@@ -870,8 +825,8 @@ msgstr ""
 #: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:1570
 #, python-format
 msgid ""
-"“%(value)s” value has the correct format (YYYY-MM-DD HH:MM[:ss[.uuuuuu]]"
-"[TZ]) but it is an invalid date/time."
+"“%(value)s” value has the correct format (YYYY-MM-DD "
+"HH:MM[:ss[.uuuuuu]][TZ]) but it is an invalid date/time."
 msgstr ""
 
 #: .\wallpaper_venv\Lib\site-packages\django\db\models\fields\__init__.py:1575
@@ -1050,7 +1005,8 @@ msgid "Many-to-many relationship"
 msgstr ""
 
 #. Translators: If found as last label character, these punctuation
-#. characters will prevent the default label_suffix to be appended to the label
+#. characters will prevent the default label_suffix to be appended to the
+#. label
 #: .\wallpaper_venv\Lib\site-packages\django\forms\boundfield.py:185
 msgid ":?.!"
 msgstr ""
@@ -1100,7 +1056,8 @@ msgstr ""
 
 #: .\wallpaper_venv\Lib\site-packages\django\forms\fields.py:643
 #, python-format
-msgid "Ensure this filename has at most %(max)d character (it has %(length)d)."
+msgid ""
+"Ensure this filename has at most %(max)d character (it has %(length)d)."
 msgid_plural ""
 "Ensure this filename has at most %(max)d characters (it has %(length)d)."
 msgstr[0] ""
@@ -1207,7 +1164,8 @@ msgid "The inline value did not match the parent instance."
 msgstr ""
 
 #: .\wallpaper_venv\Lib\site-packages\django\forms\models.py:1450
-msgid "Select a valid choice. That choice is not one of the available choices."
+msgid ""
+"Select a valid choice. That choice is not one of the available choices."
 msgstr ""
 
 #: .\wallpaper_venv\Lib\site-packages\django\forms\models.py:1594
@@ -1667,10 +1625,10 @@ msgstr ""
 
 #: .\wallpaper_venv\Lib\site-packages\django\views\csrf.py:45
 msgid ""
-"If you are using the <meta name=\"referrer\" content=\"no-referrer\"> tag or "
-"including the “Referrer-Policy: no-referrer” header, please remove them. The "
-"CSRF protection requires the “Referer” header to do strict referer checking. "
-"If you’re concerned about privacy, use alternatives like <a "
+"If you are using the <meta name=\"referrer\" content=\"no-referrer\"> tag or"
+" including the “Referrer-Policy: no-referrer” header, please remove them. "
+"The CSRF protection requires the “Referer” header to do strict referer "
+"checking. If you’re concerned about privacy, use alternatives like <a "
 "rel=\"noreferrer\" …> for links to third-party sites."
 msgstr ""
 
@@ -1781,10 +1739,10 @@ msgstr ""
 #: .\wallpaper_venv\Lib\site-packages\django\views\templates\default_urlconf.html:208
 #, python-format
 msgid ""
-"You are seeing this page because <a href=\"https://docs.djangoproject.com/en/"
-"%(version)s/ref/settings/#debug\" target=\"_blank\" "
-"rel=\"noopener\">DEBUG=True</a> is in your settings file and you have not "
-"configured any URLs."
+"You are seeing this page because <a "
+"href=\"https://docs.djangoproject.com/en/%(version)s/ref/settings/#debug\" "
+"target=\"_blank\" rel=\"noopener\">DEBUG=True</a> is in your settings file "
+"and you have not configured any URLs."
 msgstr ""
 
 #: .\wallpaper_venv\Lib\site-packages\django\views\templates\default_urlconf.html:217
@@ -1904,8 +1862,7 @@ msgstr ""
 #: .\wallpaper_venv\Lib\site-packages\drf_spectacular\views.py:45
 msgid ""
 "\n"
-"    OpenApi3 schema for this API. Format can be selected via content "
-"negotiation.\n"
+"    OpenApi3 schema for this API. Format can be selected via content negotiation.\n"
 "\n"
 "    - YAML: application/vnd.oai.openapi\n"
 "    - JSON: application/vnd.oai.openapi+json\n"

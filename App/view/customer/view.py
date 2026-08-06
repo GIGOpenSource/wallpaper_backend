@@ -11,7 +11,7 @@ from tool.permissions import IsCustomerTokenValid
 from tool.token_tools import CustomTokenTool, generate_is_user_token, _redis
 from tool.utils import ApiResponse
 from django.utils.translation import gettext as _
-from django.utils.translation import get_language
+
 
 class CustomerRegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)

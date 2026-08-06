@@ -65,29 +65,33 @@ def translate_po_file(po_path, to_lang):
 
 
 if __name__ == "__main__":
+    source_text = "你好世界"
+    # to_lang参数：en英语、kor韩语、jp日语、spa西语、fra法语、pt葡萄牙语
+    result = baidu_translate(source_text, to_lang="kor")
+    print(f"{source_text} → {result}")
     translate_po_file(
-        po_path=r"E:\project\nobad\locale\es\LC_MESSAGES\django.po",
-        to_lang="spa"   # 西班牙语
-    )
+         po_path=r"C:\Users\l'l\wallpaper\locale\en\LC_MESSAGES\django.po",
+         to_lang="spa"   # 西班牙语
+     )
     translate_po_file(
-        po_path=r"E:\project\nobad\locale\en\LC_MESSAGES\django.po",
+        po_path=r"C:\Users\l'l\wallpaper\locale\en\LC_MESSAGES\django.po",
         to_lang="en"  # 英语
     )
     translate_po_file(
-        po_path=r"E:\project\nobad\locale\pt\LC_MESSAGES\django.po",
-        to_lang="pt"  # 葡萄牙语
-    )
+         po_path=r"C:\Users\l'l\wallpaper\locale\pt\LC_MESSAGES\django.po",
+         to_lang="pt"  # 葡萄牙语
+     )
 
     translate_po_file(
-        po_path=r"E:\project\nobad\locale\ja\LC_MESSAGES\django.po",
-        to_lang="jp"  # 日语
-    )
+         po_path=r"C:\Users\l'l\wallpaper\locale\ja\LC_MESSAGES\django.po",
+         to_lang="jp"  # 日语
+     )
     translate_po_file(
-        po_path=r"E:\project\nobad\locale\ko\LC_MESSAGES\django.po",
-        to_lang="kor"  # 韩语
-    )
+         po_path=r"C:\Users\l'l\wallpaper\locale\ko\LC_MESSAGES\django.po",
+          to_lang="kor"  # 韩语
+     )
 
     translate_po_file(
-        po_path=r"E:\project\nobad\locale\fr\LC_MESSAGES\django.po",
-        to_lang="fra"   # 法语
-    )
+         po_path=r"C:\Users\l'l\wallpaper\locale\fr\LC_MESSAGES\django.po",
+         to_lang="fra"   # 法语
+     )

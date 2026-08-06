@@ -1,0 +1,560 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-08-06 10:42+0800\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: .\App\view\customer\view.py:29 .\App\view\user\view.py:26
+msgid "两次输入的密码不一致"
+msgstr "Senha inserida duas vezes inconsistente"
+
+#: .\App\view\customer\view.py:34 .\App\view\user\view.py:34
+msgid "密码长度不能超过72字节"
+msgstr "O comprimento da senha não pode exceder 72 bytes."
+
+#: .\App\view\customer\view.py:41 .\App\view\customer\view.py:104
+msgid "该邮箱已被注册"
+msgstr "Esta caixa de e-mail já está registrada"
+
+#: .\App\view\customer\view.py:97 .\App\view\customer\view.py:122
+#: .\App\view\customer\view.py:260
+msgid "参数校验失败"
+msgstr "Falha na verificação dos parâmetros"
+
+#: .\App\view\customer\view.py:110
+msgid "注册成功"
+msgstr "Registro bem sucedido"
+
+#: .\App\view\customer\view.py:130
+msgid "邮箱未注册"
+msgstr "E-mail não registrado"
+
+#: .\App\view\customer\view.py:134
+msgid "账号已被禁用，请联系客服"
+msgstr ""
+"A conta foi desativada, por favor entre em contato com o serviço de "
+"atendimento ao cliente."
+
+#: .\App\view\customer\view.py:137
+msgid "邮箱或密码错误"
+msgstr "E-mail ou senha incorreta"
+
+#: .\App\view\customer\view.py:143
+msgid "登录成功"
+msgstr "Login com sucesso"
+
+#: .\App\view\customer\view.py:151
+msgid "未提供 Token"
+msgstr "Nenhum token fornecido"
+
+#: .\App\view\customer\view.py:153
+msgid "登出成功"
+msgstr "Saída bem sucedida"
+
+#: .\App\view\customer\view.py:176
+msgid "请先登录或提供用户ID"
+msgstr "Inicie sessão ou forneça um ID de usuário"
+
+#: .\App\view\customer\view.py:184 .\App\view\customer\view.py:190
+#: .\App\view\customer\view.py:252 .\App\view\user\view.py:176
+#: .\App\view\wechat\view.py:301
+msgid "用户不存在"
+msgstr "Usuário não existe"
+
+#: .\App\view\customer\view.py:237
+msgid "获取成功"
+msgstr "Obter sucesso"
+
+#: .\App\view\customer\view.py:283
+msgid "保存成功，账号已禁用，token已失效"
+msgstr "Salvado com sucesso, conta desativada e token caducado"
+
+#: .\App\view\customer\view.py:294
+msgid "保存成功"
+msgstr "Salvar com sucesso"
+
+#: .\App\view\user\view.py:74
+msgid "管理员注册（匿名可访问）"
+msgstr "Registro de administrador (acessível anônimo)"
+
+#: .\App\view\user\view.py:100
+msgid "管理员名和密码不能为空"
+msgstr "Nome de administrador e senha não podem estar vazios"
+
+#: .\App\view\user\view.py:105
+msgid "管理员名不存在"
+msgstr "O nome do administrador não existe"
+
+#: .\App\view\user\view.py:107
+msgid "管理员名重复"
+msgstr "Nome de administrador duplicado"
+
+#: .\App\view\user\view.py:117
+msgid "管理员名密码错误"
+msgstr "Senha do administrador incorreta"
+
+#: .\App\view\user\view.py:127
+msgid "管理员登出（需有效 Token）"
+msgstr "Saída do administrador (requer token válido)"
+
+#: .\App\view\user\view.py:137 .\App\view\user\view.py:142
+#: .\App\view\user\view.py:156
+msgid "未提供有效 Token"
+msgstr "Nenhum token válido"
+
+#: .\App\view\user\view.py:141
+msgid "登出成功，Token 已失效"
+msgstr "O login foi bem sucedido, o token expirou"
+
+#: .\App\view\user\view.py:146
+msgid "用户注销账号（需有效 Token）"
+msgstr "Conta de usuário (token válido é necessário)"
+
+#: .\App\view\user\view.py:161
+msgid "Token 无效或已过期"
+msgstr "Token inválido ou expirado"
+
+#: .\App\view\user\view.py:166
+msgid "缺少 user_id 参数"
+msgstr "Falta o parâmetro user_id"
+
+#: .\App\view\user\view.py:170
+msgid "无权注销其他用户账号"
+msgstr "Nenhum direito para sair da conta de outro usuário"
+
+#: .\App\view\user\view.py:187
+msgid "用户账号注销成功"
+msgstr "Conta de usuário sai com sucesso"
+
+#: .\App\view\user\view.py:189
+#, python-brace-format
+msgid "账号注销失败: {}"
+msgstr "Falha ao sair da conta: {}"
+
+#: .\App\view\wallpapers\view.py:2704 .\tool\tool_city_code.py:424
+msgid "请上传 Excel 文件"
+msgstr "Carregue o arquivo Excel"
+
+#: .\App\view\wallpapers\view.py:2708 .\tool\tool_city_code.py:428
+msgid "仅支持.xlsx 格式的 Excel 文件"
+msgstr "Apenas arquivos do Excel com suporte ao formato .xlsx"
+
+#: .\App\view\wallpapers\view.py:2723
+#, python-format
+msgid "Excel 文件缺少必要字段，需要包含：%(cols)s"
+msgstr ""
+"Os campos necessários estão ausentes no arquivo do Excel e devem incluir: "
+"%(cols)s"
+
+#: .\App\view\wallpapers\view.py:2777
+#, python-format
+msgid "导入完成！成功：%(success)d条，失败：%(fail)d条，新增：%(created)d条"
+msgstr ""
+"Importação concluída! Sucesso: %(success)d, falha: %(fail)d, adição: "
+"%(created)d"
+
+#: .\App\view\wallpapers\view.py:2785 .\tool\tool_city_code.py:561
+#, python-format
+msgid "批量导入失败：%(error)s"
+msgstr "Falha na importação em lote: %(error)s"
+
+#: .\App\view\wechat\view.py:137
+msgid "token不能为空"
+msgstr "O token não pode estar vazio."
+
+#: .\App\view\wechat\view.py:141
+msgid "token无效或已过期"
+msgstr "token inválido ou expirado"
+
+#: .\App\view\wechat\view.py:339
+msgid "更新失败"
+msgstr "A atualização falhou"
+
+#: .\WallPaper\settings\pro.py:25
+msgid "Spanish"
+msgstr "Espanhol"
+
+#: .\WallPaper\settings\pro.py:26
+msgid "English"
+msgstr "Inglês"
+
+#: .\WallPaper\settings\pro.py:27
+msgid "Portuguese"
+msgstr "Português"
+
+#: .\WallPaper\settings\pro.py:28
+msgid "Japanese"
+msgstr "japonês"
+
+#: .\WallPaper\settings\pro.py:29
+msgid "Korean"
+msgstr "coreano"
+
+#: .\WallPaper\settings\pro.py:30
+msgid "Simplified Chinese"
+msgstr "Chinês simplificado"
+
+#: .\WallPaper\settings\pro.py:31
+msgid "Traditional Chinese"
+msgstr "Chinês Tradicional"
+
+#: .\WallPaper\settings\pro.py:32
+msgid "German"
+msgstr "alemão"
+
+#: .\WallPaper\settings\pro.py:33
+msgid "French"
+msgstr "Francês"
+
+#: .\tool\authentication.py:34 .\tool\authentication.py:36
+msgid "无效的用户名或密码"
+msgstr "Nome de usuário ou senha inválida"
+
+#: .\tool\authentication.py:95
+msgid "无效的token"
+msgstr "Token inválido"
+
+#: .\tool\authentication.py:102
+msgid "管理员用户不存在"
+msgstr "O usuário administrador não existe"
+
+#: .\tool\authentication.py:107
+msgid "客户用户不存在"
+msgstr "Usuário cliente não existe"
+
+#: .\tool\authentication.py:110
+msgid "token对应的用户不存在"
+msgstr "O usuário correspondente ao token não existe."
+
+#: .\tool\larg_models_tool.py:34 .\tool\larg_models_tool.py:52
+msgid "用户提问："
+msgstr "Perguntas do usuário:"
+
+#: .\tool\larg_models_tool.py:34
+msgid "用户答案："
+msgstr "Respostas do usuário:"
+
+#: .\tool\larg_models_tool.py:34
+msgid ""
+"\n"
+"             # 一、强制输出规则（违反则无效）\n"
+"            1. 输出格式为标准JSON，无任何多余内容（无注释、无换行、无特殊符号、无代码块），可直接用json.loads解析。\n"
+"            2. 严格遵循以下结构，字段不可缺失、不可新增。\n"
+"            # 二、输出结构（强制要求,正确的结构）\n"
+"                    {\n"
+"                        \"result\": {\n"
+"                            \"key_points\":\"要点\",\n"
+"                            \"summary\": \"展开回答\"\n"
+"                        },\n"
+"                    }\n"
+"            # 三、中文返回结果\n"
+"            "
+msgstr "Regra de saída forçada (violação inválida)"
+
+#: .\tool\larg_models_tool.py:48 .\tool\larg_models_tool.py:161
+msgid "请传入至少一个图片地址"
+msgstr "Por favor, insira pelo menos um endereço de imagem"
+
+#: .\tool\larg_models_tool.py:52
+msgid "用户抽中的牌为："
+msgstr "As cartas tiradas pelo usuário são:"
+
+#: .\tool\larg_models_tool.py:52
+msgid ""
+"\n"
+"                         # 一、强制输出规则（违反则无效）\n"
+"                        1. 输出格式为标准JSON，无任何多余内容（无注释、无换行、无特殊符号、无代码块），可直接用json.loads解析。\n"
+"                        2. 严格遵循以下结构，字段不可缺失、不可新增。\n"
+"                        # 二、输出结构（强制要求,正确的结构）\n"
+"                                {\n"
+"                                    \"result\": {\n"
+"                                        \"summary\": \"核心能量：xxxxx。/n \n"
+"                                        情感人际：xxxxx。/n\n"
+"                                        xxx：xxx。/n \n"
+"                                        使用'/n'换行输出\"\n"
+"                                    },\n"
+"                                }\n"
+"                        # 三、中文返回结果\n"
+"                        "
+msgstr "Regra de saída forçada (violação inválida)"
+
+#: .\tool\larg_models_tool.py:68
+msgid ""
+"\n"
+"            # 一、强制输出规则（违反则无效）\n"
+"            1. 输出格式为标准JSON，无任何多余内容（无注释、无换行、无特殊符号、无代码块），可直接用json.loads解析。\n"
+"            2. 严格遵循以下结构，字段不可缺失、不可新增，数据类型正确（分数为整数，summary为字符串）。\n"
+"            3. 根据对话判断对方是男或女，不用表述出来，仅在gender数据里。\n"
+"            4. 整数分数0-100分。\n"
+"            # 二、输出结构（强制要求,正确的结构）\n"
+"                    {\n"
+"                        \"result\": {\n"
+"                            \"poster\": {\n"
+"                                \"flags\": {\"关键词1\": 整数分数, \"关键词2\": 整数分数, \"关键词3\": 整数分数, \"关键词4\": 整数分数},\n"
+"                                \"summary\": \"一句话总结（格式：TA是一个XXXX，字数20-30字）\"\n"
+"                                \"gender\":\"male或female\"\n"
+"                                },\n"
+"                                \"report\": {\n"
+"                                    \"summary\": \"法医结论行动建议一句话总结（格式：字数200字）不显示“法医结论字样”\",\n"
+"                                    \"flags\": {\"风险关键词1\": 整数分数, \"风险关键词2\": 整数分数, \"风险关键词3\": 整数分数, \"风险关键词4\": 整数分数},\n"
+"                                    \"danger\":\"最隐蔽风险\",\n"
+"                                    \"advise\":\"行动建议\",\n"
+"                                    \"advise_summary\":\"行动建议核心结论\",\n"
+"                                    \"detail\":\"{\"详细解读段落1\":\"内容\",\"详细解读段落2\":\"内容\",\"详细解读段落3\":\"\",....}\n"
+"                                }\"\n"
+"                            }\"\n"
+"                    }\n"
+"            # 三、输出结构组成示例：\n"
+"                        reslut:{\n"
+"                            poster:{\n"
+"                            “海报要求”\n"
+"                            }\n"
+"                            report:{\n"
+"                            “报告要求”\n"
+"                            }\n"
+"                        }\n"
+"            ### 3.1海报要求：\n"
+"                必须4个关键词，每个关键字的分数根据分析出的结果应为不同数值：\n"
+"                flags: {\"词1\":分数,\"词2\":分数,\"词3\":分数,\"词4\":分数}\n"
+"                summary:一句话总结（如“TA是一个XXXX”，字数限制为20-40字）\n"
+"            ### 3.2报告要求：\n"
+"                必须4个风险评分，每个风险评分关键字有分数\n"
+"                summary总结,只包含结果，不含标题\n"
+"                activate行动建议：一句话不分点。\n"
+"                detail内容为字典格式{\"key\":\"value\"}可以有多个\n"
+"            # 四、中文语言返回结果\n"
+"            "
+msgstr "Regra de saída forçada (violação inválida)"
+
+#: .\tool\larg_models_tool.py:195
+#, python-brace-format
+msgid ""
+"{nick_name1}的视角；{nick_name1}的事件描述：{question1}；{nick_name1}的问题及委屈点：{issue_description1}；{nick_name2}的视角；{nick_name2}的事件描述：{question2}；{nick_name2}的问题及委屈点：{issue_description2}；{instructions}"
+msgstr ""
+"A perspectiva de {nick_name1}; Descrição do evento {nick_name1}: "
+"{question1}; Problemas e problemas de {nick_name1}: {issue_description1}; A "
+"perspectiva de {nick_name2}; Descrição do evento {nick_name2}: {question2}; "
+"Problemas e problemas de {nick_name2}: {issue_description2}; {instructions}"
+
+#: .\tool\larg_models_tool.py:205
+msgid ""
+"\n"
+"                            # 一、强制输出规则（违反则无效）\n"
+"                            1. 输出格式为标准JSON，无任何多余内容（无注释、无换行、无特殊符号、无代码块），可直接用json.loads解析。\n"
+"                            2. 严格遵循JSON结构，字段不可缺失、不可新增、最重要可直接用json.loads解析。\n"
+"                            3. 参数解读：\n"
+"                                analysis: 问题原因分析是怎么回事。\n"
+"                                percentage:问题占比，用户1占比多少用户2占比多少 和为100%。\n"
+"                                verdict: 最终判决,虚拟一个《爱情法典》第几章触犯了什么，不对。\n"
+"                                resolution: 和解方案,谁道歉理解....。\n"
+"                                judge_advice: 本判决自双方签字（或击掌）之日起生效，给点温馨的话。\n"
+"                                case_name: 案件名，根据事件起个名如2026-XX-00x号（年-名-号 随机就行）。\n"
+"                                presiding_judge:审判长名称，活泼可爱的名字，如长耳朵小兔法官等。\n"
+"                                open_court_time:开庭时间名，一个发散的名字，如一个阳关刚好的下午茶时刻。\n"
+"                            # 二、输出结构（强制要求,正确的结构，不要额外换行，除了内容）\n"
+"                                {\n"
+"                                    \"result\": {\n"
+"                                        \"analysis\": \".....\",\n"
+"                                        \"percentage\": {\"user1\":xx%,\"user2\":xx%}\",\n"
+"                                        \"verdict\": \"1、..../n  2、......./n \" (使用'/n'换行输出\"),\n"
+"                                        \"resolution\": \"1、..../n  2、......./n (使用'/n'换行输出\")\",\n"
+"                                        \"judge_advice\": \"本判决自双方签字（或击掌）之日起生效，......(使用'/n'换行输出\")\",\n"
+"                                        \"case_name\":\"xxxx-xxx-xxx号\",\n"
+"                                        \"presiding_judge\":\"审判长名\",\n"
+"                                        \"open_court_time\":\"开庭事件名\"\n"
+"                                    },\n"
+"                                }\n"
+"                            # 三、中文返回结果\n"
+"                            "
+msgstr "Regra de saída forçada (violação inválida)"
+
+#: .\tool\larg_models_tool.py:235
+#, python-brace-format
+msgid "用户提问：{question}。用户答案：{answer}{instructions}"
+msgstr ""
+"Perguntas do usuário: {question}. Resposta do usuário: "
+"{answer}{instructions}"
+
+#: .\tool\larg_models_tool.py:239
+msgid ""
+"\n"
+"                 # 一、强制输出规则（违反则无效）\n"
+"                1. 输出格式为标准JSON，无任何多余内容（无注释、无换行、无特殊符号、无代码块），可直接用json.loads解析。\n"
+"                2. 严格遵循以下结构，字段不可缺失、不可新增。\n"
+"                # 二、输出结构（强制要求,正确的结构）\n"
+"                        {\n"
+"                            \"result\": {\n"
+"                                \"key_points\":\"要点\",\n"
+"                                \"summary\": \"展开回答\"\n"
+"                            },\n"
+"                        }\n"
+"                # 三、中文返回结果\n"
+"                "
+msgstr "Regra de saída forçada (violação inválida)"
+
+#: .\tool\larg_models_tool.py:254
+#, python-brace-format
+msgid "用户提问：{question}。用户抽中的牌为：{answer}{instructions}"
+msgstr ""
+"Perguntas do usuário: {question}. As cartas sorteadas pelo usuário são: "
+"{answer}{instructions}"
+
+#: .\tool\larg_models_tool.py:258
+msgid ""
+"\n"
+"                    # 一、强制输出规则（违反则无效）\n"
+"                    1. 输出格式为标准JSON，无任何多余内容（无注释、无换行、无特殊符号、无代码块），可直接用json.loads解析。\n"
+"                    2. 严格遵循以下结构，字段不可缺失、不可新增。\n"
+"                    # 二、输出结构（强制要求,正确的结构）\n"
+"                            {\n"
+"                                \"result\": {\n"
+"                                    \"summary\": \"核心能量：xxxxx。/n \n"
+"                                    情感人际：xxxxx。/n\n"
+"                                    xxx：xxx。/n \n"
+"                                    使用'/n'换行输出\"\n"
+"                                },\n"
+"                            }\n"
+"                    # 三、中文返回结果\n"
+"                "
+msgstr "Regra de saída forçada (violação inválida)"
+
+#: .\tool\larg_models_tool.py:275
+msgid ""
+"\n"
+"            # 一、强制输出规则（违反则无效）\n"
+"            1. 输出格式为标准JSON，无任何多余内容（无注释、无换行、无特殊符号、无代码块），可直接用json.loads解析。\n"
+"            2. 严格遵循以下结构，字段不可缺失、不可新增，数据类型正确（分数为整数，summary为字符串）。\n"
+"            3. 根据对话判断对方是男或女，不用表述出来，仅在gender数据里。\n"
+"            4. 整数分数0-100分。\n"
+"            # 二、输出结构（强制要求,正确的结构）\n"
+"                    {\n"
+"                        \"result\": {\n"
+"                            \"poster\": {\n"
+"                                \"flags\": {\"关键词1\": 整数分数, \"关键词2\": 整数分数, \"关键词3\": 整数分数, \"关键词4\": 整数分数},\n"
+"                                \"summary\": \"一句话总结（格式：TA是一个XXXX，字数20-30字）\"\n"
+"                                \"gender\":\"male或female\"\n"
+"                                },\n"
+"                                \"report\": {\n"
+"                                    \"summary\": \"法医结论行动建议一句话总结（格式：字数200字）不显示“法医结论字样”\",\n"
+"                                    \"flags\": {\"风险关键词1\": 整数分数, \"风险关键词2\": 整数分数, \"风险关键词3\": 整数分数, \"风险关键词4\": 整数分数},\n"
+"                                    \"danger\":\"最隐蔽风险\",\n"
+"                                    \"advise\":\"行动建议\",\n"
+"                                    \"advise_summary\":\"行动建议核心结论\",\n"
+"                                    \"detail\":\"{\"详细解读段落1\":\"内容\",\"详细解读段落2\":\"内容\",\"详细解读段落3\":\"\",....}\n"
+"                                }\"\n"
+"                            }\"\n"
+"                    }\n"
+"            # 三、输出结构组成示例：\n"
+"                        reslut:{\n"
+"                            poster:{\n"
+"                            \"海报要求\"\n"
+"                            }\n"
+"                            report:{\n"
+"                            \"报告要求\"\n"
+"                            }\n"
+"                        }\n"
+"            ### 3.1海报要求：\n"
+"                必须4个关键词，每个关键字的分数根据分析出的结果应为不同数值：\n"
+"                flags: {\"词1\":分数,\"词2\":分数,\"词3\":分数,\"词4\":分数}\n"
+"                summary:一句话总结（如\"TA是一个XXXX\"，字数限制为20-40字）\n"
+"            ### 3.2报告要求：\n"
+"                必须4个风险评分，每个风险评分关键字有分数\n"
+"                summary总结,只包含结果，不含标题\n"
+"                activate行动建议：一句话不分点。\n"
+"                detail内容为字典格式{\"key\":\"value\"}可以有多个\n"
+"            # 四、中文语言返回结果\n"
+"            "
+msgstr "Regra de saída forçada (violação inválida)"
+
+#: .\tool\tool_answer.py:208
+msgid "Ai分析："
+msgstr "Análise AI:"
+
+#: .\tool\tool_city_code.py:147 .\tool\tool_city_code.py:190
+#: .\tool\tool_city_code.py:235 .\tool\tool_city_code.py:309
+#: .\tool\tool_city_code.py:359
+msgid "查询成功"
+msgstr "Pesquisa com sucesso"
+
+#: .\tool\tool_city_code.py:184
+msgid "缺少省份代码参数"
+msgstr "Parâmetros de código de província ausentes"
+
+#: .\tool\tool_city_code.py:192
+msgid "省份不存在"
+msgstr "Província não existe"
+
+#: .\tool\tool_city_code.py:229
+msgid "缺少城市代码参数"
+msgstr "Parâmetros de código de cidade ausentes"
+
+#: .\tool\tool_city_code.py:237
+msgid "城市不存在"
+msgstr "A cidade não existe."
+
+#: .\tool\tool_city_code.py:342
+msgid "缺少区域代码参数"
+msgstr "Parâmetros de código de área ausentes"
+
+#: .\tool\tool_city_code.py:361
+msgid "区域不存在"
+msgstr "A região não existe"
+
+#: .\tool\tool_city_code.py:444
+#, python-format
+msgid "Excel 文件缺少必要列，需要包含：%(cols)s"
+msgstr ""
+"Faltam colunas necessárias no arquivo do Excel e devem conter: %(cols)s"
+
+#: .\tool\tool_city_code.py:484
+msgid "Excel 文件中没有有效数据"
+msgstr "Não há dados válidos no arquivo do Excel"
+
+#: .\tool\tools_star_sign.py:181
+#, python-brace-format
+msgid "用户星座：{zodiac_name}，用户性别：{gender},今日日期{today}{instructions}"
+msgstr ""
+"Constelação do usuário: {zodiac_name}, sexo do usuário: {gender}, data de "
+"hoje {today}{instructions}"
+
+#: .\tool\tools_star_sign.py:187
+msgid ""
+"\n"
+"                # 一、角色\n"
+"                你是一个星座心情表，结合当天的用户星座和用户性别。\n"
+"                # 二、强制输出规则（违反则无效）\n"
+"                1. 输出格式为标准JSON，无任何多余内容（无注释、无换行、无特殊符号、无代码块），可直接用json.loads解析。\n"
+"                2. 严格遵循以下结构，字段不可缺失、不可新增。\n"
+"                # 三、输出结构（强制要求,正确的结构）\n"
+"                   {\n"
+"                        \"result\": {\n"
+"                        \"encourage_sentence\": \"鼓励今天的该星座的一句话\",\n"
+"                        \"mood_score\": 26(示例分数，下面的按实际情况的来),\n"
+"                        \"love_score\": 85,\n"
+"                        \"wealth_score\": 00,\n"
+"                        \"career_score\": 00,\n"
+"                        \"study_score\": 98,\n"
+"                        \"contact_score\": 00,\n"
+"                        }\n"
+"                    }\n"
+"                # 三、中文返回结果\n"
+"                "
+msgstr " # 1 - Papel"
+
+#: .\tool\utils.py:130
+msgid "请求的页面超出范围，返回空结果"
+msgstr "A página solicitada está fora do alcance e retorna um resultado vazio"
