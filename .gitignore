@@ -70,3 +70,36 @@ npm-debug.log*
 resource/key/search-console-key.json
 
 wallpaper_venv/
+
+
+
+# ===== Python缓存，杜绝pyc二进制冲突 =====
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ===== PyCharm / IDEA 本地配置，禁止提交idea文件 =====
+.idea/
+*.iml
+*.iws
+*.out
+inspectionProfiles/
+
+# ===== VSCode =====
+.vscode/
+*.swp
+*.swo
+
+# ===== 虚拟环境 =====
+.venv/
+venv/
+wallpaper_venv/
+
+# ===== Django 本地生成文件 =====
+db.sqlite3
+*.sqlite3
+media/
+staticfiles/
+*.log
+logs/
