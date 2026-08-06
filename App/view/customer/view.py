@@ -43,7 +43,10 @@ class CustomerRegisterSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         validated_data.pop("confirm_password")
-        return CustomerUser.objects.create(**validated_data)
+        try:
+            return CustomerUser.objects.create(**validated_data)
+        except IntegrityError:
+            raise serializers.ValidationError({"email": _("该邮箱已被注册")})
 
 
 class CustomerLoginSerializer(serializers.Serializer):
