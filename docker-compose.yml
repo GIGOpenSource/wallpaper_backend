@@ -49,7 +49,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     networks:
-      - wallpaper_net
+      - app_network
     restart: unless-stopped
     shm_size: 1g
     cpus: '3'
@@ -69,7 +69,7 @@ services:
     volumes:
       - redisdata:/data
     networks:
-      - wallpaper_net
+      - app_network
     restart: unless-stopped
     command: >
       redis-server
