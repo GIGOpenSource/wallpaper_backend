@@ -52,7 +52,7 @@ services:
       - app_network
     restart: unless-stopped
     shm_size: 1g
-    cpus: '3'
+    cpus: '2'
     mem_limit: 2g
     mem_reservation: 1g
     healthcheck:
