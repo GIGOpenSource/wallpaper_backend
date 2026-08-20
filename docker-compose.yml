@@ -36,6 +36,54 @@ services:
       - django_web
     networks:
       - app_network
+      -
+  db:
+    image: postgres:16-alpine
+    container_name: wallpaper_db
+    environment:
+      - POSTGRES_DB=wallpaper_db
+      - POSTGRES_USER=wallpaper123
+      - POSTGRES_PASSWORD=wallpaper123
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    ports:
+      - "5436:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - wallpaper_net
+    restart: unless-stopped
+    shm_size: 1g
+    cpus: '3'
+    mem_limit: 2g
+    mem_reservation: 1g
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U wallpaper123 -d wallpaper_db" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: wallpaper_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    networks:
+      - wallpaper_net
+    restart: unless-stopped
+    command: >
+      redis-server
+      --requirepass Redis@2026#0119
+      --protected-mode yes
+      --rename-command FLUSHALL ""
+      --rename-command FLUSHDB ""
+      --rename-command CONFIG ""
+    healthcheck:
+      test: [ "CMD", "redis-cli", "-a", "Redis@2026#0119", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
 networks:
   app_network:
